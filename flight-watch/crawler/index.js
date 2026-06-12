@@ -4,6 +4,7 @@
 // 실행: node index.js          (상주)
 //       node index.js --once   (1회 검사 후 종료)
 
+const fs = require("fs");
 const path = require("path");
 const { initializeApp, cert } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
@@ -127,6 +128,20 @@ async function checkWatch(doc, searchCache) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// 로그 자가 로테이션: 5MB 넘으면 .old로 복사 후 비움
+// (launchd가 append 모드로 파일을 잡고 있으므로 rename 대신 copy+truncate)
+const LOG_PATH = path.join(process.env.HOME ?? "", "Library/Logs/flight-watch.log");
+function rotateLogIfNeeded() {
+  try {
+    const { size } = fs.statSync(LOG_PATH);
+    if (size > 5 * 1024 * 1024) {
+      fs.copyFileSync(LOG_PATH, LOG_PATH + ".old");
+      fs.truncateSync(LOG_PATH, 0);
+      console.log("로그 로테이션: 이전 로그는 flight-watch.log.old");
+    }
+  } catch {}
+}
+
 let running = false;
 let pendingTrigger = null;
 async function checkAll(trigger) {
@@ -137,6 +152,7 @@ async function checkAll(trigger) {
     return;
   }
   running = true;
+  rotateLogIfNeeded();
   const startedAt = new Date();
   console.log(`[${startedAt.toLocaleString("ko-KR")}] 검사 시작 (${trigger})`);
   try {
