@@ -447,6 +447,7 @@ struct ContentView: View {
 
 struct ManageView: View {
     @EnvironmentObject var model: Model
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -467,6 +468,12 @@ struct ManageView: View {
         }
         .frame(minWidth: 520, minHeight: 620)
         .onAppear { model.refresh() }
+        .background(
+            // ESC로 창 닫기
+            Button("") { dismiss() }
+                .keyboardShortcut(.cancelAction)
+                .hidden()
+        )
     }
 }
 
@@ -744,6 +751,7 @@ struct WatchForm: View {
                         .keyboardShortcut(.defaultAction)
                     if editing != nil {
                         Button("취소") { dismiss() }
+                            .keyboardShortcut(.cancelAction)
                     }
                     if let m = message {
                         Text(m).font(.system(size: 12)).foregroundColor(m.hasPrefix("✅") ? .green : .red)
