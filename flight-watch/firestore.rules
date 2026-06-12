@@ -18,5 +18,9 @@ service cloud.firestore {
       allow read: if true;
       allow write: if docId == 'checkNow'; // status는 데몬(Admin SDK)만 기록
     }
+    match /notifications/{docId} {
+      allow read: if true;
+      allow write: if false; // 데몬(Admin SDK)만 기록
+    }
   }
 }

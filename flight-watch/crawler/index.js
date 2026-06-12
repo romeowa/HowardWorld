@@ -78,15 +78,22 @@ async function checkWatch(doc) {
         : bestMatch.outbound.stops != null
           ? `경유 ${bestMatch.outbound.stops}회`
           : "";
-    await sendToAll({
-      title: `✈️ ${watch.origin}→${watch.destination} ${fmtPrice(bestMatch.price)}`,
-      body:
-        `${watch.departureDate}${watch.returnDate ? ` ~ ${watch.returnDate}` : ""}` +
-        (stopsTxt ? ` · ${stopsTxt}` : "") +
-        (bestMatch.outbound.carriers.length ? ` · ${bestMatch.outbound.carriers.join(",")}` : "") +
-        (bestMatch.outbound.departTime ? ` · 출발 ${bestMatch.outbound.departTime}` : "") +
-        ` (조건 충족 ${matchCount}건)`,
+    const title = `✈️ ${watch.origin}→${watch.destination} ${fmtPrice(bestMatch.price)}`;
+    const body =
+      `${watch.departureDate}${watch.returnDate ? ` ~ ${watch.returnDate}` : ""}` +
+      (stopsTxt ? ` · ${stopsTxt}` : "") +
+      (bestMatch.outbound.carriers.length ? ` · ${bestMatch.outbound.carriers.join(",")}` : "") +
+      (bestMatch.outbound.departTime ? ` · 출발 ${bestMatch.outbound.departTime}` : "") +
+      ` (조건 충족 ${matchCount}건)`;
+    // Mac 메뉴바 앱이 폴링으로 가져가 네이티브 알림으로 표시
+    await db.collection("notifications").add({
+      title,
+      body,
+      watchId: doc.id,
+      t: FieldValue.serverTimestamp(),
     });
+    // iPhone(PWA) 등 FCM 등록 기기용 웹 푸시
+    await sendToAll({ title, body });
     update.lastNotifiedPrice = bestMatch.price;
     update.lastNotifiedAt = FieldValue.serverTimestamp();
     notified = true;

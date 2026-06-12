@@ -5,6 +5,7 @@
 
 import SwiftUI
 import AppKit
+import UserNotifications
 
 // MARK: - 셸 (launchd 제어)
 
@@ -176,6 +177,14 @@ final class Model: ObservableObject {
     private var timer: Timer?
 
     func startPolling() {
+        // 네이티브 알림 권한 (최초 1회 시스템 다이얼로그)
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            print("알림 권한: \(granted)")
+        }
+        // 최초 실행이면 지금을 기준점으로 — 과거 알림은 표시하지 않음
+        if UserDefaults.standard.double(forKey: "lastNotifSeen") == 0 {
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastNotifSeen")
+        }
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
@@ -187,7 +196,36 @@ final class Model: ObservableObject {
         Task {
             await loadStatus()
             await loadWatches()
+            await loadNotifications()
         }
+    }
+
+    /// 데몬이 기록한 notifications 컬렉션을 폴링해 새 항목을 macOS 알림으로 표시
+    func loadNotifications() async {
+        guard let res = await Firestore.get("notifications?pageSize=50") else { return }
+        let docs = (res["documents"] as? [[String: Any]]) ?? []
+        let items: [(t: Date, title: String, body: String, id: String)] = docs.compactMap { doc in
+            let f = Firestore.fields(doc)
+            guard let t = Firestore.ts(f, "t"),
+                  let title = Firestore.str(f, "title"),
+                  let body = Firestore.str(f, "body") else { return nil }
+            let id = (doc["name"] as? String)?.components(separatedBy: "/").last ?? UUID().uuidString
+            return (t, title, body, id)
+        }
+        guard let newest = items.map({ $0.t.timeIntervalSince1970 }).max() else { return }
+
+        let key = "lastNotifSeen"
+        let lastSeen = UserDefaults.standard.double(forKey: key)
+        for n in items where n.t.timeIntervalSince1970 > lastSeen {
+            let content = UNMutableNotificationContent()
+            content.title = n.title
+            content.body = n.body
+            content.sound = .default
+            try? await UNUserNotificationCenter.current().add(
+                UNNotificationRequest(identifier: n.id, content: content, trigger: nil)
+            )
+        }
+        if newest > lastSeen { UserDefaults.standard.set(newest, forKey: key) }
     }
 
 
