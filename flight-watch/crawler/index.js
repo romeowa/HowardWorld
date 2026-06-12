@@ -80,7 +80,18 @@ async function checkWatch(doc, searchCache) {
   };
   // 0건(노선 데이터 없음/일시 문제)일 땐 기존 가격 정보를 덮어쓰지 않는다
   if (offers.length > 0) {
-    update.lastBestPrice = bestOverall?.price ?? null;
+    const newBest = bestOverall?.price ?? null;
+    const newMatch = bestMatch?.price ?? null;
+    const oldBest = watch.lastBestPrice ?? null;
+    const oldMatch = watch.lastBestMatch?.price ?? null;
+    // 가격이 "변했을 때"만 직전 가격을 보존 — 앱이 ▲▼ 표시에 사용
+    if (newBest != null && oldBest != null && newBest !== oldBest) {
+      update.prevBestPrice = oldBest;
+    }
+    if (newMatch != null && oldMatch != null && newMatch !== oldMatch) {
+      update.prevBestMatchPrice = oldMatch;
+    }
+    update.lastBestPrice = newBest;
     update.lastBestMatch = offerBrief(bestMatch);
   }
 

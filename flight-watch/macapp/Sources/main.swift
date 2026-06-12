@@ -143,6 +143,8 @@ struct WatchDetail: Identifiable {
     let lastBestPrice: Double?
     let bestMatchPrice: Double?
     let bestMatchStops: Int?
+    let prevBestPrice: Double?
+    let prevBestMatchPrice: Double?
 
     var title: String { "\(origin) → \(destination)" }
     var dateLine: String { "\(departureDate)\(returnDate.map { " ~ \($0)" } ?? " 편도")" }
@@ -171,6 +173,17 @@ struct WatchDetail: Identifiable {
         df.locale = Locale(identifier: "ko_KR")
         df.dateFormat = Calendar.current.isDateInToday(at) ? "HH:mm" : "M월 d일 HH:mm"
         return "\(df.string(from: at)) 기준"
+    }
+
+    /// 표시 중인 가격의 직전 대비 변동 (nil이면 변동 정보 없음)
+    var priceDelta: Double? {
+        if let cur = bestMatchPrice, let prev = prevBestMatchPrice, cur != prev { return cur - prev }
+        if bestMatchPrice == nil, let cur = lastBestPrice, let prev = prevBestPrice, cur != prev { return cur - prev }
+        return nil
+    }
+    var deltaText: String? {
+        guard let d = priceDelta else { return nil }
+        return d > 0 ? "▲\(fmtPrice(d))" : "▼\(fmtPrice(-d))"
     }
 }
 
@@ -302,7 +315,9 @@ final class Model: ObservableObject {
                 lastCheckedAt: Firestore.ts(f, "lastCheckedAt"),
                 lastBestPrice: Firestore.num(f, "lastBestPrice"),
                 bestMatchPrice: Firestore.num(bm, "price"),
-                bestMatchStops: Firestore.num(bm, "outboundStops").map { Int($0) }
+                bestMatchStops: Firestore.num(bm, "outboundStops").map { Int($0) },
+                prevBestPrice: Firestore.num(f, "prevBestPrice"),
+                prevBestMatchPrice: Firestore.num(f, "prevBestMatchPrice")
             )
         }
         .sorted {
@@ -454,6 +469,11 @@ struct ContentView: View {
                             Text(w.priceLine)
                                 .font(.system(size: 12))
                                 .foregroundColor(w.matched ? .green : .secondary)
+                            if let d = w.deltaText {
+                                Text(d)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor((w.priceDelta ?? 0) > 0 ? .red : .green)
+                            }
                             if let c = w.checkedLine {
                                 Text("· \(c)")
                                     .font(.system(size: 10))
@@ -566,6 +586,11 @@ struct WatchCard: View {
                 Text(watch.priceLine)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(watch.matched ? .green : .secondary)
+                if let d = watch.deltaText {
+                    Text(d)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor((watch.priceDelta ?? 0) > 0 ? .red : .green)
+                }
                 if let c = watch.checkedLine {
                     Text("· \(c)").font(.system(size: 11)).foregroundColor(.secondary)
                 }
