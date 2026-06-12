@@ -5,10 +5,30 @@
 //    Incheon International Airport at 8:30 AM on ... and arrives at ... at 9:55 AM ..."
 
 const path = require("path");
+const fs = require("fs");
+const { execSync } = require("child_process");
 const { chromium } = require("playwright");
 
 // 쿠키/스토리지가 유지되는 프로필 — 매번 새 브라우저보다 차단 확률이 낮다
 const PROFILE_DIR = path.join(__dirname, ".chrome-profile");
+
+/** 비정상 종료로 프로필 잠금을 쥔 좀비 크로뮴 정리 */
+function killOrphanedBrowsers() {
+  try {
+    execSync(`pkill -f "${PROFILE_DIR}"`, { stdio: "ignore" });
+  } catch {} // 매치 없으면 pkill이 1을 반환 — 정상
+}
+
+/** 차단 의심 시 프로필 초기화 (쿠키가 플래그됐을 수 있음) */
+function resetProfile() {
+  try {
+    killOrphanedBrowsers();
+    fs.rmSync(PROFILE_DIR, { recursive: true, force: true });
+    console.warn("브라우저 프로필 초기화함");
+  } catch (e) {
+    console.warn("프로필 초기화 실패:", e.message);
+  }
+}
 
 /** "8:30 AM" → "08:30" (24h) */
 function to24h(t) {
@@ -52,18 +72,11 @@ function parseLabel(label) {
   };
 }
 
-/** 현재 페이지에 보이는 항공편 행들을 파싱 */
-async function parseVisibleFlights(page) {
-  // "View more flights" 버튼이 있으면 눌러서 전체 노출
-  const moreBtn = page.locator('button[aria-label*="more flights"]').first();
-  if (await moreBtn.isVisible().catch(() => false)) {
-    await moreBtn.click().catch(() => {});
-    await page.waitForTimeout(1500);
-  }
-  const labels = await page.$$eval("li", (lis) =>
+/** 현재 보이는 행들의 라벨만 수집 (DOM 상태 변경 없음) */
+async function collectLabels(page) {
+  return page.$$eval("li", (lis) =>
     lis
       .map((li) => {
-        const el = li.querySelector("[aria-label]");
         // 행 전체를 설명하는 긴 라벨만
         const cands = Array.from(li.querySelectorAll("[aria-label]"))
           .map((e) => e.getAttribute("aria-label"))
@@ -72,6 +85,26 @@ async function parseVisibleFlights(page) {
       })
       .filter(Boolean)
   );
+}
+
+/** 현재 페이지에 보이는 항공편 행들을 파싱 */
+async function parseVisibleFlights(page) {
+  // 1차: 더보기 클릭 전에 일단 확보 — 클릭이 Oops 페이지를 유발해도 빈손이 안 되게
+  let labels = await collectLabels(page);
+
+  // "View more flights" 버튼이 있으면 눌러서 전체 노출 시도
+  const moreBtn = page.locator('button[aria-label*="more flights"]').first();
+  if (await moreBtn.isVisible().catch(() => false)) {
+    await moreBtn.click().catch(() => {});
+    await page.waitForTimeout(2500);
+    const expanded = await collectLabels(page).catch(() => []);
+    if (expanded.length >= labels.length) {
+      labels = expanded; // 확장 성공
+    } else {
+      console.warn(`더보기 클릭 후 목록이 깨짐 — 클릭 전 ${labels.length}건으로 진행`);
+    }
+  }
+
   const seen = new Set();
   const flights = [];
   for (const label of labels) {
@@ -139,12 +172,18 @@ async function searchFlights(watch, { headless = true, screenshotOnError = true 
 
   // channel: "chromium" → 크롤링 전용 headless shell 대신 일반 크로뮴의
   // 새 headless 모드 사용 (탐지 가능성 낮음)
+  killOrphanedBrowsers();
   const browser = await chromium.launchPersistentContext(PROFILE_DIR, {
     channel: "chromium",
     headless,
     locale: "en-US",
     timezoneId: "Asia/Seoul",
     viewport: { width: 1280, height: 900 },
+    // UA의 "HeadlessChrome" 흔적 제거 (버전은 실제 엔진과 맞춤)
+    userAgent:
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+    // navigator.webdriver=false — 자동화 표식 제거
+    args: ["--disable-blink-features=AutomationControlled"],
   });
   try {
     const page = await browser.newPage();
@@ -208,4 +247,4 @@ async function searchFlights(watch, { headless = true, screenshotOnError = true 
   }
 }
 
-module.exports = { searchFlights, parseLabel, to24h };
+module.exports = { searchFlights, parseLabel, to24h, resetProfile };

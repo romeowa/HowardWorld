@@ -9,7 +9,7 @@ const path = require("path");
 const { initializeApp, cert } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 
-const { searchFlights } = require("./googleFlights");
+const { searchFlights, resetProfile } = require("./googleFlights");
 const { evaluate } = require("./matcher");
 const { sendToAll } = require("./notify");
 
@@ -177,6 +177,7 @@ async function checkAll(trigger) {
         // 차단당했으면 계속 두드리지 말고 이번 회차는 여기서 끝 (다음 주기에 재시도)
         if (String(err.message).includes("일시 차단")) {
           console.warn("  차단 추정 — 남은 감시는 다음 주기로 미룸");
+          resetProfile(); // 플래그된 쿠키일 수 있으니 다음 회차는 새 프로필로
           break;
         }
       }
