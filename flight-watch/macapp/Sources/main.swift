@@ -375,8 +375,9 @@ struct ContentView: View {
             Text(model.lastRunLine)
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
-            ForEach(model.resultLines, id: \.self) { line in
-                Text(line).font(.system(size: 12))
+            // 정상 결과는 아래 감시 목록과 중복이라 숨기고, 검사 실패만 표시
+            ForEach(model.resultLines.filter { $0.contains("⚠️") }, id: \.self) { line in
+                Text(line).font(.system(size: 12)).foregroundColor(.orange)
             }
 
             Divider()
