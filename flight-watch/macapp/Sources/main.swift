@@ -163,6 +163,15 @@ struct WatchDetail: Identifiable {
         return "아직 검사 전"
     }
     var matched: Bool { bestMatchPrice != nil }
+
+    /// 마지막 성공 검사 시각 (가격 정보의 기준 시점)
+    var checkedLine: String? {
+        guard let at = lastCheckedAt else { return nil }
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "ko_KR")
+        df.dateFormat = Calendar.current.isDateInToday(at) ? "HH:mm" : "M월 d일 HH:mm"
+        return "\(df.string(from: at)) 기준"
+    }
 }
 
 @MainActor
@@ -441,9 +450,16 @@ struct ContentView: View {
                                 Text("중지됨").font(.system(size: 10)).foregroundColor(.orange)
                             }
                         }
-                        Text(w.priceLine)
-                            .font(.system(size: 12))
-                            .foregroundColor(w.matched ? .green : .secondary)
+                        HStack(spacing: 4) {
+                            Text(w.priceLine)
+                                .font(.system(size: 12))
+                                .foregroundColor(w.matched ? .green : .secondary)
+                            if let c = w.checkedLine {
+                                Text("· \(c)")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(Color.secondary.opacity(0.7))
+                            }
+                        }
                     }
                     .opacity(w.active ? 1 : 0.5)
                 }
@@ -550,14 +566,8 @@ struct WatchCard: View {
                 Text(watch.priceLine)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(watch.matched ? .green : .secondary)
-                if let at = watch.lastCheckedAt {
-                    let df: DateFormatter = {
-                        let d = DateFormatter()
-                        d.locale = Locale(identifier: "ko_KR")
-                        d.dateFormat = "M월 d일 HH:mm"
-                        return d
-                    }()
-                    Text("· 체크 \(df.string(from: at))").font(.system(size: 11)).foregroundColor(.secondary)
+                if let c = watch.checkedLine {
+                    Text("· \(c)").font(.system(size: 11)).foregroundColor(.secondary)
                 }
                 Spacer()
                 Button("수정") { showEdit = true }
