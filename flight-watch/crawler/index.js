@@ -63,9 +63,12 @@ async function checkWatch(doc) {
     lastCheckedAt: FieldValue.serverTimestamp(),
     lastOfferCount: offers.length,
     lastMatchCount: matchCount,
-    lastBestPrice: bestOverall?.price ?? null,
-    lastBestMatch: offerBrief(bestMatch),
   };
+  // 0건(노선 데이터 없음/일시 문제)일 땐 기존 가격 정보를 덮어쓰지 않는다
+  if (offers.length > 0) {
+    update.lastBestPrice = bestOverall?.price ?? null;
+    update.lastBestMatch = offerBrief(bestMatch);
+  }
 
   let notified = false;
   if (bestMatch && (watch.lastNotifiedPrice == null || bestMatch.price < watch.lastNotifiedPrice)) {
@@ -102,19 +105,29 @@ async function checkWatch(doc) {
   };
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 let running = false;
+let pendingTrigger = null;
 async function checkAll(trigger) {
   if (running) {
-    console.log("이미 검사 중 — 건너뜀");
+    // 검사 중 들어온 수동 요청은 큐에 넣어 끝나고 바로 실행
+    if (trigger.startsWith("manual")) pendingTrigger = trigger;
+    console.log(`이미 검사 중 — ${trigger} ${pendingTrigger ? "큐에 등록" : "건너뜀"}`);
     return;
   }
   running = true;
   const startedAt = new Date();
   console.log(`[${startedAt.toLocaleString("ko-KR")}] 검사 시작 (${trigger})`);
   try {
+    await db.doc("control/status").set(
+      { running: true, trigger, startedAt: FieldValue.serverTimestamp() },
+      { merge: true }
+    );
     const snap = await db.collection("watches").where("active", "==", true).get();
     const results = [];
-    for (const doc of snap.docs) {
+    for (let i = 0; i < snap.docs.length; i++) {
+      const doc = snap.docs[i];
       try {
         const r = await checkWatch(doc);
         console.log(" ", JSON.stringify(r));
@@ -125,14 +138,23 @@ async function checkAll(trigger) {
         console.error(`  감시 ${label} (${doc.id}) 실패:`, err.message);
         results.push({ id: doc.id, label, status: "error", error: String(err.message ?? err) });
       }
+      // 구글 차단 회피: 감시 사이 간격
+      if (i < snap.docs.length - 1) await sleep(15_000 + Math.random() * 15_000);
     }
     await db.doc("control/status").set({
+      running: false,
       lastRunAt: FieldValue.serverTimestamp(),
       trigger,
       results,
     });
   } finally {
     running = false;
+    if (pendingTrigger) {
+      const t = pendingTrigger;
+      pendingTrigger = null;
+      console.log(`큐에 있던 ${t} 실행`);
+      checkAll(t).catch((e) => console.error(e));
+    }
   }
 }
 

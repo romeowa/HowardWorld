@@ -171,6 +171,7 @@ final class Model: ObservableObject {
     @Published var resultLines: [String] = []
     @Published var watches: [WatchDetail] = []
     @Published var checkRequested = false
+    @Published var checking = false // 데몬이 검사 진행 중
 
     private var timer: Timer?
 
@@ -197,6 +198,12 @@ final class Model: ObservableObject {
     func loadStatus() async {
         guard let doc = await Firestore.get("control/status") else { return }
         let f = Firestore.fields(doc)
+        checking = Firestore.bool(f, "running") ?? false
+        if checking {
+            let trigger = Firestore.str(f, "trigger") ?? "?"
+            lastRunLine = "⏳ 검사 진행 중... (\(Model.triggerNames[trigger] ?? trigger))"
+            return
+        }
         if let at = Firestore.ts(f, "lastRunAt") {
             let df = DateFormatter()
             df.locale = Locale(identifier: "ko_KR")
@@ -410,9 +417,12 @@ struct ContentView: View {
                 Button {
                     model.checkNow()
                 } label: {
-                    Label(model.checkRequested ? "요청됨..." : "지금 체크", systemImage: "bolt.fill")
+                    Label(
+                        model.checking ? "검사 중..." : (model.checkRequested ? "요청됨..." : "지금 체크"),
+                        systemImage: "bolt.fill"
+                    )
                 }
-                .disabled(model.checkRequested || !model.daemonRunning)
+                .disabled(model.checking || model.checkRequested || !model.daemonRunning)
 
                 Button {
                     openWindow(id: "manage")

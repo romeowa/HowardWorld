@@ -103,9 +103,13 @@ async function waitForResults(page, attempts = 3) {
     } catch (err) {
       const reload = page.locator('button:has-text("Reload")').first();
       if (await reload.isVisible().catch(() => false)) {
+        if (i === attempts - 1) {
+          // 재시도 소진 — 0건이 아니라 에러다 (구글 일시 차단 가능성)
+          throw new Error("구글플라이트 오류 페이지가 계속됨 (일시 차단 추정) — 다음 주기에 재시도");
+        }
         console.warn(`구글플라이트 일시 오류 페이지 — Reload 재시도 (${i + 1}/${attempts})`);
         await reload.click().catch(() => {});
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(5000 + Math.random() * 5000);
         continue;
       }
       const body = (await page.textContent("body").catch(() => "")) ?? "";
@@ -114,7 +118,7 @@ async function waitForResults(page, attempts = 3) {
       await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
     }
   }
-  return "empty";
+  throw new Error("결과를 확인하지 못함");
 }
 
 /**
