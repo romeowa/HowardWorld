@@ -7,7 +7,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>/opt/homebrew/bin/node</string>
-    <string>index.js</string>
+    <string>/Users/howard/HowardWorld/flight-watch/crawler/index.js</string>
   </array>
   <key>WorkingDirectory</key>
   <string>/Users/howard/HowardWorld/flight-watch/crawler</string>
