@@ -5,6 +5,7 @@
 
 import SwiftUI
 import AppKit
+import Charts
 import UserNotifications
 
 // MARK: - 셸 (launchd 제어)
@@ -72,6 +73,27 @@ enum Firestore {
         let iso = ISO8601DateFormatter().string(from: Date())
         let body: [String: Any] = ["fields": ["requestedAt": ["timestampValue": iso]]]
         return await request("PATCH", "control/checkNow?updateMask.fieldPaths=requestedAt", body: body) != nil
+    }
+
+    /// 서브컬렉션 쿼리 (orderBy/limit) — 문서 fields 딕셔너리 배열 반환
+    static func runQuery(parent: String, collection: String, orderByField: String, limit: Int) async -> [[String: Any]] {
+        let body: [String: Any] = [
+            "structuredQuery": [
+                "from": [["collectionId": collection]],
+                "orderBy": [["field": ["fieldPath": orderByField], "direction": "DESCENDING"]],
+                "limit": limit,
+            ]
+        ]
+        guard let url = URL(string: "\(base)/\(parent):runQuery") else { return [] }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let arr = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]]
+        else { return [] }
+        return arr.compactMap { ($0["document"] as? [String: Any]).map { fields($0) } }
     }
 
     // ---- 값 인코딩 ----
@@ -561,6 +583,90 @@ struct ManageView: View {
     }
 }
 
+// MARK: - 가격 추이 그래프
+
+struct PricePoint: Identifiable {
+    let id = UUID()
+    let t: Date
+    let price: Double
+    let series: String // "전체 최저" | "조건 충족"
+}
+
+/// 단위 표시용: 1034000 → "103.4만"
+func fmtManwon(_ n: Double) -> String {
+    let man = n / 10_000
+    return man >= 100 ? String(format: "%.0f만", man) : String(format: "%.1f만", man)
+}
+
+struct HistoryChart: View {
+    let watchId: String
+    @State private var points: [PricePoint] = []
+    @State private var loaded = false
+
+    var body: some View {
+        Group {
+            if !loaded {
+                ProgressView().controlSize(.small).frame(height: 100)
+            } else if points.count < 2 {
+                Text("기록이 더 쌓이면 그래프가 표시됩니다")
+                    .font(.system(size: 11)).foregroundColor(.secondary)
+                    .frame(height: 30)
+            } else {
+                Chart(points) { p in
+                    LineMark(
+                        x: .value("시각", p.t),
+                        y: .value("가격", p.price),
+                        series: .value("구분", p.series)
+                    )
+                    .foregroundStyle(by: .value("구분", p.series))
+                    .interpolationMethod(.monotone)
+                }
+                .chartForegroundStyleScale(["전체 최저": Color.blue, "조건 충족": Color.green])
+                .chartYScale(domain: .automatic(includesZero: false))
+                .chartYAxis {
+                    AxisMarks(position: .trailing) { value in
+                        AxisGridLine()
+                        AxisValueLabel {
+                            if let v = value.as(Double.self) {
+                                Text(fmtManwon(v)).font(.system(size: 9))
+                            }
+                        }
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .day)) { _ in
+                        AxisGridLine()
+                        AxisValueLabel(format: .dateTime.month(.defaultDigits).day(), centered: true)
+                            .font(.system(size: 9))
+                    }
+                }
+                .chartLegend(points.contains { $0.series == "조건 충족" } ? .visible : .hidden)
+                .frame(height: 100)
+            }
+        }
+        .task { await load() }
+    }
+
+    private func load() async {
+        let docs = await Firestore.runQuery(
+            parent: "watches/\(watchId)", collection: "history", orderByField: "t", limit: 200
+        )
+        let weekAgo = Date().addingTimeInterval(-7 * 24 * 3600)
+        var pts: [PricePoint] = []
+        for f in docs {
+            guard let t = Firestore.ts(f, "t"), t > weekAgo else { continue }
+            if let p = Firestore.num(f, "bestOverallPrice") {
+                pts.append(PricePoint(t: t, price: p, series: "전체 최저"))
+            }
+            if let p = Firestore.num(f, "bestMatchPrice") {
+                pts.append(PricePoint(t: t, price: p, series: "조건 충족"))
+            }
+        }
+        points = pts.sorted { $0.t < $1.t }
+        loaded = true
+    }
+}
+
 struct WatchCard: View {
     @EnvironmentObject var model: Model
     let watch: WatchDetail
@@ -613,6 +719,8 @@ struct WatchCard: View {
                         Button("삭제", role: .destructive) { model.deleteWatch(watch) }
                     }
             }
+            HistoryChart(watchId: watch.id)
+                .padding(.top, 4)
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
