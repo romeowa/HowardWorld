@@ -164,10 +164,11 @@ async function waitForResults(page, attempts = 3) {
  * @returns offers: [{ price, currency, outbound: {...}, inbound: {...}|null }]
  */
 async function searchFlights(watch, { headless = true, screenshotOnError = true } = {}) {
-  const { origin, destination, departureDate, returnDate } = watch;
+  const { origin, destination, departureDate, returnDate, adults = 1 } = watch;
+  const paxPart = adults > 1 ? ` for ${adults} adults` : "";
   const q = returnDate
-    ? `Flights from ${origin} to ${destination} on ${departureDate} through ${returnDate}`
-    : `One way flights from ${origin} to ${destination} on ${departureDate}`;
+    ? `Flights from ${origin} to ${destination} on ${departureDate} through ${returnDate}${paxPart}`
+    : `One way flights from ${origin} to ${destination} on ${departureDate}${paxPart}`;
   const url = `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}&hl=en&curr=KRW`;
 
   // channel: "chromium" → 크롤링 전용 headless shell 대신 일반 크로뮴의
