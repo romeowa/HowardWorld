@@ -4,7 +4,11 @@
 //   "From 350000 South Korean won. Nonstop flight with Jeju Air. Leaves
 //    Incheon International Airport at 8:30 AM on ... and arrives at ... at 9:55 AM ..."
 
+const path = require("path");
 const { chromium } = require("playwright");
+
+// 쿠키/스토리지가 유지되는 프로필 — 매번 새 브라우저보다 차단 확률이 낮다
+const PROFILE_DIR = path.join(__dirname, ".chrome-profile");
 
 /** "8:30 AM" → "08:30" (24h) */
 function to24h(t) {
@@ -133,14 +137,17 @@ async function searchFlights(watch, { headless = true, screenshotOnError = true 
     : `One way flights from ${origin} to ${destination} on ${departureDate}`;
   const url = `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}&hl=en&curr=KRW`;
 
-  const browser = await chromium.launch({ headless });
+  // channel: "chromium" → 크롤링 전용 headless shell 대신 일반 크로뮴의
+  // 새 headless 모드 사용 (탐지 가능성 낮음)
+  const browser = await chromium.launchPersistentContext(PROFILE_DIR, {
+    channel: "chromium",
+    headless,
+    locale: "en-US",
+    timezoneId: "Asia/Seoul",
+    viewport: { width: 1280, height: 900 },
+  });
   try {
-    const ctx = await browser.newContext({
-      locale: "en-US",
-      timezoneId: "Asia/Seoul",
-      viewport: { width: 1280, height: 900 },
-    });
-    const page = await ctx.newPage();
+    const page = await browser.newPage();
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
     await dismissConsent(page);
     if ((await waitForResults(page)) === "empty") {
@@ -190,7 +197,7 @@ async function searchFlights(watch, { headless = true, screenshotOnError = true 
   } catch (err) {
     if (screenshotOnError) {
       try {
-        const pages = browser.contexts()[0]?.pages() ?? [];
+        const pages = browser.pages();
         if (pages[0]) await pages[0].screenshot({ path: "/tmp/flight-watch-error.png", fullPage: false });
         console.error("에러 스크린샷: /tmp/flight-watch-error.png");
       } catch {}

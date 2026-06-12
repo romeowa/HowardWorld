@@ -38,7 +38,7 @@ function offerBrief(o) {
   };
 }
 
-async function checkWatch(doc) {
+async function checkWatch(doc, searchCache) {
   const watch = doc.data();
   const label = `${watch.origin}→${watch.destination} ${watch.departureDate}`;
 
@@ -48,7 +48,20 @@ async function checkWatch(doc) {
     return { id: doc.id, label, status: "expired" };
   }
 
-  const offers = await searchFlights(watch);
+  // 같은 검색 조건이면 이번 회차의 결과를 재사용 (중복 감시 대응)
+  const needInbound = !!watch.returnDate && (watch.returnAfter || watch.returnBefore || watch.maxStops != null);
+  const cacheKey = JSON.stringify([
+    watch.origin, watch.destination, watch.departureDate, watch.returnDate ?? null,
+    watch.adults ?? 1, watch.currency ?? "KRW", !!needInbound,
+  ]);
+  let offers;
+  if (searchCache?.has(cacheKey)) {
+    offers = searchCache.get(cacheKey);
+    console.log(`  (캐시 재사용: ${label})`);
+  } else {
+    offers = await searchFlights(watch);
+    searchCache?.set(cacheKey, offers);
+  }
   const { bestMatch, bestOverall, matchCount } = evaluate(watch, offers);
 
   await doc.ref.collection("history").add({
@@ -133,10 +146,11 @@ async function checkAll(trigger) {
     );
     const snap = await db.collection("watches").where("active", "==", true).get();
     const results = [];
+    const searchCache = new Map();
     for (let i = 0; i < snap.docs.length; i++) {
       const doc = snap.docs[i];
       try {
-        const r = await checkWatch(doc);
+        const r = await checkWatch(doc, searchCache);
         console.log(" ", JSON.stringify(r));
         results.push(r);
       } catch (err) {
@@ -144,9 +158,14 @@ async function checkAll(trigger) {
         const label = `${w.origin}→${w.destination} ${w.departureDate}`;
         console.error(`  감시 ${label} (${doc.id}) 실패:`, err.message);
         results.push({ id: doc.id, label, status: "error", error: String(err.message ?? err) });
+        // 차단당했으면 계속 두드리지 말고 이번 회차는 여기서 끝 (다음 주기에 재시도)
+        if (String(err.message).includes("일시 차단")) {
+          console.warn("  차단 추정 — 남은 감시는 다음 주기로 미룸");
+          break;
+        }
       }
       // 구글 차단 회피: 감시 사이 간격
-      if (i < snap.docs.length - 1) await sleep(15_000 + Math.random() * 15_000);
+      if (i < snap.docs.length - 1) await sleep(30_000 + Math.random() * 30_000);
     }
     await db.doc("control/status").set({
       running: false,
@@ -165,20 +184,27 @@ async function checkAll(trigger) {
   }
 }
 
+// 네트워크 끊김(잠자기 등)으로 인한 비정상 종료 방지
+process.on("unhandledRejection", (err) => console.error("unhandledRejection:", err));
+process.on("uncaughtException", (err) => console.error("uncaughtException:", err));
+
 async function main() {
   if (ONCE) {
     await checkAll("manual-cli");
     process.exit(0);
   }
 
-  // 웹 UI "지금 체크" 감지 (시작 이전의 요청은 무시)
+  // 웹/앱 "지금 체크" 감지 (시작 이전의 요청은 무시)
   const bootTime = Timestamp.now();
-  db.doc("control/checkNow").onSnapshot((snap) => {
-    const requestedAt = snap.data()?.requestedAt;
-    if (requestedAt && requestedAt.toMillis() > bootTime.toMillis()) {
-      checkAll("manual-web").catch((e) => console.error(e));
-    }
-  });
+  db.doc("control/checkNow").onSnapshot(
+    (snap) => {
+      const requestedAt = snap.data()?.requestedAt;
+      if (requestedAt && requestedAt.toMillis() > bootTime.toMillis()) {
+        checkAll("manual-web").catch((e) => console.error(e));
+      }
+    },
+    (err) => console.error("checkNow 리스너 오류 (자동 재연결 대기):", err.message)
+  );
 
   await checkAll("startup");
   setInterval(() => checkAll("schedule").catch((e) => console.error(e)), INTERVAL_MIN * 60_000);

@@ -5,3 +5,4 @@ node_modules/
 serviceAccount.json
 .firebase/
 flight-watch/macapp/build/
+flight-watch/crawler/.chrome-profile/
