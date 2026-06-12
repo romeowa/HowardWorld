@@ -295,6 +295,34 @@ final class Model: ObservableObject {
         return ok
     }
 
+    func updateWatch(
+        id: String,
+        origin: String, destination: String, departureDate: String, returnDate: String?,
+        adults: Int, currency: String, maxPrice: Double?, maxStops: Int?,
+        departAfter: String?, departBefore: String?, returnAfter: String?, returnBefore: String?
+    ) async -> Bool {
+        let fields: [String: Any] = [
+            "origin": Firestore.vStr(origin),
+            "destination": Firestore.vStr(destination),
+            "departureDate": Firestore.vStr(departureDate),
+            "returnDate": Firestore.vStr(returnDate),
+            "adults": Firestore.vInt(adults),
+            "currency": Firestore.vStr(currency),
+            "maxPrice": Firestore.vDouble(maxPrice),
+            "maxStops": Firestore.vInt(maxStops),
+            "departAfter": Firestore.vStr(departAfter),
+            "departBefore": Firestore.vStr(departBefore),
+            "returnAfter": Firestore.vStr(returnAfter),
+            "returnBefore": Firestore.vStr(returnBefore),
+            // 조건이 바뀌었으니 알림 기준도 리셋 — 새 조건 충족 시 다시 알림
+            "lastNotifiedPrice": ["nullValue": NSNull()],
+        ]
+        let mask = fields.keys.map { "updateMask.fieldPaths=\($0)" }.joined(separator: "&")
+        let ok = await Firestore.request("PATCH", "watches/\(id)?\(mask)", body: ["fields": fields]) != nil
+        if ok { await loadWatches() }
+        return ok
+    }
+
     func setActive(_ watch: WatchDetail, _ active: Bool) {
         Task {
             let body: [String: Any] = ["fields": ["active": Firestore.vBool(active)]]
@@ -423,7 +451,7 @@ struct ManageView: View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    AddWatchForm()
+                    WatchForm()
                     Divider()
                     Text("감시 목록").font(.headline)
                     if model.watches.isEmpty {
@@ -445,6 +473,7 @@ struct WatchCard: View {
     @EnvironmentObject var model: Model
     let watch: WatchDetail
     @State private var confirmDelete = false
+    @State private var showEdit = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -475,6 +504,14 @@ struct WatchCard: View {
                     Text("· 체크 \(df.string(from: at))").font(.system(size: 11)).foregroundColor(.secondary)
                 }
                 Spacer()
+                Button("수정") { showEdit = true }
+                    .controlSize(.small)
+                    .sheet(isPresented: $showEdit) {
+                        WatchForm(editing: watch)
+                            .environmentObject(model)
+                            .padding(16)
+                            .frame(width: 520)
+                    }
                 Button(watch.active ? "일시중지" : "다시 시작") {
                     model.setActive(watch, !watch.active)
                 }
@@ -492,8 +529,12 @@ struct WatchCard: View {
     }
 }
 
-struct AddWatchForm: View {
+struct WatchForm: View {
     @EnvironmentObject var model: Model
+    @Environment(\.dismiss) private var dismiss
+
+    /// nil이면 새 감시 추가, 값이 있으면 해당 감시 수정
+    let editing: WatchDetail?
 
     @State private var origin = ""
     @State private var destination = ""
@@ -524,8 +565,30 @@ struct AddWatchForm: View {
         return d
     }()
 
+    init(editing: WatchDetail? = nil) {
+        self.editing = editing
+        guard let w = editing else { return }
+        _origin = State(initialValue: w.origin)
+        _destination = State(initialValue: w.destination)
+        _departureDate = State(initialValue: Self.dayFmt.date(from: w.departureDate) ?? Date())
+        _roundTrip = State(initialValue: w.returnDate != nil)
+        if let r = w.returnDate, let d = Self.dayFmt.date(from: r) {
+            _returnDate = State(initialValue: d)
+        }
+        _adults = State(initialValue: w.adults)
+        _currency = State(initialValue: w.currency)
+        _maxPriceText = State(initialValue: w.maxPrice.map { String(Int($0)) } ?? "")
+        _maxStops = State(initialValue: w.maxStops ?? -1)
+        _limitDepartTime = State(initialValue: w.departAfter != nil || w.departBefore != nil)
+        if let t = w.departAfter, let d = Self.timeFmt.date(from: t) { _departAfter = State(initialValue: d) }
+        if let t = w.departBefore, let d = Self.timeFmt.date(from: t) { _departBefore = State(initialValue: d) }
+        _limitReturnTime = State(initialValue: w.returnAfter != nil || w.returnBefore != nil)
+        if let t = w.returnAfter, let d = Self.timeFmt.date(from: t) { _returnAfter = State(initialValue: d) }
+        if let t = w.returnBefore, let d = Self.timeFmt.date(from: t) { _returnBefore = State(initialValue: d) }
+    }
+
     var body: some View {
-        GroupBox(label: Text("새 감시 추가").font(.headline)) {
+        GroupBox(label: Text(editing == nil ? "새 감시 추가" : "감시 수정 — \(editing!.title)").font(.headline)) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     TextField("출발지 (예: ICN)", text: $origin)
@@ -577,9 +640,12 @@ struct AddWatchForm: View {
                     }
                 }
                 HStack {
-                    Button(saving ? "추가 중..." : "감시 추가") { submit() }
+                    Button(saving ? "저장 중..." : (editing == nil ? "감시 추가" : "저장")) { submit() }
                         .disabled(saving)
                         .keyboardShortcut(.defaultAction)
+                    if editing != nil {
+                        Button("취소") { dismiss() }
+                    }
                     if let m = message {
                         Text(m).font(.system(size: 12)).foregroundColor(m.hasPrefix("✅") ? .green : .red)
                     }
@@ -601,28 +667,51 @@ struct AddWatchForm: View {
         saving = true
         message = nil
         Task {
-            let ok = await model.addWatch(
-                origin: o,
-                destination: d,
-                departureDate: Self.dayFmt.string(from: departureDate),
-                returnDate: roundTrip ? Self.dayFmt.string(from: returnDate) : nil,
-                adults: adults,
-                currency: currency,
-                maxPrice: maxPrice,
-                maxStops: maxStops >= 0 ? maxStops : nil,
-                departAfter: limitDepartTime ? Self.timeFmt.string(from: departAfter) : nil,
-                departBefore: limitDepartTime ? Self.timeFmt.string(from: departBefore) : nil,
-                returnAfter: roundTrip && limitReturnTime ? Self.timeFmt.string(from: returnAfter) : nil,
-                returnBefore: roundTrip && limitReturnTime ? Self.timeFmt.string(from: returnBefore) : nil
-            )
+            let ok: Bool
+            if let w = editing {
+                ok = await model.updateWatch(
+                    id: w.id,
+                    origin: o,
+                    destination: d,
+                    departureDate: Self.dayFmt.string(from: departureDate),
+                    returnDate: roundTrip ? Self.dayFmt.string(from: returnDate) : nil,
+                    adults: adults,
+                    currency: currency,
+                    maxPrice: maxPrice,
+                    maxStops: maxStops >= 0 ? maxStops : nil,
+                    departAfter: limitDepartTime ? Self.timeFmt.string(from: departAfter) : nil,
+                    departBefore: limitDepartTime ? Self.timeFmt.string(from: departBefore) : nil,
+                    returnAfter: roundTrip && limitReturnTime ? Self.timeFmt.string(from: returnAfter) : nil,
+                    returnBefore: roundTrip && limitReturnTime ? Self.timeFmt.string(from: returnBefore) : nil
+                )
+            } else {
+                ok = await model.addWatch(
+                    origin: o,
+                    destination: d,
+                    departureDate: Self.dayFmt.string(from: departureDate),
+                    returnDate: roundTrip ? Self.dayFmt.string(from: returnDate) : nil,
+                    adults: adults,
+                    currency: currency,
+                    maxPrice: maxPrice,
+                    maxStops: maxStops >= 0 ? maxStops : nil,
+                    departAfter: limitDepartTime ? Self.timeFmt.string(from: departAfter) : nil,
+                    departBefore: limitDepartTime ? Self.timeFmt.string(from: departBefore) : nil,
+                    returnAfter: roundTrip && limitReturnTime ? Self.timeFmt.string(from: returnAfter) : nil,
+                    returnBefore: roundTrip && limitReturnTime ? Self.timeFmt.string(from: returnBefore) : nil
+                )
+            }
             saving = false
             if ok {
-                message = "✅ 추가됨 — \(o) → \(d)"
-                origin = ""
-                destination = ""
-                maxPriceText = ""
+                if editing != nil {
+                    dismiss()
+                } else {
+                    message = "✅ 추가됨 — \(o) → \(d)"
+                    origin = ""
+                    destination = ""
+                    maxPriceText = ""
+                }
             } else {
-                message = "추가 실패 — 네트워크/권한 확인"
+                message = "\(editing == nil ? "추가" : "저장") 실패 — 네트워크/권한 확인"
             }
         }
     }
