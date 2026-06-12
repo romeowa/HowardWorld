@@ -4,6 +4,7 @@
 
 - **웹 UI**: https://howardworld.web.app — 감시 추가/관리, 알림 기기 등록, 수동 체크
 - **크롤러 데몬**: Mac launchd 상주 프로세스 (`crawler/`) — Playwright로 구글플라이트 크롤링
+- **메뉴바 앱**: `macapp/` — 데몬 상태/시작/중지/재시작, 마지막 검사 결과, 지금 체크 + **감시 관리 창**(추가/일시중지/삭제 — 웹 UI와 동일 기능)
 - **데이터**: Firestore — `watches`(감시 조건), `watches/{id}/history`(가격 추이), `fcmTokens`(푸시 기기), `control`(데몬 제어/상태)
 
 > 원래 Amadeus Self-Service API로 만들었으나, Amadeus가 2026-07-17부로 Self-Service를 종료(신규 가입은 이미 중단)해서 Mac 크롤링 방식으로 전환. 덕분에 Blaze 플랜 불필요 — 전부 무료 티어로 동작.
@@ -49,7 +50,17 @@ node index.js --once
 
 # 웹 UI 배포
 firebase deploy --only hosting
+
+# 메뉴바 앱 빌드/설치 (Swift, Xcode 불필요 — Command Line Tools면 충분)
+cd macapp
+./build.sh
+cp -R build/FlightWatch.app ~/Applications/
+open ~/Applications/FlightWatch.app
 ```
+
+메뉴바 앱은 Firestore REST(공개 읽기 규칙)로 상태를 읽으므로 서비스 계정 키가 필요 없다.
+데몬 제어는 `launchctl`을 직접 호출한다. 로그인 시 자동 시작하려면
+시스템 설정 → 일반 → 로그인 항목에 FlightWatch.app 추가.
 
 ## 구조
 
@@ -66,6 +77,10 @@ public/
   index.html / app.js          # 감시 관리 UI (Firestore 직접 읽기/쓰기)
   firebase-messaging-sw.js     # 백그라운드 푸시 서비스워커
   manifest.json                # iOS 홈 화면 추가용 PWA 매니페스트
+macapp/
+  Sources/main.swift           # SwiftUI 메뉴바 앱 (전체가 한 파일)
+  build.sh                     # swiftc 빌드 → build/FlightWatch.app
+  Info.plist                   # LSUIElement (Dock 아이콘 없는 메뉴바 전용)
 ```
 
 ## 주의사항

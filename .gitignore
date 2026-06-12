@@ -4,3 +4,4 @@ node_modules/
 .env
 serviceAccount.json
 .firebase/
+flight-watch/macapp/build/

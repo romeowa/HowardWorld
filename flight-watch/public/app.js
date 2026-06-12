@@ -15,7 +15,7 @@ const firebaseConfig = {
 };
 
 // Firebase 콘솔 → 프로젝트 설정 → 클라우드 메시징 → 웹 푸시 인증서에서 생성한 키
-const VAPID_KEY = "PASTE_VAPID_KEY_HERE";
+const VAPID_KEY = "BDmTPoFy8N01JB5AlH3d0tb1f51olmTDIigRU4_jlC-j_QNg8KkndH0YQoaY2_U8Ammk9dFtoUnkt5KDvQvArJQ";
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
