@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// 개인 프로젝트 v1: 인증 없이 열어둠.
+// 데이터가 민감해지면 Firebase Auth(구글 로그인) 붙이고 request.auth.uid 체크로 잠글 것.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /watches/{watchId} {
+      allow read, write: if true;
+      match /history/{entryId} {
+        allow read: if true;
+        allow write: if false; // history는 서버(Functions)만 기록
+      }
+    }
+    match /fcmTokens/{tokenId} {
+      allow read, write: if true;
+    }
+    match /control/{docId} {
+      allow read: if true;
+      allow write: if docId == 'checkNow'; // status는 데몬(Admin SDK)만 기록
+    }
+  }
+}

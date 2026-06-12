@@ -1,0 +1,15 @@
+{
+  "name": "flight-watch-crawler",
+  "description": "Mac에서 구글플라이트를 주기적으로 크롤링해 조건에 맞으면 FCM 푸시를 보내는 데몬",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "once": "node index.js --once",
+    "test-crawl": "node testCrawl.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "playwright": "^1.45.0"
+  },
+  "private": true
+}

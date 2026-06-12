@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>✈️ 항공권 감시</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0f172a" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
+      background: #0f172a; color: #e2e8f0;
+      padding: 20px; padding-top: calc(20px + env(safe-area-inset-top));
+      max-width: 640px; margin: 0 auto;
+    }
+    h1 { font-size: 22px; margin-bottom: 16px; }
+    h2 { font-size: 15px; color: #94a3b8; margin: 24px 0 10px; }
+    .card { background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+    label { display: block; font-size: 12px; color: #94a3b8; margin: 10px 0 4px; }
+    input, select {
+      width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #334155;
+      background: #0f172a; color: #e2e8f0; font-size: 15px;
+    }
+    input::placeholder { color: #475569; }
+    .row { display: flex; gap: 10px; }
+    .row > div { flex: 1; }
+    button {
+      width: 100%; padding: 12px; margin-top: 14px; border: none; border-radius: 8px;
+      background: #3b82f6; color: white; font-size: 15px; font-weight: 600; cursor: pointer;
+    }
+    button:disabled { background: #334155; color: #64748b; }
+    button.secondary { background: #334155; }
+    button.danger { background: transparent; color: #f87171; font-weight: 400; padding: 6px; margin-top: 6px; font-size: 13px; }
+    .watch-title { font-size: 17px; font-weight: 700; }
+    .watch-meta { font-size: 13px; color: #94a3b8; margin-top: 4px; line-height: 1.6; }
+    .price { font-size: 15px; font-weight: 600; margin-top: 8px; }
+    .price.match { color: #4ade80; }
+    .price.nomatch { color: #94a3b8; }
+    .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; margin-left: 6px; vertical-align: middle; }
+    .badge.on { background: #14532d; color: #4ade80; }
+    .badge.off { background: #334155; color: #94a3b8; }
+    #notif-status { font-size: 13px; color: #94a3b8; margin-top: 8px; }
+    .toolbar { display: flex; gap: 10px; }
+    .toolbar button { margin-top: 0; }
+    #log { font-size: 12px; color: #64748b; margin-top: 10px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>✈️ 항공권 감시</h1>
+
+  <div class="card">
+    <div class="toolbar">
+      <button id="btn-enable-notif">🔔 이 기기에서 알림 받기</button>
+      <button id="btn-check-now" class="secondary">지금 체크</button>
+    </div>
+    <div id="notif-status"></div>
+    <div id="log"></div>
+  </div>
+
+  <h2>새 감시 추가</h2>
+  <div class="card">
+    <div class="row">
+      <div><label>출발지 (IATA)</label><input id="f-origin" placeholder="ICN" maxlength="3" style="text-transform:uppercase" /></div>
+      <div><label>도착지 (IATA)</label><input id="f-destination" placeholder="FUK" maxlength="3" style="text-transform:uppercase" /></div>
+    </div>
+    <div class="row">
+      <div><label>출발일</label><input id="f-departureDate" type="date" /></div>
+      <div><label>귀국일 (편도면 비움)</label><input id="f-returnDate" type="date" /></div>
+    </div>
+    <div class="row">
+      <div><label>최대 가격</label><input id="f-maxPrice" type="number" placeholder="350000" /></div>
+      <div><label>통화</label>
+        <select id="f-currency"><option>KRW</option><option>USD</option><option>JPY</option><option>EUR</option></select>
+      </div>
+    </div>
+    <div class="row">
+      <div><label>최대 경유 횟수</label>
+        <select id="f-maxStops"><option value="0">직항만</option><option value="1">1회까지</option><option value="2">2회까지</option><option value="">상관없음</option></select>
+      </div>
+      <div><label>성인 수</label><input id="f-adults" type="number" value="1" min="1" max="9" /></div>
+    </div>
+    <div class="row">
+      <div><label>출발편: 이 시간 이후</label><input id="f-departAfter" type="time" /></div>
+      <div><label>출발편: 이 시간 이전</label><input id="f-departBefore" type="time" /></div>
+    </div>
+    <div class="row">
+      <div><label>귀국편: 이 시간 이후</label><input id="f-returnAfter" type="time" /></div>
+      <div><label>귀국편: 이 시간 이전</label><input id="f-returnBefore" type="time" /></div>
+    </div>
+    <button id="btn-add">감시 추가</button>
+  </div>
+
+  <h2>감시 목록</h2>
+  <div id="watch-list"></div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
