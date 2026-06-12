@@ -529,6 +529,103 @@ struct WatchCard: View {
     }
 }
 
+// MARK: - 공항 자동완성 입력
+
+struct AirportSuggestion: Identifiable {
+    let id: String
+    let code: String
+    let name: String
+    let countryName: String
+}
+
+/// 도시명(한국어)으로 공항을 검색해 IATA 코드를 고르는 입력 필드.
+/// IATA 3글자를 직접 입력해도 그대로 인식한다.
+struct AirportField: View {
+    let placeholder: String
+    @Binding var code: String
+
+    @State private var text: String
+    @State private var suggestions: [AirportSuggestion] = []
+    @State private var searchTask: Task<Void, Never>?
+    @State private var pickedDisplay: String?
+
+    init(placeholder: String, code: Binding<String>) {
+        self.placeholder = placeholder
+        self._code = code
+        self._text = State(initialValue: code.wrappedValue)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            TextField(placeholder, text: $text)
+                .onChange(of: text) {
+                    if text == pickedDisplay { return } // 선택 직후 표시 변경은 무시
+                    pickedDisplay = nil
+                    let trimmed = text.trimmingCharacters(in: .whitespaces)
+                    // IATA 코드 직접 입력 허용
+                    if trimmed.count == 3, trimmed.allSatisfy({ $0.isLetter && $0.isASCII }) {
+                        code = trimmed.uppercased()
+                    } else {
+                        code = ""
+                    }
+                    search(trimmed)
+                }
+            ForEach(suggestions) { s in
+                Button {
+                    code = s.code
+                    pickedDisplay = "\(s.name) (\(s.code))"
+                    text = pickedDisplay!
+                    suggestions = []
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("\(s.name) (\(s.code))").font(.system(size: 12))
+                        Text(s.countryName).font(.system(size: 11)).foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 4)
+            }
+        }
+    }
+
+    private func search(_ term: String) {
+        searchTask?.cancel()
+        guard term.count >= 2, !(term.count == 3 && term.allSatisfy { $0.isLetter && $0.isASCII }) else {
+            suggestions = []
+            return
+        }
+        searchTask = Task {
+            try? await Task.sleep(nanoseconds: 300_000_000) // 디바운스
+            if Task.isCancelled { return }
+            var comp = URLComponents(string: "https://autocomplete.travelpayouts.com/places2")!
+            comp.queryItems = [
+                URLQueryItem(name: "locale", value: "ko"),
+                URLQueryItem(name: "types[]", value: "city"),
+                URLQueryItem(name: "types[]", value: "airport"),
+                URLQueryItem(name: "term", value: term),
+            ]
+            guard let url = comp.url,
+                  let (data, resp) = try? await URLSession.shared.data(from: url),
+                  (resp as? HTTPURLResponse)?.statusCode == 200,
+                  let arr = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]]
+            else { return }
+            if Task.isCancelled { return }
+            let found = arr.prefix(5).compactMap { item -> AirportSuggestion? in
+                guard let c = item["code"] as? String, let n = item["name"] as? String else { return nil }
+                return AirportSuggestion(
+                    id: "\(c)-\(item["type"] as? String ?? "")",
+                    code: c,
+                    name: n,
+                    countryName: item["country_name"] as? String ?? ""
+                )
+            }
+            await MainActor.run { suggestions = Array(found) }
+        }
+    }
+}
+
 struct WatchForm: View {
     @EnvironmentObject var model: Model
     @Environment(\.dismiss) private var dismiss
@@ -590,12 +687,13 @@ struct WatchForm: View {
     var body: some View {
         GroupBox(label: Text(editing == nil ? "새 감시 추가" : "감시 수정 — \(editing!.title)").font(.headline)) {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    TextField("출발지 (예: ICN)", text: $origin)
-                        .frame(width: 130)
+                HStack(alignment: .top) {
+                    AirportField(placeholder: "출발지 (도시명 또는 코드)", code: $origin)
+                        .frame(width: 175)
                     Image(systemName: "arrow.right")
-                    TextField("도착지 (예: FUK)", text: $destination)
-                        .frame(width: 130)
+                        .padding(.top, 4)
+                    AirportField(placeholder: "도착지 (도시명 또는 코드)", code: $destination)
+                        .frame(width: 175)
                     Spacer()
                     Stepper("성인 \(adults)", value: $adults, in: 1...9)
                 }
@@ -660,7 +758,7 @@ struct WatchForm: View {
         let o = origin.trimmingCharacters(in: .whitespaces).uppercased()
         let d = destination.trimmingCharacters(in: .whitespaces).uppercased()
         guard o.count == 3, d.count == 3 else {
-            message = "출발지/도착지는 IATA 3글자 코드로 입력하세요"
+            message = "출발지/도착지를 검색 목록에서 선택하세요 (또는 IATA 코드 직접 입력)"
             return
         }
         let maxPrice = Double(maxPriceText.replacingOccurrences(of: ",", with: ""))
