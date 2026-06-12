@@ -91,6 +91,33 @@ async function dismissConsent(page) {
 }
 
 /**
+ * 결과 목록이 뜰 때까지 대기. 구글이 가끔 "Oops, something went wrong"
+ * 일시 오류 페이지를 띄우므로 Reload 버튼을 눌러 재시도한다.
+ * @returns "results" | "empty"
+ */
+async function waitForResults(page, attempts = 3) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      await page.waitForSelector('li [aria-label*="won"], li [aria-label*="₩"]', { timeout: 30_000 });
+      return "results";
+    } catch (err) {
+      const reload = page.locator('button:has-text("Reload")').first();
+      if (await reload.isVisible().catch(() => false)) {
+        console.warn(`구글플라이트 일시 오류 페이지 — Reload 재시도 (${i + 1}/${attempts})`);
+        await reload.click().catch(() => {});
+        await page.waitForTimeout(3000);
+        continue;
+      }
+      const body = (await page.textContent("body").catch(() => "")) ?? "";
+      if (/no flights|no results|couldn'?t find/i.test(body)) return "empty";
+      if (i === attempts - 1) throw err;
+      await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+    }
+  }
+  return "empty";
+}
+
+/**
  * 한 watch에 대해 구글플라이트 검색.
  * 왕복에서 귀국편 조건(시간대/경유)이 있으면 가는편 상위 후보를 클릭해 귀국편까지 파싱.
  * @returns offers: [{ price, currency, outbound: {...}, inbound: {...}|null }]
@@ -112,8 +139,10 @@ async function searchFlights(watch, { headless = true, screenshotOnError = true 
     const page = await ctx.newPage();
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
     await dismissConsent(page);
-    // 결과 리스트가 뜰 때까지 대기
-    await page.waitForSelector('li [aria-label*="won"], li [aria-label*="₩"]', { timeout: 45_000 });
+    if ((await waitForResults(page)) === "empty") {
+      console.warn(`결과 없음: ${watch.origin}→${watch.destination} ${watch.departureDate}`);
+      return [];
+    }
     await page.waitForTimeout(2000);
 
     const outbounds = await parseVisibleFlights(page);
@@ -140,14 +169,14 @@ async function searchFlights(watch, { headless = true, screenshotOnError = true 
           .first();
         if (!(await row.isVisible().catch(() => false))) continue;
         await row.click();
-        await page.waitForSelector('li [aria-label*="won"], li [aria-label*="₩"]', { timeout: 30_000 });
+        if ((await waitForResults(page, 2)) === "empty") continue;
         await page.waitForTimeout(2000);
         const inbounds = await parseVisibleFlights(page);
         for (const ib of inbounds) {
           offers.push({ price: ib.price, currency: "KRW", outbound: ob, inbound: ib });
         }
         await page.goBack({ waitUntil: "domcontentloaded" });
-        await page.waitForSelector('li [aria-label*="won"], li [aria-label*="₩"]', { timeout: 30_000 });
+        if ((await waitForResults(page, 2)) === "empty") break;
         await page.waitForTimeout(1500);
       } catch (err) {
         console.warn(`귀국편 파싱 실패 (가는편 ${ob.departTime}): ${err.message}`);

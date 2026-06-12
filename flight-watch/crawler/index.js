@@ -120,8 +120,10 @@ async function checkAll(trigger) {
         console.log(" ", JSON.stringify(r));
         results.push(r);
       } catch (err) {
-        console.error(`  감시 ${doc.id} 실패:`, err.message);
-        results.push({ id: doc.id, status: "error", error: String(err.message ?? err) });
+        const w = doc.data();
+        const label = `${w.origin}→${w.destination} ${w.departureDate}`;
+        console.error(`  감시 ${label} (${doc.id}) 실패:`, err.message);
+        results.push({ id: doc.id, label, status: "error", error: String(err.message ?? err) });
       }
     }
     await db.doc("control/status").set({
