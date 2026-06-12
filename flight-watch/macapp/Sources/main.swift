@@ -634,9 +634,10 @@ struct HistoryChart: View {
                     }
                 }
                 .chartXAxis {
-                    AxisMarks(values: .stride(by: .day)) { _ in
+                    AxisMarks(values: .stride(by: .day, count: 2)) { _ in
                         AxisGridLine()
-                        AxisValueLabel(format: .dateTime.month(.defaultDigits).day(), centered: true)
+                        AxisTick()
+                        AxisValueLabel(format: .dateTime.month(.defaultDigits).day(), centered: false)
                             .font(.system(size: 9))
                     }
                 }
@@ -649,12 +650,12 @@ struct HistoryChart: View {
 
     private func load() async {
         let docs = await Firestore.runQuery(
-            parent: "watches/\(watchId)", collection: "history", orderByField: "t", limit: 200
+            parent: "watches/\(watchId)", collection: "history", orderByField: "t", limit: 400
         )
-        let weekAgo = Date().addingTimeInterval(-7 * 24 * 3600)
+        let since = Date().addingTimeInterval(-15 * 24 * 3600) // 보름
         var pts: [PricePoint] = []
         for f in docs {
-            guard let t = Firestore.ts(f, "t"), t > weekAgo else { continue }
+            guard let t = Firestore.ts(f, "t"), t > since else { continue }
             if let p = Firestore.num(f, "bestOverallPrice") {
                 pts.append(PricePoint(t: t, price: p, series: "전체 최저"))
             }
