@@ -207,6 +207,24 @@ struct WatchDetail: Identifiable {
         guard let d = priceDelta else { return nil }
         return d > 0 ? "▲\(fmtPrice(d))" : "▼\(fmtPrice(-d))"
     }
+
+    /// 데이터를 가져온 구글플라이트 페이지 (크롤러와 동일한 쿼리)
+    var sourceURL: URL? {
+        let paxPart = adults > 1 ? " for \(adults) adults" : ""
+        let q = returnDate != nil
+            ? "Flights from \(origin) to \(destination) on \(departureDate) through \(returnDate!)\(paxPart)"
+            : "One way flights from \(origin) to \(destination) on \(departureDate)\(paxPart)"
+        var comp = URLComponents(string: "https://www.google.com/travel/flights")
+        comp?.queryItems = [
+            URLQueryItem(name: "q", value: q),
+            URLQueryItem(name: "hl", value: "en"),
+            URLQueryItem(name: "curr", value: "KRW"),
+        ]
+        return comp?.url
+    }
+    func openSource() {
+        if let url = sourceURL { NSWorkspace.shared.open(url) }
+    }
 }
 
 @MainActor
@@ -486,6 +504,9 @@ struct ContentView: View {
                             if !w.active {
                                 Text("중지됨").font(.system(size: 10)).foregroundColor(.orange)
                             }
+                            Spacer()
+                            Image(systemName: "arrow.up.right.square")
+                                .font(.system(size: 10)).foregroundColor(.secondary.opacity(0.6))
                         }
                         HStack(spacing: 4) {
                             Text(w.priceLine)
@@ -504,6 +525,8 @@ struct ContentView: View {
                         }
                     }
                     .opacity(w.active ? 1 : 0.5)
+                    .contentShape(Rectangle())
+                    .onTapGesture { w.openSource() }
                 }
             }
 
@@ -677,7 +700,17 @@ struct WatchCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(watch.title).font(.system(size: 15, weight: .bold))
+                Button {
+                    watch.openSource()
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(watch.title).font(.system(size: 15, weight: .bold))
+                        Image(systemName: "arrow.up.right.square")
+                            .font(.system(size: 11)).foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .help("구글플라이트에서 열기")
                 Text(watch.dateLine).foregroundColor(.secondary)
                 Text("성인 \(watch.adults)").font(.system(size: 11)).foregroundColor(.secondary)
                 Spacer()
