@@ -138,6 +138,9 @@ async function waitForResults(page, attempts = 3) {
       await page.waitForSelector('li [aria-label*="won"], li [aria-label*="₩"]', { timeout: 30_000 });
       return "results";
     } catch (err) {
+      // "No nonstop flights found" 등 명시적 빈 결과는 즉시 empty (에러 아님)
+      const body0 = (await page.textContent("body").catch(() => "")) ?? "";
+      if (/no nonstop flights|no flights found|no results|couldn'?t find/i.test(body0)) return "empty";
       const reload = page.locator('button:has-text("Reload")').first();
       if (await reload.isVisible().catch(() => false)) {
         if (i === attempts - 1) {
@@ -164,11 +167,14 @@ async function waitForResults(page, attempts = 3) {
  * @returns offers: [{ price, currency, outbound: {...}, inbound: {...}|null }]
  */
 async function searchFlights(watch, { headless = true, screenshotOnError = true } = {}) {
-  const { origin, destination, departureDate, returnDate, adults = 1 } = watch;
+  const { origin, destination, departureDate, returnDate, adults = 1, maxStops } = watch;
   const paxPart = adults > 1 ? ` for ${adults} adults` : "";
+  // 직항만 감시는 구글의 nonstop 필터를 직접 사용 — 결과가 직항으로 좁혀져
+  // "더보기" 펼치기(Oops 차단 유발) 없이도 빠짐없이 잡힌다.
+  const nonstopPrefix = maxStops === 0 ? "Nonstop " : "";
   const q = returnDate
-    ? `Flights from ${origin} to ${destination} on ${departureDate} through ${returnDate}${paxPart}`
-    : `One way flights from ${origin} to ${destination} on ${departureDate}${paxPart}`;
+    ? `${nonstopPrefix}Flights from ${origin} to ${destination} on ${departureDate} through ${returnDate}${paxPart}`
+    : `${nonstopPrefix}One way flights from ${origin} to ${destination} on ${departureDate}${paxPart}`;
   const url = `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}&hl=en&curr=KRW`;
 
   // channel: "chromium" → 크롤링 전용 headless shell 대신 일반 크로뮴의
