@@ -5,3 +5,4 @@
 | 프로젝트 | 설명 |
 |---|---|
 | [flight-watch](flight-watch/) | 항공권 조건 감시 + Mac/iPhone 푸시 알림 (구글플라이트 크롤링 + Mac launchd 데몬 + FCM) |
+| [trip-planner](trip-planner/) | 링크로 함께 짜는 여행 일정 공유 (Firestore 실시간 + OpenStreetMap 지도/검색) |

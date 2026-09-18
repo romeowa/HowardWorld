@@ -1,0 +1,164 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --line: #e5e7eb;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --accent: #0ea5e9;
+  --accent-dark: #0284c7;
+  --danger: #ef4444;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+  background: var(--bg); color: var(--text); line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+.loading { text-align: center; color: var(--muted); padding: 60px 20px; }
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+input, textarea, select { font-family: inherit; font-size: 16px; }
+
+.wrap { max-width: 760px; margin: 0 auto; padding: 0 16px; padding-bottom: calc(40px + env(safe-area-inset-bottom)); }
+
+/* ---------- 버튼 ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 11px 16px; border-radius: 10px; font-size: 15px; font-weight: 600;
+  background: var(--accent); color: #fff; transition: background .15s;
+}
+.btn:hover { background: var(--accent-dark); }
+.btn.ghost { background: var(--card); color: var(--text); border: 1px solid var(--line); font-weight: 500; }
+.btn.ghost:hover { background: #f3f4f6; }
+.btn.sm { padding: 7px 12px; font-size: 13px; border-radius: 8px; }
+.btn.block { width: 100%; }
+.btn.danger { background: transparent; color: var(--danger); font-weight: 500; }
+
+/* ---------- 홈 ---------- */
+.home { padding: 48px 0 20px; text-align: center; }
+.home h1 { font-size: 30px; margin-bottom: 8px; }
+.home .sub { color: var(--muted); margin-bottom: 28px; }
+.recent { text-align: left; margin-top: 36px; }
+.recent h2 { font-size: 14px; color: var(--muted); margin-bottom: 10px; font-weight: 600; }
+.recent a {
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 13px 15px; margin-bottom: 8px; text-decoration: none; color: var(--text);
+}
+.recent a:hover { border-color: var(--accent); }
+.recent .rt { font-weight: 600; }
+.recent .rd { font-size: 12px; color: var(--muted); }
+
+/* ---------- 여행 헤더 ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 20; background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.topbar-inner { max-width: 760px; margin: 0 auto; padding: 12px 16px; display: flex; align-items: center; gap: 10px; }
+.topbar .home-link { font-size: 20px; text-decoration: none; }
+.trip-title {
+  flex: 1; font-size: 19px; font-weight: 700; border: none; background: transparent;
+  color: var(--text); padding: 4px 6px; border-radius: 6px; min-width: 0;
+}
+.trip-title:focus { outline: none; background: #f3f4f6; }
+.trip-meta { max-width: 760px; margin: 0 auto; padding: 8px 16px 0; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.trip-meta label { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.trip-meta input[type=date] { border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font-size: 14px; background: var(--card); color: var(--text); }
+
+/* ---------- Day 탭 ---------- */
+.days { display: flex; gap: 8px; overflow-x: auto; padding: 14px 16px 6px; max-width: 760px; margin: 0 auto; -webkit-overflow-scrolling: touch; }
+.day-tab {
+  flex: 0 0 auto; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--card); font-size: 14px; font-weight: 600; color: var(--muted); white-space: nowrap;
+}
+.day-tab .dd { display: block; font-size: 11px; font-weight: 400; margin-top: 1px; }
+.day-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.day-tab.add { color: var(--accent); border-style: dashed; font-weight: 700; }
+
+/* ---------- 항목 카드 ---------- */
+.items { margin-top: 8px; }
+.item {
+  display: flex; gap: 12px; background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; padding: 13px 14px; margin-bottom: 10px; box-shadow: var(--shadow);
+}
+.item .ic { font-size: 22px; flex: 0 0 auto; width: 30px; text-align: center; }
+.item .body { flex: 1; min-width: 0; }
+.item .row1 { display: flex; align-items: baseline; gap: 8px; }
+.item .time { font-size: 13px; font-weight: 700; color: var(--accent-dark); flex: 0 0 auto; }
+.item .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.item .addr { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.item .addr a { color: var(--muted); text-decoration: none; }
+.item .addr a:hover { color: var(--accent); text-decoration: underline; }
+.item .memo { font-size: 14px; margin-top: 6px; white-space: pre-wrap; }
+.item .acts { display: flex; flex-direction: column; gap: 4px; flex: 0 0 auto; }
+.item .acts button { font-size: 15px; padding: 3px 6px; border-radius: 6px; color: var(--muted); }
+.item .acts button:hover { background: #f3f4f6; }
+.empty-day { text-align: center; color: var(--muted); padding: 30px 0; font-size: 14px; }
+
+.add-row { display: flex; gap: 8px; margin: 6px 0 20px; }
+
+/* 지도 미리보기 (그 날 핀 모음) */
+#dayMap { height: 220px; border-radius: 12px; margin: 4px 0 18px; border: 1px solid var(--line); }
+.map-toggle { margin: 2px 0 12px; }
+
+/* ---------- 모달 ---------- */
+.modal-bg {
+  position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 100;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.modal {
+  background: var(--card); width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto;
+  border-radius: 16px 16px 0 0; padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
+}
+@media (min-width: 600px) { .modal-bg { align-items: center; } .modal { border-radius: 16px; } }
+.modal h3 { font-size: 17px; margin-bottom: 14px; }
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 5px; }
+.field input, .field textarea, .field select {
+  width: 100%; padding: 10px 11px; border: 1px solid var(--line); border-radius: 9px;
+  background: var(--card); color: var(--text);
+}
+.field textarea { min-height: 64px; resize: vertical; }
+.type-pick { display: flex; gap: 8px; }
+.type-pick button {
+  flex: 1; padding: 9px 4px; border: 1px solid var(--line); border-radius: 9px; font-size: 13px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px; background: var(--card); color: var(--muted);
+}
+.type-pick button.on { border-color: var(--accent); background: #e0f2fe; color: var(--accent-dark); font-weight: 600; }
+.type-pick .em { font-size: 18px; }
+
+.search-box { position: relative; }
+.search-results {
+  border: 1px solid var(--line); border-radius: 9px; margin-top: 6px; overflow: hidden;
+  max-height: 200px; overflow-y: auto;
+}
+.search-results button {
+  display: block; width: 100%; text-align: left; padding: 9px 11px; border-bottom: 1px solid var(--line);
+}
+.search-results button:last-child { border-bottom: none; }
+.search-results button:hover { background: #f3f4f6; }
+.search-results .sr-name { font-weight: 600; font-size: 14px; }
+.search-results .sr-addr { font-size: 12px; color: var(--muted); }
+.searching { font-size: 13px; color: var(--muted); padding: 8px 2px; }
+
+#pickMap { height: 200px; border-radius: 10px; margin-top: 8px; border: 1px solid var(--line); }
+.picked { font-size: 13px; color: var(--accent-dark); margin-top: 6px; font-weight: 500; }
+
+.modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+.modal-actions .btn { flex: 1; }
+
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: #111827; color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 14px;
+  z-index: 200; opacity: 0; transition: opacity .2s; pointer-events: none;
+}
+.toast.show { opacity: 1; }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f172a; --card: #1e293b; --line: #334155; --text: #e2e8f0; --muted: #94a3b8;
+  }
+  .btn.ghost:hover, .item .acts button:hover, .search-results button:hover { background: #334155; }
+  .trip-title:focus { background: #334155; }
+  .type-pick button.on { background: #0c4a6e; color: #bae6fd; }
+}
