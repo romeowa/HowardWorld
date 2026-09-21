@@ -413,6 +413,30 @@ function openEditor(existing) {
   const updatePicked = () => { pickedEl.textContent = editState.lat != null ? `📍 위치 지정됨 (${editState.lat.toFixed(4)}, ${editState.lng.toFixed(4)})` : ""; };
   updatePicked();
 
+  // 핀 위치 → 주소 자동 채우기 (Nominatim 역지오코딩)
+  async function reverseGeocode(lat, lng) {
+    const prev = addrEl.value;
+    addrEl.value = "주소 불러오는 중…";
+    try {
+      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=ko&zoom=18&addressdetails=1`;
+      const res = await fetch(url);
+      const r = await res.json();
+      // 응답 도착 사이에 다른 위치를 다시 찍었으면 무시
+      if (editState.lat !== lat || editState.lng !== lng) return;
+      if (r && r.display_name) {
+        addrEl.value = r.display_name; editState.address = r.display_name;
+        if (!nameEl.value.trim()) {
+          const primary = r.name || r.display_name.split(",")[0];
+          nameEl.value = primary; editState.name = primary;
+        }
+      } else {
+        addrEl.value = prev;
+      }
+    } catch {
+      addrEl.value = prev;
+    }
+  }
+
   // 지도
   setTimeout(() => {
     pickMap = L.map(modal.querySelector("#pickMap")).setView(
@@ -420,14 +444,18 @@ function openEditor(existing) {
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(pickMap);
     pickMap.invalidateSize();
     if (editState.lat != null) setMarker(editState.lat, editState.lng);
-    pickMap.on("click", (e) => { setMarker(e.latlng.lat, e.latlng.lng); editState.lat = e.latlng.lat; editState.lng = e.latlng.lng; updatePicked(); });
+    pickMap.on("click", (e) => {
+      setMarker(e.latlng.lat, e.latlng.lng);
+      editState.lat = e.latlng.lat; editState.lng = e.latlng.lng;
+      updatePicked(); reverseGeocode(e.latlng.lat, e.latlng.lng);
+    });
   }, 80);
 
   function setMarker(lat, lng) {
     if (pickMarker) pickMarker.setLatLng([lat, lng]);
     else {
       pickMarker = L.marker([lat, lng], { draggable: true }).addTo(pickMap);
-      pickMarker.on("dragend", () => { const p = pickMarker.getLatLng(); editState.lat = p.lat; editState.lng = p.lng; updatePicked(); });
+      pickMarker.on("dragend", () => { const p = pickMarker.getLatLng(); editState.lat = p.lat; editState.lng = p.lng; updatePicked(); reverseGeocode(p.lat, p.lng); });
     }
     pickMap.setView([lat, lng], Math.max(pickMap.getZoom(), 15));
   }
