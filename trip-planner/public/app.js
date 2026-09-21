@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore, doc, collection, addDoc, setDoc, updateDoc, deleteDoc,
-  getDoc, onSnapshot, serverTimestamp,
+  getDoc, onSnapshot, serverTimestamp, writeBatch,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -116,6 +116,7 @@ let items = [];        // [{id, ...}]
 let curDay = 0;
 let tripId = null;
 let dayMap = null, dayMarkers = [];
+let sortable = null;   // 현재 Day 항목 리스트의 드래그 정렬 인스턴스
 
 function renderTrip(id) {
   tripId = id;
@@ -135,12 +136,17 @@ function renderTrip(id) {
   });
 }
 
+// 수동 순서(order)가 기준. 드래그로 바꾼 순서를 그대로 유지하고,
+// "시간순 정렬" 버튼으로 원할 때만 시간 기준으로 order를 다시 매긴다.
 function sortedItems(dayItems) {
-  return dayItems.slice().sort((a, b) => {
-    const ta = a.time || "99:99", tb = b.time || "99:99";
-    if (ta !== tb) return ta < tb ? -1 : 1;
-    return (a.order || 0) - (b.order || 0);
-  });
+  return dayItems.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+}
+
+// 주어진 순서(문서 id 배열)대로 order 필드를 0,1,2…로 다시 매겨 저장
+async function persistOrder(orderedIds) {
+  const batch = writeBatch(db);
+  orderedIds.forEach((id, i) => batch.update(doc(db, "trips", tripId, "items", id), { order: i }));
+  await batch.commit();
 }
 
 function paint() {
@@ -196,9 +202,34 @@ function paint() {
   dayItems.forEach((it) => list.appendChild(itemCard(it)));
   wrap.appendChild(list);
 
-  // 추가 버튼
-  const addRow = h(`<div class="add-row"><button class="btn block" id="addItem">+ 항목 추가</button></div>`);
+  // 드래그 순서 변경 (터치 지원). 항목이 2개 이상일 때만.
+  if (sortable) { sortable.destroy(); sortable = null; }
+  if (dayItems.length > 1 && window.Sortable) {
+    sortable = Sortable.create(list, {
+      handle: ".drag",
+      animation: 150,
+      ghostClass: "drag-ghost",
+      onEnd: () => {
+        const ids = [...list.querySelectorAll(".item")].map((el) => el.dataset.id);
+        persistOrder(ids).catch((e) => toast("정렬 저장 실패: " + e.message));
+      },
+    });
+  }
+
+  // 추가 버튼 (+ 시간순 정렬)
+  const addRow = h(`<div class="add-row">
+    <button class="btn" style="flex:1" id="addItem">+ 항목 추가</button>
+    ${dayItems.length > 1 ? `<button class="btn ghost" id="sortTime" title="시간 기준으로 정렬">🕘 시간순</button>` : ""}
+  </div>`);
   addRow.querySelector("#addItem").addEventListener("click", () => openEditor(null));
+  const sortBtn = addRow.querySelector("#sortTime");
+  if (sortBtn) sortBtn.addEventListener("click", () => {
+    const byTime = dayItems.slice().sort((a, b) => {
+      const ta = a.time || "99:99", tb = b.time || "99:99";
+      return ta < tb ? -1 : ta > tb ? 1 : 0;
+    });
+    persistOrder(byTime.map((x) => x.id)).catch((e) => toast("정렬 실패: " + e.message));
+  });
   wrap.appendChild(addRow);
 
   // 지도 (핀이 있으면)
@@ -235,7 +266,8 @@ function itemCard(it) {
   const t = TYPES[it.type] || TYPES.note;
   const mapLink = it.lat != null ? `https://www.openstreetmap.org/?mlat=${it.lat}&mlon=${it.lng}#map=17/${it.lat}/${it.lng}` : null;
   const card = h(`
-    <div class="item">
+    <div class="item" data-id="${it.id}">
+      <span class="drag" title="드래그해서 순서 변경">⠿</span>
       <div class="ic">${t.emoji}</div>
       <div class="body">
         <div class="row1">
@@ -268,11 +300,24 @@ function renderDayMap(pinned) {
   }).addTo(dayMap);
   const group = [];
   pinned.forEach((it, i) => {
-    const mk = L.marker([it.lat, it.lng]).addTo(dayMap);
-    mk.bindPopup(`<b>${esc(it.name || "")}</b>${it.time ? "<br/>" + esc(it.time) : ""}`);
+    const icon = L.divIcon({
+      className: "num-pin",
+      html: `<div class="num-pin-inner">${i + 1}</div>`,
+      iconSize: [28, 28], iconAnchor: [14, 14],
+    });
+    const mk = L.marker([it.lat, it.lng], { icon }).addTo(dayMap);
+    mk.bindPopup(`<b>${i + 1}. ${esc(it.name || "")}</b>${it.time ? "<br/>" + esc(it.time) : ""}`);
     group.push([it.lat, it.lng]);
   });
-  setTimeout(() => { dayMap.invalidateSize(); dayMap.fitBounds(group, { padding: [30, 30], maxZoom: 15 }); }, 60);
+  // 순서대로 잇는 경로선
+  if (group.length > 1) {
+    L.polyline(group, { color: "#0ea5e9", weight: 3.5, opacity: 0.75, dashArray: "2,9", lineCap: "round" }).addTo(dayMap);
+  }
+  setTimeout(() => {
+    dayMap.invalidateSize();
+    if (group.length > 1) dayMap.fitBounds(group, { padding: [34, 34], maxZoom: 15 });
+    else dayMap.setView(group[0], 15);
+  }, 60);
 }
 
 // ---------- 항목 편집 모달 ----------
