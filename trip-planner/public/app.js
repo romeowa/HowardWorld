@@ -232,19 +232,9 @@ function paint() {
   });
   wrap.appendChild(addRow);
 
-  // 지도 (핀이 있으면)
+  // 지도 (핀이 있으면 항상 표시)
   const pinned = dayItems.filter((it) => it.lat != null);
-  if (pinned.length) {
-    wrap.appendChild(h(`<div class="map-toggle"><button class="btn ghost sm" id="mapToggle">🗺️ 이 날 지도 보기</button></div>`));
-    const mapEl = h(`<div id="dayMap" style="display:none"></div>`);
-    wrap.appendChild(mapEl);
-    wrap.querySelector("#mapToggle").addEventListener("click", () => {
-      const showing = mapEl.style.display !== "none";
-      mapEl.style.display = showing ? "none" : "block";
-      wrap.querySelector("#mapToggle").textContent = showing ? "🗺️ 이 날 지도 보기" : "🗺️ 지도 접기";
-      if (!showing) renderDayMap(pinned);
-    });
-  }
+  if (pinned.length) wrap.appendChild(h(`<div id="dayMap"></div>`));
 
   // 마지막 날 삭제 (비어있을 때만)
   if (trip.dayCount > 1) {
@@ -260,6 +250,7 @@ function paint() {
   }
 
   APP.appendChild(wrap);
+  if (pinned.length) renderDayMap(pinned);
 }
 
 function itemCard(it) {
@@ -307,17 +298,31 @@ function renderDayMap(pinned) {
     });
     const mk = L.marker([it.lat, it.lng], { icon }).addTo(dayMap);
     mk.bindPopup(`<b>${i + 1}. ${esc(it.name || "")}</b>${it.time ? "<br/>" + esc(it.time) : ""}`);
+    mk.on("click", () => focusItem(it));
     group.push([it.lat, it.lng]);
   });
   // 순서대로 잇는 경로선
   if (group.length > 1) {
     L.polyline(group, { color: "#0ea5e9", weight: 3.5, opacity: 0.75, dashArray: "2,9", lineCap: "round" }).addTo(dayMap);
   }
-  setTimeout(() => {
+  const fit = () => {
     dayMap.invalidateSize();
     if (group.length > 1) dayMap.fitBounds(group, { padding: [34, 34], maxZoom: 15 });
     else dayMap.setView(group[0], 15);
-  }, 60);
+  };
+  // 컨테이너 레이아웃이 끝난 뒤 크기를 다시 잡고 맞춘다 (초기 즉시 렌더 시 폭 0 방지)
+  setTimeout(fit, 150);
+  setTimeout(() => dayMap.invalidateSize(), 400);
+}
+
+// 핀 클릭 → 지도 확대 + 해당 항목으로 스크롤·하이라이트
+function focusItem(it) {
+  if (dayMap && it.lat != null) dayMap.setView([it.lat, it.lng], Math.max(dayMap.getZoom(), 16), { animate: true });
+  const card = document.querySelector(`.item[data-id="${it.id}"]`);
+  if (card) {
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+    card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash");
+  }
 }
 
 // ---------- 항목 편집 모달 ----------
