@@ -107,24 +107,15 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .add-row { display: flex; gap: 8px; margin: 6px 0 20px; }
 
 /* 지도 미리보기 (그 날 핀 모음) */
-/* position/z-index로 독립 stacking context를 만들어 Leaflet 내부 요소가 모달 위로 새지 않게 함 */
+/* position/z-index로 독립 stacking context를 만들어 지도 내부 요소가 모달 위로 새지 않게 함 */
 #dayMap { height: 260px; border-radius: 12px; margin: 4px 0 18px; border: 1px solid var(--line); position: relative; z-index: 0; }
-/* 순서 번호 핀 */
-.num-pin { background: transparent; border: none; }
-/* 전체 보기 버튼 */
+/* 전체 보기 버튼 (구글맵 커스텀 컨트롤) */
 .fit-all-btn {
-  background: #fff; color: #1f2937; border: 2px solid rgba(0,0,0,.2); border-radius: 6px;
-  font-size: 12px; font-weight: 700; padding: 5px 9px; cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0,0,0,.25);
+  background: #fff; color: #1f2937; border: none; border-radius: 6px;
+  font-size: 12px; font-weight: 700; padding: 7px 10px; margin: 10px; cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
 }
 .fit-all-btn:hover { background: #f3f4f6; }
-.num-pin-inner {
-  width: 28px; height: 28px; border-radius: 50%;
-  background: var(--accent); color: #fff; font-weight: 700; font-size: 14px;
-  display: flex; align-items: center; justify-content: center;
-  border: 2px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.45);
-}
-.map-toggle { margin: 2px 0 12px; }
 
 /* ---------- 모달 ---------- */
 .modal-bg {

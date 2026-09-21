@@ -4,9 +4,10 @@
 
 - **웹**: https://howard-trips.web.app
 - **백엔드**: Firestore (howardworld 프로젝트 공유) — 실시간 동기화, 서버 코드 없음(클라이언트가 직접 읽기/쓰기)
-- **지도**: OpenStreetMap(Leaflet) — 표시·핀
-- **장소 검색**: 구글 Places API (Text Search, New) — 한글로 해외 POI 검색. 웹 키는 howard-trips.web.app 리퍼러 + Places API로 제한
-- **핀→주소 역지오코딩**: Nominatim(무료) — 지도 클릭/드래그 시
+- **지도**: 구글맵 (Maps JavaScript API) — 번호 마커·경로선·정보창
+- **장소 검색**: 구글 Places API (Text Search, New) — 한글로 해외 POI 검색
+- **핀→주소 역지오코딩**: Nominatim(무료) — 지도 클릭/드래그 시 (구글 사용량 절약)
+- 웹 키(gcloud 생성)는 howard-trips.web.app 리퍼러 + Places/Maps JS API로 제한
 
 ## 동작 방식
 

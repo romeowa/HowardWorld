@@ -15,8 +15,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// 구글 Places API 키 (howard-trips.web.app 리퍼러 + Places API로 제한된 웹 키)
+// 구글 API 키 (howard-trips.web.app 리퍼러 + Places/Maps JS API로 제한된 웹 키)
 const PLACES_KEY = "AIzaSyB8EXfTFJfBf6eLDUiX8vJcaxN7Tc-meVI";
+
+// 구글맵 동적 로더 (google.maps.importLibrary 부트스트랩)
+(g => { let h, a, k, p = "The Google Maps JavaScript API", c = "google", l = "importLibrary", q = "__ib__", m = document, b = window; b = b[c] || (b[c] = {}); const d = b.maps || (b.maps = {}), r = new Set(), e = new URLSearchParams(), u = () => h || (h = new Promise(async (f, n) => { a = m.createElement("script"); e.set("libraries", [...r] + ""); for (k in g) e.set(k.replace(/[A-Z]/g, t => "_" + t[0].toLowerCase()), g[k]); e.set("callback", c + ".maps." + q); a.src = `https://maps.${c}apis.com/maps/api/js?` + e; d[q] = f; a.onerror = () => h = n(Error(p + " could not load.")); a.nonce = m.querySelector("script[nonce]")?.nonce || ""; m.head.append(a); })); d[l] ? console.warn(p + " only loads once. Ignoring:", g) : d[l] = (f, ...n) => r.add(f) && u().then(() => d[l](f, ...n)); })({ key: PLACES_KEY, v: "weekly", language: "ko" });
 
 const APP = document.getElementById("app");
 const TYPES = {
@@ -290,58 +293,57 @@ function itemCard(it) {
   return card;
 }
 
-// ---------- 이 날 지도 ----------
-function renderDayMap(pinned) {
+// ---------- 이 날 지도 (구글맵) ----------
+let dayFitAll = null; // "전체 보기" 콜백
+async function renderDayMap(pinned) {
   const el = document.getElementById("dayMap");
   if (!el) return;
-  if (dayMap) { dayMap.remove(); dayMap = null; }
-  dayMap = L.map(el);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "© OpenStreetMap", maxZoom: 19,
-  }).addTo(dayMap);
-  const group = [];
+  await google.maps.importLibrary("maps");
+  const map = new google.maps.Map(el, {
+    mapTypeControl: false, streetViewControl: false, fullscreenControl: false, gestureHandling: "greedy",
+  });
+  dayMap = map;
   markerById = {};
+  const bounds = new google.maps.LatLngBounds();
+  const path = [];
   pinned.forEach((it, i) => {
-    const icon = L.divIcon({
-      className: "num-pin",
-      html: `<div class="num-pin-inner">${i + 1}</div>`,
-      iconSize: [28, 28], iconAnchor: [14, 14],
+    const pos = { lat: it.lat, lng: it.lng };
+    const mk = new google.maps.Marker({
+      position: pos, map,
+      label: { text: String(i + 1), color: "#fff", fontWeight: "700", fontSize: "12px" },
     });
-    const mk = L.marker([it.lat, it.lng], { icon }).addTo(dayMap);
-    mk.bindPopup(`<b>${i + 1}. ${esc(it.name || "")}</b>${it.time ? "<br/>" + esc(it.time) : ""}`);
-    mk.on("click", () => focusItem(it));
-    markerById[it.id] = mk;
-    group.push([it.lat, it.lng]);
+    const info = new google.maps.InfoWindow({
+      content: `<b>${i + 1}. ${esc(it.name || "")}</b>${it.time ? "<br>" + esc(it.time) : ""}`,
+    });
+    mk.addListener("click", () => { info.open({ map, anchor: mk }); focusItem(it); });
+    markerById[it.id] = { mk, info };
+    bounds.extend(pos); path.push(pos);
   });
   // 순서대로 잇는 경로선
-  if (group.length > 1) {
-    L.polyline(group, { color: "#0ea5e9", weight: 3.5, opacity: 0.75, dashArray: "2,9", lineCap: "round" }).addTo(dayMap);
+  if (path.length > 1) {
+    new google.maps.Polyline({ path, map, strokeColor: "#0ea5e9", strokeOpacity: 0.85, strokeWeight: 3.5 });
   }
-  const fitAll = () => {
-    dayMap.invalidateSize();
-    if (group.length > 1) dayMap.fitBounds(group, { padding: [34, 34], maxZoom: 15 });
-    else dayMap.setView(group[0], 15);
+  dayFitAll = () => {
+    if (path.length > 1) map.fitBounds(bounds, 40);
+    else { map.setCenter(path[0]); map.setZoom(15); }
   };
-  // "전체 보기" 버튼 — 핀 클릭으로 확대한 뒤 다시 전체 핀이 보이게
-  const FitCtl = L.Control.extend({
-    options: { position: "topright" },
-    onAdd() {
-      const b = L.DomUtil.create("button", "fit-all-btn leaflet-control");
-      b.type = "button"; b.textContent = "⤢ 전체"; b.title = "전체 보기";
-      L.DomEvent.disableClickPropagation(b);
-      L.DomEvent.on(b, "click", (e) => { L.DomEvent.stop(e); fitAll(); });
-      return b;
-    },
-  });
-  dayMap.addControl(new FitCtl());
-  // 컨테이너 레이아웃이 끝난 뒤 크기를 다시 잡고 맞춘다 (초기 즉시 렌더 시 폭 0 방지)
-  setTimeout(fitAll, 150);
-  setTimeout(() => dayMap.invalidateSize(), 400);
+  // "전체 보기" 버튼
+  const btn = document.createElement("button");
+  btn.className = "fit-all-btn"; btn.type = "button"; btn.textContent = "⤢ 전체"; btn.title = "전체 보기";
+  btn.addEventListener("click", dayFitAll);
+  map.controls[google.maps.ControlPosition.TOP_RIGHT].push(btn);
+  dayFitAll();
+}
+
+function panTo(it) {
+  if (!dayMap || it.lat == null) return;
+  dayMap.panTo({ lat: it.lat, lng: it.lng });
+  if (dayMap.getZoom() < 16) dayMap.setZoom(16);
 }
 
 // 핀 클릭 → 지도 확대 + 해당 항목으로 스크롤·하이라이트
 function focusItem(it) {
-  if (dayMap && it.lat != null) dayMap.setView([it.lat, it.lng], Math.max(dayMap.getZoom(), 16), { animate: true });
+  panTo(it);
   const card = document.querySelector(`.item[data-id="${it.id}"]`);
   if (card) {
     card.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -352,8 +354,9 @@ function focusItem(it) {
 // 리스트 항목 클릭 → 지도에서 해당 위치로 이동 + 팝업 + 지도로 스크롤
 function focusOnMap(it) {
   if (!dayMap || it.lat == null) return;
-  dayMap.setView([it.lat, it.lng], Math.max(dayMap.getZoom(), 16), { animate: true });
-  markerById[it.id]?.openPopup();
+  panTo(it);
+  const m = markerById[it.id];
+  if (m) m.info.open({ map: dayMap, anchor: m.mk });
   document.getElementById("dayMap")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   const card = document.querySelector(`.item[data-id="${it.id}"]`);
   if (card) { card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash"); }
@@ -441,27 +444,34 @@ function openEditor(existing) {
     }
   }
 
-  // 지도
-  setTimeout(() => {
-    pickMap = L.map(modal.querySelector("#pickMap")).setView(
-      editState.lat != null ? [editState.lat, editState.lng] : [35.1796, 129.0756], editState.lat != null ? 15 : 4);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(pickMap);
-    pickMap.invalidateSize();
-    if (editState.lat != null) setMarker(editState.lat, editState.lng);
-    pickMap.on("click", (e) => {
-      setMarker(e.latlng.lat, e.latlng.lng);
-      editState.lat = e.latlng.lat; editState.lng = e.latlng.lng;
-      updatePicked(); reverseGeocode(e.latlng.lat, e.latlng.lng);
+  // 지도 (구글맵)
+  (async () => {
+    await google.maps.importLibrary("maps");
+    pickMap = new google.maps.Map(modal.querySelector("#pickMap"), {
+      center: editState.lat != null ? { lat: editState.lat, lng: editState.lng } : { lat: 35.1796, lng: 129.0756 },
+      zoom: editState.lat != null ? 15 : 4,
+      mapTypeControl: false, streetViewControl: false, fullscreenControl: false, gestureHandling: "greedy",
     });
-  }, 80);
+    if (editState.lat != null) setMarker(editState.lat, editState.lng);
+    pickMap.addListener("click", (e) => {
+      const lat = e.latLng.lat(), lng = e.latLng.lng();
+      setMarker(lat, lng);
+      editState.lat = lat; editState.lng = lng;
+      updatePicked(); reverseGeocode(lat, lng);
+    });
+  })();
 
   function setMarker(lat, lng) {
-    if (pickMarker) pickMarker.setLatLng([lat, lng]);
+    if (pickMarker) pickMarker.setPosition({ lat, lng });
     else {
-      pickMarker = L.marker([lat, lng], { draggable: true }).addTo(pickMap);
-      pickMarker.on("dragend", () => { const p = pickMarker.getLatLng(); editState.lat = p.lat; editState.lng = p.lng; updatePicked(); reverseGeocode(p.lat, p.lng); });
+      pickMarker = new google.maps.Marker({ position: { lat, lng }, map: pickMap, draggable: true });
+      pickMarker.addListener("dragend", () => {
+        const p = pickMarker.getPosition(); const la = p.lat(), ln = p.lng();
+        editState.lat = la; editState.lng = ln; updatePicked(); reverseGeocode(la, ln);
+      });
     }
-    pickMap.setView([lat, lng], Math.max(pickMap.getZoom(), 15));
+    pickMap.panTo({ lat, lng });
+    if (pickMap.getZoom() < 15) pickMap.setZoom(15);
   }
 
   // 검색 (Nominatim, 디바운스)
@@ -506,7 +516,7 @@ function openEditor(existing) {
   modal.querySelector("#cancel").addEventListener("click", close);
   modal.querySelector("#save").addEventListener("click", save);
 
-  function close() { if (pickMap) { pickMap.remove(); pickMap = null; } pickMarker = null; bg.remove(); }
+  function close() { pickMap = null; pickMarker = null; bg.remove(); }
 
   async function save() {
     editState.name = nameEl.value.trim();
@@ -530,7 +540,7 @@ function openEditor(existing) {
         modal.querySelector("#time").value = ""; modal.querySelector("#memo").value = "";
         editState.name = editState.address = editState.time = editState.memo = "";
         editState.lat = editState.lng = null;
-        if (pickMarker) { pickMap.removeLayer(pickMarker); pickMarker = null; }
+        if (pickMarker) { pickMarker.setMap(null); pickMarker = null; }
         updatePicked();
         resultsEl.innerHTML = "";
         const q = modal.querySelector("#q"); q.value = ""; q.focus();
