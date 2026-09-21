@@ -51,12 +51,22 @@ function dayLabel(startDate, idx) {
   return { top: `Day ${idx + 1}`, sub: `${d.getMonth() + 1}/${d.getDate()} (${WEEK[d.getDay()]})` };
 }
 
-function rememberTrip(id, title) {
+// 최근 연 여행 기억 — 달력 배치에 쓸 시작일/일수도 함께 저장
+// info: 문자열(제목) 또는 {title, startDate, dayCount}
+function rememberTrip(id, info) {
+  const t = typeof info === "string" ? { title: info } : (info || {});
   let list = [];
   try { list = JSON.parse(localStorage.getItem("recentTrips") || "[]"); } catch {}
-  list = list.filter((t) => t.id !== id);
-  list.unshift({ id, title: title || "제목 없는 여행", ts: Date.now() });
-  try { localStorage.setItem("recentTrips", JSON.stringify(list.slice(0, 12))); } catch {}
+  const prev = list.find((x) => x.id === id) || {};
+  list = list.filter((x) => x.id !== id);
+  list.unshift({
+    id,
+    title: t.title || prev.title || "제목 없는 여행",
+    startDate: t.startDate !== undefined ? t.startDate : (prev.startDate ?? null),
+    dayCount: t.dayCount !== undefined ? t.dayCount : (prev.dayCount ?? 1),
+    ts: Date.now(),
+  });
+  try { localStorage.setItem("recentTrips", JSON.stringify(list.slice(0, 24))); } catch {}
 }
 
 // ---------- 광고 푸터 (만든 사람의 다른 앱) ----------
@@ -103,31 +113,191 @@ function route() {
   else renderHome();
 }
 
-// ---------- 홈 ----------
-function renderHome() {
+// ---------- 홈 (월별 달력) ----------
+const TRIP_COLORS = ["#0f766e", "#b45309", "#6d5bd0", "#be123c", "#4d7c0f", "#0369a1"];
+const hashId = (s) => { let n = 0; for (let i = 0; i < s.length; i++) n = (n * 31 + s.charCodeAt(i)) >>> 0; return n; };
+const parseDate = (s) => new Date(s + "T00:00:00");
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const dayDiff = (a, b) => Math.round((b - a) / 86400000);
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+const fmtMD = (d) => `${d.getMonth() + 1}.${d.getDate()}`;
+
+let homeMonth = null;          // 현재 보는 달 (해당 월 1일 Date)
+let homeView = "month";        // "month" | "list"
+
+async function renderHome() {
+  APP.innerHTML = `<div class="loading">불러오는 중…</div>`;
   let recent = [];
   try { recent = JSON.parse(localStorage.getItem("recentTrips") || "[]"); } catch {}
-  APP.innerHTML = "";
-  const view = h(`
-    <div class="wrap home">
-      <h1>🧳 여행 일정</h1>
-      <p class="sub">링크 하나로 함께 짜는 여행 일정.<br/>만들고 링크만 공유하면 누구나 같이 편집해요.</p>
-      <button class="btn" id="newTrip">+ 새 여행 만들기</button>
-      <div class="recent" id="recent"></div>
-    </div>`);
-  APP.appendChild(view);
-  view.querySelector("#newTrip").addEventListener("click", createTrip);
 
-  const rc = view.querySelector("#recent");
-  if (recent.length) {
-    rc.appendChild(h(`<h2>최근 연 여행</h2>`));
-    recent.forEach((t) => {
-      const a = h(`<a href="/t/${t.id}"><span class="rt">${esc(t.title)}</span><span class="rd">열기 →</span></a>`);
-      a.addEventListener("click", (e) => { e.preventDefault(); go(`/t/${t.id}`); });
-      rc.appendChild(a);
-    });
+  // 최근 여행의 최신 정보를 Firestore에서 (제목·시작일·일수) — 순서 유지
+  const arr = new Array(recent.length).fill(null);
+  await Promise.all(recent.map(async (r, i) => {
+    try {
+      const snap = await getDoc(doc(db, "trips", r.id));
+      if (!snap.exists()) return; // 삭제됨 → 목록에서 제거
+      const d = snap.data();
+      arr[i] = { id: r.id, title: d.title || "제목 없는 여행", startDate: d.startDate || null, dayCount: d.dayCount || 1, ts: r.ts || 0 };
+    } catch {
+      // 네트워크 실패 시 로컬 캐시로 대체
+      arr[i] = { id: r.id, title: r.title || "제목 없는 여행", startDate: r.startDate ?? null, dayCount: r.dayCount ?? 1, ts: r.ts || 0 };
+    }
+  }));
+  const trips = arr.filter(Boolean);
+  trips.forEach((t) => { t.color = TRIP_COLORS[hashId(t.id) % TRIP_COLORS.length]; });
+  // 삭제된 항목 반영해 localStorage 갱신
+  try { localStorage.setItem("recentTrips", JSON.stringify(trips.map(({ color, ...t }) => t))); } catch {}
+
+  if (!homeMonth) {
+    const now = new Date();
+    homeMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   }
+
+  APP.innerHTML = "";
+  const shell = h(`<div class="home-shell"></div>`);
+
+  // 헤더
+  const y = homeMonth.getFullYear(), m = homeMonth.getMonth();
+  const header = h(`
+    <div class="cal-head">
+      <div class="cal-title">
+        <span class="cal-my">${y}년 ${m + 1}월</span>
+        <span class="cal-nav">
+          <button class="cal-arrow" id="prevM" title="이전 달">‹</button>
+          <button class="cal-arrow" id="nextM" title="다음 달">›</button>
+          <button class="cal-today" id="todayBtn">오늘</button>
+        </span>
+      </div>
+      <div class="cal-actions">
+        <span class="cal-toggle">
+          <button class="${homeView === "month" ? "on" : ""}" id="vMonth">월</button>
+          <button class="${homeView === "list" ? "on" : ""}" id="vList">목록</button>
+        </span>
+        <button class="btn sm" id="newTrip">+ 새 여행</button>
+      </div>
+    </div>`);
+  shell.appendChild(header);
+  header.querySelector("#newTrip").addEventListener("click", createTrip);
+  header.querySelector("#prevM").addEventListener("click", () => { homeMonth = new Date(y, m - 1, 1); renderHome(); });
+  header.querySelector("#nextM").addEventListener("click", () => { homeMonth = new Date(y, m + 1, 1); renderHome(); });
+  header.querySelector("#todayBtn").addEventListener("click", () => { const n = new Date(); homeMonth = new Date(n.getFullYear(), n.getMonth(), 1); renderHome(); });
+  header.querySelector("#vMonth").addEventListener("click", () => { homeView = "month"; renderHome(); });
+  header.querySelector("#vList").addEventListener("click", () => { homeView = "list"; renderHome(); });
+
+  if (homeView === "month") shell.appendChild(buildCalendar(homeMonth, trips));
+  else shell.appendChild(buildTripList(trips));
+
+  APP.appendChild(shell);
   APP.appendChild(promoFooter());
+}
+
+// 달력 그리드 + 여행 막대
+function buildCalendar(month, trips) {
+  const y = month.getFullYear(), m = month.getMonth();
+  const first = new Date(y, m, 1);
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const gridStart = addDays(first, -first.getDay());          // 그리드 첫 칸(일요일)
+  const weekCount = Math.ceil((first.getDay() + daysInMonth) / 7);
+  const gridEnd = addDays(gridStart, weekCount * 7 - 1);
+  const today = new Date();
+
+  // 이 그리드에 걸치는 여행 → 레인 배정(겹치면 아래 줄로)
+  const placed = trips
+    .filter((t) => t.startDate)
+    .map((t) => { const s = parseDate(t.startDate); return { ...t, s, e: addDays(s, (t.dayCount || 1) - 1) }; })
+    .filter((t) => t.e >= gridStart && t.s <= gridEnd)
+    .sort((a, b) => a.s - b.s || b.e - a.e);
+  const laneEnds = [];
+  placed.forEach((t) => {
+    let lane = laneEnds.findIndex((end) => end < t.s);
+    if (lane === -1) { lane = laneEnds.length; laneEnds.push(t.e); } else laneEnds[lane] = t.e;
+    t.lane = lane;
+  });
+  const laneCount = Math.max(1, laneEnds.length);
+
+  const cal = h(`<div class="cal"></div>`);
+  cal.appendChild(h(`<div class="cal-week-head">${["일","월","화","수","목","금","토"].map((d) => `<div>${d}</div>`).join("")}</div>`));
+
+  for (let w = 0; w < weekCount; w++) {
+    const weekStart = addDays(gridStart, w * 7);
+    const weekEnd = addDays(weekStart, 6);
+    const week = h(`<div class="cal-week" style="--lanes:${laneCount}"></div>`);
+    // 날짜 칸
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(weekStart, i);
+      const inMonth = d.getMonth() === m;
+      const isToday = sameDay(d, today);
+      const cell = h(`<div class="cal-cell ${inMonth ? "" : "out"}">
+        <span class="cal-day ${isToday ? "today" : ""}">${d.getDate()}</span>
+      </div>`);
+      cell.addEventListener("click", () => { homeMonth = new Date(y, m, 1); });
+      week.appendChild(cell);
+    }
+    // 이 주에 걸치는 여행 막대
+    placed.filter((t) => t.e >= weekStart && t.s <= weekEnd).forEach((t) => {
+      const segS = t.s < weekStart ? weekStart : t.s;
+      const segE = t.e > weekEnd ? weekEnd : t.e;
+      const col = segS.getDay();
+      const span = dayDiff(segS, segE) + 1;
+      const contL = t.s < weekStart, contR = t.e > weekEnd;
+      const bar = h(`<button class="cal-bar" title="${esc(t.title)}"></button>`);
+      bar.style.left = `calc(${(col / 7) * 100}% + 3px)`;
+      bar.style.width = `calc(${(span / 7) * 100}% - 6px)`;
+      bar.style.top = `calc(26px + ${t.lane} * 21px)`;
+      bar.style.background = t.color;
+      if (contL) { bar.style.borderTopLeftRadius = "0"; bar.style.borderBottomLeftRadius = "0"; }
+      if (contR) { bar.style.borderTopRightRadius = "0"; bar.style.borderBottomRightRadius = "0"; }
+      bar.textContent = (!contL || col === 0) ? t.title : "";
+      bar.addEventListener("click", (e) => { e.stopPropagation(); go(`/t/${t.id}`); });
+      week.appendChild(bar);
+    });
+    cal.appendChild(week);
+  }
+
+  // 이번 달 여행 목록
+  const monthLast = new Date(y, m + 1, 0);
+  const inMonth = trips
+    .filter((t) => t.startDate)
+    .map((t) => { const s = parseDate(t.startDate); return { ...t, s, e: addDays(s, (t.dayCount || 1) - 1) }; })
+    .filter((t) => t.e >= first && t.s <= monthLast)
+    .sort((a, b) => a.s - b.s);
+  const undated = trips.filter((t) => !t.startDate);
+
+  const foot = h(`<div class="cal-foot"></div>`);
+  if (inMonth.length) {
+    foot.appendChild(h(`<div class="cal-foot-title">이번 달 여행 ${inMonth.length}</div>`));
+    inMonth.forEach((t) => foot.appendChild(tripRow(t, `${fmtMD(t.s)} — ${fmtMD(t.e)} · ${t.dayCount}일`)));
+  } else {
+    foot.appendChild(h(`<div class="cal-foot-empty">이번 달엔 잡힌 여행이 없어요.</div>`));
+  }
+  if (undated.length) {
+    foot.appendChild(h(`<div class="cal-foot-title">날짜 미정 ${undated.length}</div>`));
+    undated.forEach((t) => foot.appendChild(tripRow(t, "시작일 미정")));
+  }
+  cal.appendChild(foot);
+  return cal;
+}
+
+// 목록 뷰 (전체 최근 여행)
+function buildTripList(trips) {
+  const box = h(`<div class="cal-foot list-view"></div>`);
+  if (!trips.length) { box.appendChild(h(`<div class="cal-foot-empty">아직 연 여행이 없어요. “+ 새 여행”으로 시작해 보세요.</div>`)); return box; }
+  trips.forEach((t) => {
+    const sub = t.startDate ? `${fmtMD(parseDate(t.startDate))} 시작 · ${t.dayCount}일` : "시작일 미정";
+    box.appendChild(tripRow(t, sub));
+  });
+  return box;
+}
+
+function tripRow(t, sub) {
+  const row = h(`<a class="trip-row" href="/t/${t.id}">
+    <span class="tr-bar" style="background:${t.color}"></span>
+    <span class="tr-body"><span class="tr-name">${esc(t.title)}</span><span class="tr-sub">${esc(sub)}</span></span>
+    <span class="tr-go">›</span>
+  </a>`);
+  row.addEventListener("click", (e) => { e.preventDefault(); go(`/t/${t.id}`); });
+  return row;
 }
 
 async function createTrip() {
@@ -137,7 +307,7 @@ async function createTrip() {
     const ref = await addDoc(collection(db, "trips"), {
       title: "새 여행", startDate: null, dayCount: 3, createdAt: serverTimestamp(),
     });
-    rememberTrip(ref.id, "새 여행");
+    rememberTrip(ref.id, { title: "새 여행", startDate: null, dayCount: 3 });
     go(`/t/${ref.id}`);
   } catch (e) {
     toast("생성 실패: " + e.message);
@@ -161,7 +331,7 @@ function renderTrip(id) {
   unsubTrip = onSnapshot(doc(db, "trips", id), (snap) => {
     if (!snap.exists()) { APP.innerHTML = `<div class="wrap home"><h1>🔍</h1><p class="sub">여행을 찾을 수 없어요. 링크가 정확한지 확인해 주세요.</p><button class="btn ghost" onclick="location.href='/'">홈으로</button></div>`; cleanup(); return; }
     trip = snap.data();
-    rememberTrip(id, trip.title);
+    rememberTrip(id, { title: trip.title, startDate: trip.startDate ?? null, dayCount: trip.dayCount ?? 1 });
     paint();
   }, (err) => { APP.innerHTML = `<div class="loading">불러오기 실패: ${esc(err.message)}</div>`; });
 

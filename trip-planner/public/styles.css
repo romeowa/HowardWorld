@@ -41,20 +41,51 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .btn.block { width: 100%; }
 .btn.danger { background: transparent; color: var(--danger); font-weight: 500; }
 
-/* ---------- 홈 ---------- */
+/* ---------- 홈: 여행 못 찾음 등 ---------- */
 .home { padding: 52px 0 20px; text-align: center; }
 .home h1 { font-size: 30px; font-weight: 600; letter-spacing: -.02em; margin-bottom: 8px; }
 .home .sub { color: var(--muted); margin-bottom: 28px; }
-.recent { text-align: left; margin-top: 36px; }
-.recent h2 { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; font-weight: 500; }
-.recent a {
-  display: flex; justify-content: space-between; align-items: center;
-  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-  padding: 14px 15px; margin-bottom: 8px; text-decoration: none; color: var(--text);
+
+/* ---------- 홈: 월별 달력 ---------- */
+.home-shell { max-width: 900px; margin: 0 auto; padding: 16px 16px calc(40px + env(safe-area-inset-bottom)); }
+.cal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.cal-title { display: flex; align-items: center; gap: 12px; }
+.cal-my { font-size: 22px; font-weight: 600; letter-spacing: -.02em; }
+.cal-nav { display: flex; gap: 6px; align-items: center; }
+.cal-arrow { width: 34px; height: 34px; border-radius: 10px; background: var(--surface); color: var(--text); font-size: 16px; display: inline-flex; align-items: center; justify-content: center; }
+.cal-arrow:hover { background: var(--surface-2); }
+.cal-today { padding: 0 12px; height: 34px; border-radius: 10px; border: 1px solid var(--line); font-size: 13px; color: var(--muted-2); }
+.cal-today:hover { border-color: var(--accent); color: var(--accent); }
+.cal-actions { display: flex; align-items: center; gap: 10px; }
+.cal-toggle { display: flex; background: var(--surface); border-radius: 10px; padding: 3px; }
+.cal-toggle button { padding: 6px 13px; border-radius: 8px; font-size: 13px; color: var(--muted-2); }
+.cal-toggle button.on { background: var(--text); color: var(--card); font-weight: 500; }
+
+.cal-week-head { display: grid; grid-template-columns: repeat(7, 1fr); }
+.cal-week-head div { text-align: center; padding: 4px 0 8px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.cal-week { position: relative; display: grid; grid-template-columns: repeat(7, 1fr); min-height: calc(30px + var(--lanes, 1) * 21px + 8px); border-top: 1px solid var(--line-soft); }
+.cal-cell { display: flex; justify-content: center; padding-top: 6px; }
+.cal-day { font-size: 12.5px; color: var(--muted-2); width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
+.cal-cell.out .cal-day { color: #c2bcb0; }
+.cal-day.today { background: var(--text); color: var(--card); border-radius: 50%; font-weight: 500; }
+.cal-bar {
+  position: absolute; height: 19px; border-radius: 6px; color: #fff; font-size: 12px; font-weight: 500;
+  display: flex; align-items: center; padding: 0 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  text-align: left; cursor: pointer;
 }
-.recent a:hover { border-color: var(--accent); }
-.recent .rt { font-weight: 600; }
-.recent .rd { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.cal-bar:hover { filter: brightness(1.08); }
+
+.cal-foot { margin-top: 22px; display: flex; flex-direction: column; gap: 8px; }
+.cal-foot-title { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
+.cal-foot-empty { color: var(--muted); font-size: 14px; padding: 18px 0; text-align: center; }
+.list-view { margin-top: 4px; }
+.trip-row { display: flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; text-decoration: none; color: var(--text); }
+.trip-row:hover { border-color: var(--accent); }
+.tr-bar { width: 4px; height: 34px; border-radius: 4px; flex: 0 0 auto; }
+.tr-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tr-name { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-sub { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.tr-go { color: var(--muted); font-size: 18px; flex: 0 0 auto; }
 
 /* ---------- 여행 헤더 ---------- */
 .topbar {
