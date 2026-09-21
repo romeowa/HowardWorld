@@ -171,6 +171,25 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
 .modal-actions .btn { flex: 1; }
 
+/* ---------- 광고 푸터 ---------- */
+.promo { max-width: 760px; margin: 24px auto 0; padding: 16px 16px calc(24px + env(safe-area-inset-bottom)); }
+.promo-title { font-size: 12px; color: var(--muted); margin-bottom: 10px; text-align: center; }
+.promo-cards { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.promo-card {
+  display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text);
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 14px; min-width: 160px; flex: 1; max-width: 300px; box-shadow: var(--shadow);
+}
+.promo-card:hover { border-color: var(--accent); }
+.pc-icon {
+  width: 38px; height: 38px; border-radius: 10px; flex: 0 0 auto;
+  object-fit: cover; border: 1px solid var(--line);
+}
+.pc-text { display: flex; flex-direction: column; line-height: 1.3; flex: 1; min-width: 0; }
+.pc-name { font-weight: 700; font-size: 15px; }
+.pc-plat { font-size: 11px; color: var(--muted); }
+.pc-go { color: var(--muted); font-size: 16px; flex: 0 0 auto; }
+
 .toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
   background: #111827; color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 14px;

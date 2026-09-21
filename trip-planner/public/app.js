@@ -53,6 +53,34 @@ function rememberTrip(id, title) {
   try { localStorage.setItem("recentTrips", JSON.stringify(list.slice(0, 12))); } catch {}
 }
 
+// ---------- 광고 푸터 (만든 사람의 다른 앱) ----------
+function promoFooter() {
+  const ua = navigator.userAgent;
+  const isIOS = /iPhone|iPad|iPod/.test(ua);
+  const apps = [
+    {
+      name: "피그맵", icon: "/promo-pigmap.jpg", plat: "iOS · Android",
+      href: isIOS
+        ? "https://apps.apple.com/app/id6471933646"
+        : "https://play.google.com/store/apps/details?id=home.sweet.pigmap",
+    },
+    {
+      name: "니니구", icon: "/promo-ninigu.jpg", plat: "iOS · Web",
+      href: isIOS ? "https://apps.apple.com/app/id6754002478" : "https://ninigu.net",
+    },
+  ];
+  return h(`<footer class="promo">
+    <div class="promo-title">만든 사람의 다른 앱</div>
+    <div class="promo-cards">
+      ${apps.map((a) => `<a class="promo-card" href="${a.href}" target="_blank" rel="noopener">
+        <img class="pc-icon" src="${a.icon}" alt="${a.name}" width="38" height="38" loading="lazy" />
+        <span class="pc-text"><span class="pc-name">${a.name}</span><span class="pc-plat">${a.plat}</span></span>
+        <span class="pc-go">→</span>
+      </a>`).join("")}
+    </div>
+  </footer>`);
+}
+
 // ---------- 라우팅 ----------
 let unsubTrip = null, unsubItems = null;
 function cleanup() {
@@ -93,6 +121,7 @@ function renderHome() {
       rc.appendChild(a);
     });
   }
+  APP.appendChild(promoFooter());
 }
 
 async function createTrip() {
@@ -221,6 +250,7 @@ function paint() {
   }
 
   APP.appendChild(wrap);
+  APP.appendChild(promoFooter());
   if (pinned.length) renderDayMap(pinned);
 }
 
