@@ -14,7 +14,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
   background: var(--bg); color: var(--text); line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  padding-bottom: calc(150px + env(safe-area-inset-bottom)); /* 고정 광고 배너(세로 2개) 높이만큼 확보 */
+  padding-bottom: env(safe-area-inset-bottom);
 }
 .loading { text-align: center; color: var(--muted); padding: 60px 20px; }
 button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
@@ -163,15 +163,13 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
 .modal-actions .btn { flex: 1; }
 
-/* ---------- 광고 푸터 (화면 하단 고정) ---------- */
+/* ---------- 광고 푸터 (리스트 끝에 따라붙음) ---------- */
 .promo {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
-  background: var(--card); border-top: 1px solid var(--line);
-  box-shadow: 0 -2px 12px rgba(0,0,0,.10);
-  padding: 7px 12px calc(7px + env(safe-area-inset-bottom));
+  max-width: 760px; margin: 24px auto 0; padding: 14px 16px calc(24px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
 }
-.promo-title { font-size: 10px; color: var(--muted); text-align: center; margin-bottom: 5px; }
-.promo-cards { display: flex; flex-direction: column; gap: 6px; max-width: 460px; margin: 0 auto; }
+.promo-title { font-size: 10px; color: var(--muted); text-align: center; margin-bottom: 8px; }
+.promo-cards { display: flex; flex-direction: column; gap: 8px; max-width: 460px; margin: 0 auto; }
 .promo-card {
   display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text);
   background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
