@@ -206,7 +206,7 @@ function paint() {
   // 시작일
   const meta = h(`<div class="trip-meta">
     <label>시작일 <input type="date" id="startDate" value="${trip.startDate || ""}"/></label>
-    <span class="rd" style="font-size:13px;color:var(--muted)">${trip.dayCount}일 일정</span>
+    <span class="count">${trip.dayCount}일 · ${items.length}곳</span>
   </div>`);
   meta.querySelector("#startDate").addEventListener("change", (e) =>
     updateDoc(doc(db, "trips", tripId), { startDate: e.target.value || null }));
@@ -226,15 +226,19 @@ function paint() {
   days.appendChild(addDay);
   APP.appendChild(days);
 
-  // 항목 목록
+  // 항목 목록 (타임라인)
   const dayItems = sortedItems(items.filter((it) => it.day === curDay));
-  const list = h(`<div class="items"></div>`);
+  const list = h(`<div class="timeline"></div>`);
   if (!dayItems.length) list.appendChild(h(`<div class="empty-day">아직 이 날 일정이 없어요.<br/>아래 버튼으로 장소·식사·액티비티를 추가해 보세요.</div>`));
   dayItems.forEach((it) => list.appendChild(itemCard(it)));
+  // 타임라인 끝 자리표시 (여기서도 추가 가능)
+  const tlAdd = h(`<button class="tl-add">＋ 이 다음에 장소 추가</button>`);
+  tlAdd.addEventListener("click", () => openEditor(null));
+  list.appendChild(tlAdd);
   wrap.appendChild(list);
 
-  // 추가 버튼
-  const addRow = h(`<div class="add-row"><button class="btn block" id="addItem">+ 항목 추가</button></div>`);
+  // 추가 버튼 (주요 액션)
+  const addRow = h(`<div class="add-row"><button class="btn block" id="addItem">+ 장소 추가</button></div>`);
   addRow.querySelector("#addItem").addEventListener("click", () => openEditor(null));
   wrap.appendChild(addRow);
 
@@ -264,33 +268,34 @@ function itemCard(it) {
   const t = TYPES[it.type] || TYPES.note;
   // 주소 클릭 → 구글맵에서 해당 좌표 열기 (정확한 위치, 모바일에선 앱/웹뷰)
   const mapLink = it.lat != null ? `https://www.google.com/maps/search/?api=1&query=${it.lat},${it.lng}` : null;
-  const card = h(`
-    <div class="item ${it.lat != null ? "clickable" : ""}" data-id="${it.id}">
-      <div class="ic">${t.emoji}</div>
-      <div class="body">
-        <div class="row1">
-          ${it.time ? `<span class="time">${esc(it.time)}</span>` : ""}
-          <span class="name">${esc(it.name) || t.label}</span>
+  const row = h(`
+    <div class="tl-row ${it.lat != null ? "clickable" : ""}" data-id="${it.id}">
+      <div class="tl-time ${it.time ? "" : "empty"}">${it.time ? esc(it.time) : ""}</div>
+      <div class="tl-rail"><span class="tl-dot"></span></div>
+      <div class="tl-content">
+        <div class="tl-head">
+          <span class="tl-emoji">${t.emoji}</span>
+          <span class="tl-name">${esc(it.name) || t.label}</span>
+          <span class="tl-acts">
+            <button class="edit" title="수정">✏️</button>
+            <button class="del" title="삭제">🗑️</button>
+          </span>
         </div>
-        ${it.address ? `<div class="addr">${mapLink ? `<a href="${mapLink}" target="_blank" rel="noopener">📍 ${esc(it.address)}</a>` : esc(it.address)}</div>` : ""}
-        ${it.memo ? `<div class="memo">${esc(it.memo)}</div>` : ""}
-      </div>
-      <div class="acts">
-        <button class="edit" title="수정">✏️</button>
-        <button class="del" title="삭제">🗑️</button>
+        ${it.address ? `<div class="tl-addr">${mapLink ? `<a href="${mapLink}" target="_blank" rel="noopener">📍 ${esc(it.address)}</a>` : esc(it.address)}</div>` : ""}
+        ${it.memo ? `<div class="tl-memo">${esc(it.memo)}</div>` : ""}
       </div>
     </div>`);
-  card.querySelector(".edit").addEventListener("click", (e) => { e.stopPropagation(); openEditor(it); });
-  card.querySelector(".del").addEventListener("click", (e) => {
+  row.querySelector(".edit").addEventListener("click", (e) => { e.stopPropagation(); openEditor(it); });
+  row.querySelector(".del").addEventListener("click", (e) => {
     e.stopPropagation();
     if (confirm(`"${it.name || TYPES[it.type]?.label}" 삭제할까요?`)) deleteDoc(doc(db, "trips", tripId, "items", it.id));
   });
-  // 카드(장소/주소 등) 클릭 → 지도에서 해당 위치로 이동
-  card.addEventListener("click", (e) => {
-    if (e.target.closest(".acts") || e.target.closest("a")) return;
+  // 내용 클릭 → 지도에서 해당 위치로 이동
+  row.querySelector(".tl-content").addEventListener("click", (e) => {
+    if (e.target.closest(".tl-acts") || e.target.closest("a")) return;
     focusOnMap(it);
   });
-  return card;
+  return row;
 }
 
 // ---------- 이 날 지도 (구글맵) ----------
@@ -321,7 +326,7 @@ async function renderDayMap(pinned) {
   });
   // 순서대로 잇는 경로선
   if (path.length > 1) {
-    new google.maps.Polyline({ path, map, strokeColor: "#0ea5e9", strokeOpacity: 0.85, strokeWeight: 3.5 });
+    new google.maps.Polyline({ path, map, strokeColor: "#0f766e", strokeOpacity: 0.85, strokeWeight: 3.5 });
   }
   dayFitAll = () => {
     if (path.length > 1) map.fitBounds(bounds, 40);
@@ -344,10 +349,11 @@ function panTo(it) {
 // 핀 클릭 → 지도 확대 + 해당 항목으로 스크롤·하이라이트
 function focusItem(it) {
   panTo(it);
-  const card = document.querySelector(`.item[data-id="${it.id}"]`);
-  if (card) {
-    card.scrollIntoView({ behavior: "smooth", block: "center" });
-    card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash");
+  const row = document.querySelector(`.tl-row[data-id="${it.id}"]`);
+  const c = row && row.querySelector(".tl-content");
+  if (row && c) {
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    c.classList.remove("flash"); void c.offsetWidth; c.classList.add("flash");
   }
 }
 
@@ -358,8 +364,9 @@ function focusOnMap(it) {
   const m = markerById[it.id];
   if (m) m.info.open({ map: dayMap, anchor: m.mk });
   document.getElementById("dayMap")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  const card = document.querySelector(`.item[data-id="${it.id}"]`);
-  if (card) { card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash"); }
+  const row = document.querySelector(`.tl-row[data-id="${it.id}"]`);
+  const c = row && row.querySelector(".tl-content");
+  if (c) { c.classList.remove("flash"); void c.offsetWidth; c.classList.add("flash"); }
 }
 
 // ---------- 항목 편집 모달 ----------
