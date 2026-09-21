@@ -256,7 +256,8 @@ function paint() {
 
 function itemCard(it) {
   const t = TYPES[it.type] || TYPES.note;
-  const mapLink = it.lat != null ? `https://www.openstreetmap.org/?mlat=${it.lat}&mlon=${it.lng}#map=17/${it.lat}/${it.lng}` : null;
+  // 주소 클릭 → 구글맵에서 해당 좌표 열기 (정확한 위치, 모바일에선 앱/웹뷰)
+  const mapLink = it.lat != null ? `https://www.google.com/maps/search/?api=1&query=${it.lat},${it.lng}` : null;
   const card = h(`
     <div class="item ${it.lat != null ? "clickable" : ""}" data-id="${it.id}">
       <div class="ic">${t.emoji}</div>
