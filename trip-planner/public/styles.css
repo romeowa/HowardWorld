@@ -81,13 +81,8 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
   display: flex; gap: 12px; background: var(--card); border: 1px solid var(--line);
   border-radius: 12px; padding: 13px 14px; margin-bottom: 10px; box-shadow: var(--shadow);
 }
-.item .drag {
-  flex: 0 0 auto; align-self: center; color: var(--muted); font-size: 18px; line-height: 1;
-  cursor: grab; padding: 4px 2px; touch-action: none; user-select: none;
-}
-.item .drag:active { cursor: grabbing; }
-.item.drag-ghost { opacity: .4; }
-.item.sortable-chosen { box-shadow: 0 4px 14px rgba(0,0,0,.18); }
+.item.clickable { cursor: pointer; }
+.item.clickable:hover { border-color: var(--accent); }
 .item .ic { font-size: 22px; flex: 0 0 auto; width: 30px; text-align: center; }
 .item .body { flex: 1; min-width: 0; }
 .item .row1 { display: flex; align-items: baseline; gap: 8px; }
@@ -115,6 +110,13 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 #dayMap { height: 260px; border-radius: 12px; margin: 4px 0 18px; border: 1px solid var(--line); position: relative; z-index: 0; }
 /* 순서 번호 핀 */
 .num-pin { background: transparent; border: none; }
+/* 전체 보기 버튼 */
+.fit-all-btn {
+  background: #fff; color: #1f2937; border: 2px solid rgba(0,0,0,.2); border-radius: 6px;
+  font-size: 12px; font-weight: 700; padding: 5px 9px; cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,.25);
+}
+.fit-all-btn:hover { background: #f3f4f6; }
 .num-pin-inner {
   width: 28px; height: 28px; border-radius: 50%;
   background: var(--accent); color: #fff; font-weight: 700; font-size: 14px;

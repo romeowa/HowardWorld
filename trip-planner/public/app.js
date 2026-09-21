@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore, doc, collection, addDoc, setDoc, updateDoc, deleteDoc,
-  getDoc, onSnapshot, serverTimestamp, writeBatch,
+  getDoc, onSnapshot, serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -115,8 +115,8 @@ let trip = null;       // {title, startDate, dayCount}
 let items = [];        // [{id, ...}]
 let curDay = 0;
 let tripId = null;
-let dayMap = null, dayMarkers = [];
-let sortable = null;   // 현재 Day 항목 리스트의 드래그 정렬 인스턴스
+let dayMap = null;
+let markerById = {};   // 항목 id → 지도 마커 (리스트 클릭 시 지도 이동용)
 
 function renderTrip(id) {
   tripId = id;
@@ -136,17 +136,13 @@ function renderTrip(id) {
   });
 }
 
-// 수동 순서(order)가 기준. 드래그로 바꾼 순서를 그대로 유지하고,
-// "시간순 정렬" 버튼으로 원할 때만 시간 기준으로 order를 다시 매긴다.
+// 항상 시간순 정렬 (시간 없는 항목은 뒤로, 그 안에서는 추가된 순서)
 function sortedItems(dayItems) {
-  return dayItems.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
-}
-
-// 주어진 순서(문서 id 배열)대로 order 필드를 0,1,2…로 다시 매겨 저장
-async function persistOrder(orderedIds) {
-  const batch = writeBatch(db);
-  orderedIds.forEach((id, i) => batch.update(doc(db, "trips", tripId, "items", id), { order: i }));
-  await batch.commit();
+  return dayItems.slice().sort((a, b) => {
+    const ta = a.time || "99:99", tb = b.time || "99:99";
+    if (ta !== tb) return ta < tb ? -1 : 1;
+    return (a.order || 0) - (b.order || 0);
+  });
 }
 
 function paint() {
@@ -202,34 +198,9 @@ function paint() {
   dayItems.forEach((it) => list.appendChild(itemCard(it)));
   wrap.appendChild(list);
 
-  // 드래그 순서 변경 (터치 지원). 항목이 2개 이상일 때만.
-  if (sortable) { sortable.destroy(); sortable = null; }
-  if (dayItems.length > 1 && window.Sortable) {
-    sortable = Sortable.create(list, {
-      handle: ".drag",
-      animation: 150,
-      ghostClass: "drag-ghost",
-      onEnd: () => {
-        const ids = [...list.querySelectorAll(".item")].map((el) => el.dataset.id);
-        persistOrder(ids).catch((e) => toast("정렬 저장 실패: " + e.message));
-      },
-    });
-  }
-
-  // 추가 버튼 (+ 시간순 정렬)
-  const addRow = h(`<div class="add-row">
-    <button class="btn" style="flex:1" id="addItem">+ 항목 추가</button>
-    ${dayItems.length > 1 ? `<button class="btn ghost" id="sortTime" title="시간 기준으로 정렬">🕘 시간순</button>` : ""}
-  </div>`);
+  // 추가 버튼
+  const addRow = h(`<div class="add-row"><button class="btn block" id="addItem">+ 항목 추가</button></div>`);
   addRow.querySelector("#addItem").addEventListener("click", () => openEditor(null));
-  const sortBtn = addRow.querySelector("#sortTime");
-  if (sortBtn) sortBtn.addEventListener("click", () => {
-    const byTime = dayItems.slice().sort((a, b) => {
-      const ta = a.time || "99:99", tb = b.time || "99:99";
-      return ta < tb ? -1 : ta > tb ? 1 : 0;
-    });
-    persistOrder(byTime.map((x) => x.id)).catch((e) => toast("정렬 실패: " + e.message));
-  });
   wrap.appendChild(addRow);
 
   // 지도 (핀이 있으면 항상 표시)
@@ -257,8 +228,7 @@ function itemCard(it) {
   const t = TYPES[it.type] || TYPES.note;
   const mapLink = it.lat != null ? `https://www.openstreetmap.org/?mlat=${it.lat}&mlon=${it.lng}#map=17/${it.lat}/${it.lng}` : null;
   const card = h(`
-    <div class="item" data-id="${it.id}">
-      <span class="drag" title="드래그해서 순서 변경">⠿</span>
+    <div class="item ${it.lat != null ? "clickable" : ""}" data-id="${it.id}">
       <div class="ic">${t.emoji}</div>
       <div class="body">
         <div class="row1">
@@ -273,9 +243,15 @@ function itemCard(it) {
         <button class="del" title="삭제">🗑️</button>
       </div>
     </div>`);
-  card.querySelector(".edit").addEventListener("click", () => openEditor(it));
-  card.querySelector(".del").addEventListener("click", () => {
+  card.querySelector(".edit").addEventListener("click", (e) => { e.stopPropagation(); openEditor(it); });
+  card.querySelector(".del").addEventListener("click", (e) => {
+    e.stopPropagation();
     if (confirm(`"${it.name || TYPES[it.type]?.label}" 삭제할까요?`)) deleteDoc(doc(db, "trips", tripId, "items", it.id));
+  });
+  // 카드(장소/주소 등) 클릭 → 지도에서 해당 위치로 이동
+  card.addEventListener("click", (e) => {
+    if (e.target.closest(".acts") || e.target.closest("a")) return;
+    focusOnMap(it);
   });
   return card;
 }
@@ -290,6 +266,7 @@ function renderDayMap(pinned) {
     attribution: "© OpenStreetMap", maxZoom: 19,
   }).addTo(dayMap);
   const group = [];
+  markerById = {};
   pinned.forEach((it, i) => {
     const icon = L.divIcon({
       className: "num-pin",
@@ -299,19 +276,32 @@ function renderDayMap(pinned) {
     const mk = L.marker([it.lat, it.lng], { icon }).addTo(dayMap);
     mk.bindPopup(`<b>${i + 1}. ${esc(it.name || "")}</b>${it.time ? "<br/>" + esc(it.time) : ""}`);
     mk.on("click", () => focusItem(it));
+    markerById[it.id] = mk;
     group.push([it.lat, it.lng]);
   });
   // 순서대로 잇는 경로선
   if (group.length > 1) {
     L.polyline(group, { color: "#0ea5e9", weight: 3.5, opacity: 0.75, dashArray: "2,9", lineCap: "round" }).addTo(dayMap);
   }
-  const fit = () => {
+  const fitAll = () => {
     dayMap.invalidateSize();
     if (group.length > 1) dayMap.fitBounds(group, { padding: [34, 34], maxZoom: 15 });
     else dayMap.setView(group[0], 15);
   };
+  // "전체 보기" 버튼 — 핀 클릭으로 확대한 뒤 다시 전체 핀이 보이게
+  const FitCtl = L.Control.extend({
+    options: { position: "topright" },
+    onAdd() {
+      const b = L.DomUtil.create("button", "fit-all-btn leaflet-control");
+      b.type = "button"; b.textContent = "⤢ 전체"; b.title = "전체 보기";
+      L.DomEvent.disableClickPropagation(b);
+      L.DomEvent.on(b, "click", (e) => { L.DomEvent.stop(e); fitAll(); });
+      return b;
+    },
+  });
+  dayMap.addControl(new FitCtl());
   // 컨테이너 레이아웃이 끝난 뒤 크기를 다시 잡고 맞춘다 (초기 즉시 렌더 시 폭 0 방지)
-  setTimeout(fit, 150);
+  setTimeout(fitAll, 150);
   setTimeout(() => dayMap.invalidateSize(), 400);
 }
 
@@ -323,6 +313,16 @@ function focusItem(it) {
     card.scrollIntoView({ behavior: "smooth", block: "center" });
     card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash");
   }
+}
+
+// 리스트 항목 클릭 → 지도에서 해당 위치로 이동 + 팝업 + 지도로 스크롤
+function focusOnMap(it) {
+  if (!dayMap || it.lat == null) return;
+  dayMap.setView([it.lat, it.lng], Math.max(dayMap.getZoom(), 16), { animate: true });
+  markerById[it.id]?.openPopup();
+  document.getElementById("dayMap")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  const card = document.querySelector(`.item[data-id="${it.id}"]`);
+  if (card) { card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash"); }
 }
 
 // ---------- 항목 편집 모달 ----------
