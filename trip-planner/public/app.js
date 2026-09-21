@@ -184,10 +184,15 @@ function paint() {
   if (!trip) return;
   if (curDay >= trip.dayCount) curDay = trip.dayCount - 1;
 
+  // 이 날 항목 / 지도 핀 (레이아웃 결정에 필요)
+  const dayItems = sortedItems(items.filter((it) => it.day === curDay));
+  const pinned = dayItems.filter((it) => it.lat != null);
+  const hasMap = pinned.length > 0;
+
   APP.innerHTML = "";
-  // 상단 바
+  // 상단 바 (지도 있으면 넓은 폭으로)
   const bar = h(`
-    <div class="topbar"><div class="topbar-inner">
+    <div class="topbar"><div class="topbar-inner ${hasMap ? "wide" : ""}">
       <a class="home-link" href="/" title="홈">🧳</a>
       <input class="trip-title" value="${esc(trip.title)}" placeholder="여행 제목" />
       <button class="btn ghost sm" id="share">🔗 링크</button>
@@ -201,7 +206,8 @@ function paint() {
     catch { prompt("이 링크를 공유하세요:", location.href); }
   });
 
-  const wrap = h(`<div class="wrap"></div>`);
+  // 여행 전체를 감싸는 셸 (지도 있으면 넓게)
+  const shell = h(`<div class="trip-shell ${hasMap ? "wide" : ""}"></div>`);
 
   // 시작일
   const meta = h(`<div class="trip-meta">
@@ -210,7 +216,7 @@ function paint() {
   </div>`);
   meta.querySelector("#startDate").addEventListener("change", (e) =>
     updateDoc(doc(db, "trips", tripId), { startDate: e.target.value || null }));
-  APP.appendChild(meta);
+  shell.appendChild(meta);
 
   // Day 탭
   const days = h(`<div class="days"></div>`);
@@ -224,10 +230,13 @@ function paint() {
   const addDay = h(`<button class="day-tab add" title="날짜 추가">+ 날</button>`);
   addDay.addEventListener("click", () => updateDoc(doc(db, "trips", tripId), { dayCount: trip.dayCount + 1 }));
   days.appendChild(addDay);
-  APP.appendChild(days);
+  shell.appendChild(days);
+
+  // 본문: 넓으면 타임라인 | 지도 2단, 좁으면 세로 1단(지도 아래)
+  const body = h(`<div class="trip-body ${hasMap ? "has-map" : ""}"></div>`);
+  const main = h(`<div class="trip-main"></div>`);
 
   // 항목 목록 (타임라인)
-  const dayItems = sortedItems(items.filter((it) => it.day === curDay));
   const list = h(`<div class="timeline"></div>`);
   if (!dayItems.length) list.appendChild(h(`<div class="empty-day">아직 이 날 일정이 없어요.<br/>아래 버튼으로 장소·식사·액티비티를 추가해 보세요.</div>`));
   dayItems.forEach((it) => list.appendChild(itemCard(it)));
@@ -235,31 +244,36 @@ function paint() {
   const tlAdd = h(`<button class="tl-add">＋ 이 다음에 장소 추가</button>`);
   tlAdd.addEventListener("click", () => openEditor(null));
   list.appendChild(tlAdd);
-  wrap.appendChild(list);
+  main.appendChild(list);
 
   // 추가 버튼 (주요 액션)
   const addRow = h(`<div class="add-row"><button class="btn block" id="addItem">+ 장소 추가</button></div>`);
   addRow.querySelector("#addItem").addEventListener("click", () => openEditor(null));
-  wrap.appendChild(addRow);
+  main.appendChild(addRow);
 
-  // 지도 (핀이 있으면 항상 표시)
-  const pinned = dayItems.filter((it) => it.lat != null);
-  if (pinned.length) wrap.appendChild(h(`<div id="dayMap"></div>`));
+  body.appendChild(main);
 
-  // 마지막 날 삭제 (비어있을 때만)
+  // 지도 (핀이 있으면): 넓으면 오른쪽 스티키, 좁으면 타임라인 아래
+  if (hasMap) {
+    const aside = h(`<div class="trip-aside"><div id="dayMap"></div></div>`);
+    body.appendChild(aside);
+  }
+  shell.appendChild(body);
+
+  // 마지막 날 삭제 (비어있을 때만) — 본문 아래 전체 폭
   if (trip.dayCount > 1) {
     const lastEmpty = items.filter((it) => it.day === trip.dayCount - 1).length === 0;
     if (lastEmpty) {
-      const del = h(`<div style="text-align:center;margin-top:8px"><button class="btn danger sm" id="delDay">− 마지막 날(Day ${trip.dayCount}) 삭제</button></div>`);
+      const del = h(`<div style="text-align:center;margin-top:14px"><button class="btn danger sm" id="delDay">− 마지막 날(Day ${trip.dayCount}) 삭제</button></div>`);
       del.querySelector("#delDay").addEventListener("click", () => {
         updateDoc(doc(db, "trips", tripId), { dayCount: trip.dayCount - 1 });
         if (curDay >= trip.dayCount - 1) curDay = trip.dayCount - 2;
       });
-      wrap.appendChild(del);
+      shell.appendChild(del);
     }
   }
 
-  APP.appendChild(wrap);
+  APP.appendChild(shell);
   APP.appendChild(promoFooter());
   if (pinned.length) renderDayMap(pinned);
 }

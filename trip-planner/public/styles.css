@@ -68,13 +68,24 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
   color: var(--text); padding: 4px 6px; border-radius: 8px; min-width: 0;
 }
 .trip-title:focus { outline: none; background: var(--surface); }
-.trip-meta { max-width: 760px; margin: 0 auto; padding: 10px 16px 0; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.trip-meta { padding: 10px 0 0; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 .trip-meta label { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
 .trip-meta input[type=date] { border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 14px; background: var(--card); color: var(--text); }
 .trip-meta .count { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 
+/* ---------- 여행 레이아웃 (반응형) ---------- */
+.trip-shell { max-width: 760px; margin: 0 auto; padding: 0 16px calc(40px + env(safe-area-inset-bottom)); }
+.trip-aside { margin-top: 4px; }
+@media (min-width: 960px) {
+  .trip-shell.wide { max-width: 1140px; }
+  .topbar-inner.wide { max-width: 1140px; }
+  .trip-body.has-map { display: grid; grid-template-columns: minmax(0,1fr) 440px; gap: 32px; align-items: start; }
+  .trip-body.has-map .trip-aside { position: sticky; top: 84px; margin-top: 0; }
+  .trip-body.has-map #dayMap { height: calc(100vh - 140px); min-height: 460px; margin: 0; }
+}
+
 /* ---------- Day 탭 ---------- */
-.days { display: flex; gap: 8px; overflow-x: auto; padding: 14px 16px 6px; max-width: 760px; margin: 0 auto; -webkit-overflow-scrolling: touch; }
+.days { display: flex; gap: 8px; overflow-x: auto; padding: 14px 0 6px; -webkit-overflow-scrolling: touch; }
 .day-tab {
   flex: 0 0 auto; padding: 9px 15px; border-radius: 12px; border: 1px solid var(--line);
   background: var(--card); font-size: 14px; font-weight: 500; color: var(--muted-2); white-space: nowrap;
