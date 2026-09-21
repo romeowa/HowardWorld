@@ -385,8 +385,8 @@ function openEditor(existing) {
       <div class="field"><label>시간</label><input id="time" type="time" value="${esc(editState.time)}" /></div>
       <div class="field"><label>메모</label><textarea id="memo" placeholder="예약 정보, 팁, 준비물…">${esc(editState.memo)}</textarea></div>
       <div class="modal-actions">
-        <button class="btn ghost" id="cancel">취소</button>
-        <button class="btn" id="save">저장</button>
+        <button class="btn ghost" id="cancel">${existing ? "취소" : "닫기"}</button>
+        <button class="btn" id="save">${existing ? "저장" : "저장 후 계속"}</button>
       </div>
     </div>`);
   bg.appendChild(modal);
@@ -477,9 +477,22 @@ function openEditor(existing) {
       lat: editState.lat, lng: editState.lng, time: editState.time, memo: editState.memo,
     };
     try {
-      if (existing) await updateDoc(doc(db, "trips", tripId, "items", existing.id), data);
-      else await addDoc(collection(db, "trips", tripId, "items"), { ...data, order: Date.now(), createdAt: serverTimestamp() });
-      close();
+      if (existing) {
+        await updateDoc(doc(db, "trips", tripId, "items", existing.id), data);
+        close();
+      } else {
+        await addDoc(collection(db, "trips", tripId, "items"), { ...data, order: Date.now(), createdAt: serverTimestamp() });
+        // 모달을 닫지 않고 폼만 비워 이어서 입력 (날짜·종류는 유지)
+        toast(`추가됨 — 이어서 입력하세요`);
+        nameEl.value = ""; addrEl.value = "";
+        modal.querySelector("#time").value = ""; modal.querySelector("#memo").value = "";
+        editState.name = editState.address = editState.time = editState.memo = "";
+        editState.lat = editState.lng = null;
+        if (pickMarker) { pickMap.removeLayer(pickMarker); pickMarker = null; }
+        updatePicked();
+        resultsEl.innerHTML = "";
+        const q = modal.querySelector("#q"); q.value = ""; q.focus();
+      }
     } catch (e) { toast("저장 실패: " + e.message); }
   }
 }
