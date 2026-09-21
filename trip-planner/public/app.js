@@ -15,8 +15,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// 구글 API 키 (howard-trips.web.app 리퍼러 + Places/Maps JS API로 제한된 웹 키)
-const PLACES_KEY = "AIzaSyB8EXfTFJfBf6eLDUiX8vJcaxN7Tc-meVI";
+// 구글 API 키 — config.js(깃 미포함)에서 주입. 리퍼러+API 제한된 브라우저 키.
+const PLACES_KEY = (window.TRIP_CONFIG && window.TRIP_CONFIG.googleKey) || "";
 
 // 구글맵 동적 로더 (google.maps.importLibrary 부트스트랩)
 (g => { let h, a, k, p = "The Google Maps JavaScript API", c = "google", l = "importLibrary", q = "__ib__", m = document, b = window; b = b[c] || (b[c] = {}); const d = b.maps || (b.maps = {}), r = new Set(), e = new URLSearchParams(), u = () => h || (h = new Promise(async (f, n) => { a = m.createElement("script"); e.set("libraries", [...r] + ""); for (k in g) e.set(k.replace(/[A-Z]/g, t => "_" + t[0].toLowerCase()), g[k]); e.set("callback", c + ".maps." + q); a.src = `https://maps.${c}apis.com/maps/api/js?` + e; d[q] = f; a.onerror = () => h = n(Error(p + " could not load.")); a.nonce = m.querySelector("script[nonce]")?.nonce || ""; m.head.append(a); })); d[l] ? console.warn(p + " only loads once. Ignoring:", g) : d[l] = (f, ...n) => r.add(f) && u().then(() => d[l](f, ...n)); })({ key: PLACES_KEY, v: "weekly", language: "ko" });
@@ -65,13 +65,13 @@ function promoFooter() {
   const isIOS = /iPhone|iPad|iPod/.test(ua);
   const apps = [
     {
-      name: "피그맵", icon: "/promo-pigmap.jpg", plat: "iOS · Android",
+      name: "피그맵", icon: "/promo-pigmap.jpg", desc: "한국의 모든 핫플레이스 지도",
       href: isIOS
         ? "https://apps.apple.com/app/id6471933646"
         : "https://play.google.com/store/apps/details?id=home.sweet.pigmap",
     },
     {
-      name: "니니구", icon: "/promo-ninigu.jpg", plat: "iOS · Web",
+      name: "니니구", icon: "/promo-ninigu.jpg", desc: "친구가 이어주는 새로운 만남",
       href: isIOS ? "https://apps.apple.com/app/id6754002478" : "https://ninigu.net",
     },
   ];
@@ -79,8 +79,8 @@ function promoFooter() {
     <div class="promo-title">만든 사람의 다른 앱</div>
     <div class="promo-cards">
       ${apps.map((a) => `<a class="promo-card" href="${a.href}" target="_blank" rel="noopener">
-        <img class="pc-icon" src="${a.icon}" alt="${a.name}" width="38" height="38" loading="lazy" />
-        <span class="pc-text"><span class="pc-name">${a.name}</span><span class="pc-plat">${a.plat}</span></span>
+        <img class="pc-icon" src="${a.icon}" alt="${a.name}" width="34" height="34" loading="lazy" />
+        <span class="pc-text"><span class="pc-name">${a.name}</span><span class="pc-desc">${a.desc}</span></span>
         <span class="pc-go">→</span>
       </a>`).join("")}
     </div>

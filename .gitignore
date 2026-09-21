@@ -6,3 +6,6 @@ serviceAccount.json
 .firebase/
 flight-watch/macapp/build/
 flight-watch/crawler/.chrome-profile/
+
+# trip-planner: 구글 키 등 배포 전용 설정 (커밋 금지, 배포 시 public/에 포함)
+trip-planner/public/config.js
