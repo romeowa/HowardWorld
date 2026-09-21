@@ -15,6 +15,9 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// 구글 Places API 키 (howard-trips.web.app 리퍼러 + Places API로 제한된 웹 키)
+const PLACES_KEY = "AIzaSyB8EXfTFJfBf6eLDUiX8vJcaxN7Tc-meVI";
+
 const APP = document.getElementById("app");
 const TYPES = {
   place: { emoji: "📍", label: "장소" },
@@ -467,27 +470,37 @@ function openEditor(existing) {
     if (q.length < 2) { resultsEl.innerHTML = ""; return; }
     resultsEl.innerHTML = `<div class="searching">검색 중…</div>`;
     try {
-      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=ko&addressdetails=1&q=${encodeURIComponent(q)}`;
-      const res = await fetch(url);
-      const arr = await res.json();
+      const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": PLACES_KEY,
+          "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.location",
+        },
+        body: JSON.stringify({ textQuery: q, languageCode: "ko" }),
+      });
+      const data = await res.json();
+      const arr = data.places || [];
       resultsEl.innerHTML = "";
       if (!arr.length) { resultsEl.innerHTML = `<div class="searching">결과가 없어요. 지도를 눌러 직접 위치를 찍어도 됩니다.</div>`; return; }
       const box = h(`<div class="search-results"></div>`);
       arr.forEach((r) => {
-        const primary = r.name || (r.display_name || "").split(",")[0];
-        const b = h(`<button><div class="sr-name">${esc(primary)}</div><div class="sr-addr">${esc(r.display_name)}</div></button>`);
+        const primary = r.displayName?.text || (r.formattedAddress || "").split(",")[0];
+        const addr = r.formattedAddress || "";
+        const lat = r.location?.latitude, lng = r.location?.longitude;
+        const b = h(`<button><div class="sr-name">${esc(primary)}</div><div class="sr-addr">${esc(addr)}</div></button>`);
         b.addEventListener("click", () => {
-          editState.lat = parseFloat(r.lat); editState.lng = parseFloat(r.lon);
+          if (lat != null) { editState.lat = lat; editState.lng = lng; setMarker(lat, lng); }
           if (!nameEl.value.trim()) { nameEl.value = primary; editState.name = primary; }
-          addrEl.value = r.display_name; editState.address = r.display_name;
-          setMarker(editState.lat, editState.lng); updatePicked();
+          addrEl.value = addr; editState.address = addr;
+          updatePicked();
           resultsEl.innerHTML = ""; modal.querySelector("#q").value = "";
         });
         box.appendChild(b);
       });
       resultsEl.appendChild(box);
     } catch { resultsEl.innerHTML = `<div class="searching">검색 실패 (잠시 후 다시)</div>`; }
-  }, 500);
+  }, 400);
   modal.querySelector("#q").addEventListener("input", (e) => doSearch(e.target.value.trim()));
 
   modal.querySelector("#cancel").addEventListener("click", close);
