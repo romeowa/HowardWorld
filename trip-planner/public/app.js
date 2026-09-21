@@ -313,7 +313,7 @@ async function renderDayMap(pinned) {
       label: { text: String(i + 1), color: "#fff", fontWeight: "700", fontSize: "12px" },
     });
     const info = new google.maps.InfoWindow({
-      content: `<b>${i + 1}. ${esc(it.name || "")}</b>${it.time ? "<br>" + esc(it.time) : ""}`,
+      content: `<div style="color:#1f2937;font-size:13px;line-height:1.45"><b>${i + 1}. ${esc(it.name || "")}</b>${it.time ? "<br>" + esc(it.time) : ""}</div>`,
     });
     mk.addListener("click", () => { info.open({ map, anchor: mk }); focusItem(it); });
     markerById[it.id] = { mk, info };
