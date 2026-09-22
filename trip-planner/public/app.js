@@ -418,10 +418,6 @@ function paint() {
   const list = h(`<div class="timeline"></div>`);
   if (!dayItems.length) list.appendChild(h(`<div class="empty-day">아직 이 날 일정이 없어요.<br/>아래 버튼으로 장소·식사·액티비티를 추가해 보세요.</div>`));
   dayItems.forEach((it) => list.appendChild(itemCard(it)));
-  // 타임라인 끝 자리표시 (여기서도 추가 가능)
-  const tlAdd = h(`<button class="tl-add">＋ 이 다음에 장소 추가</button>`);
-  tlAdd.addEventListener("click", () => openEditor(null));
-  list.appendChild(tlAdd);
   main.appendChild(list);
 
   // 추가 버튼 (주요 액션)
