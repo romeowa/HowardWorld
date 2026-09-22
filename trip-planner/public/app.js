@@ -498,11 +498,7 @@ function paint() {
   // 항목 목록 (타임라인)
   const list = h(`<div class="timeline"></div>`);
   if (!dayItems.length) list.appendChild(h(`<div class="empty-day">아직 이 날 일정이 없어요.<br/>아래 버튼으로 장소·식사·액티비티를 추가해 보세요.</div>`));
-  dayItems.forEach((it, i) => {
-    list.appendChild(itemCard(it));
-    const next = dayItems[i + 1];
-    if (next && it.lat != null && next.lat != null) list.appendChild(legRow(it, next));
-  });
+  dayItems.forEach((it) => list.appendChild(itemCard(it)));
   main.appendChild(list);
 
   // 이 날 비용 합계
@@ -545,87 +541,6 @@ function paint() {
   APP.appendChild(shell);
   APP.appendChild(promoFooter());
   if (pinned.length) renderDayMap(pinned);
-}
-
-// ---------- 이동 구간 (구글 Routes API) ----------
-// 한국 내에서는 자동차·도보 경로가 제공되지 않아(지도 반출 규제) 대중교통만 나온다.
-// 그래서 자동차→대중교통→도보 순으로 시도해 되는 걸 표시(해외=자동차, 국내=대중교통).
-const routeCache = new Map();
-const MODE_INFO = {
-  DRIVE: { icon: "🚗", name: "자동차" },
-  TRANSIT: { icon: "🚌", name: "대중교통" },
-  WALK: { icon: "🚶", name: "도보" },
-};
-
-async function routeOne(o, d, mode) {
-  if (!PLACES_KEY) return null;
-  const body = {
-    origin: { location: { latLng: { latitude: o.lat, longitude: o.lng } } },
-    destination: { location: { latLng: { latitude: d.lat, longitude: d.lng } } },
-    travelMode: mode,
-  };
-  if (mode === "DRIVE") body.routingPreference = "TRAFFIC_UNAWARE";
-  try {
-    const res = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Goog-Api-Key": PLACES_KEY, "X-Goog-FieldMask": "routes.duration,routes.distanceMeters" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) return null;
-    const j = await res.json();
-    const r = (j.routes || [])[0];
-    if (!r) return null;
-    return { min: Math.max(1, Math.round(parseInt(r.duration) / 60)), meters: r.distanceMeters || 0 };
-  } catch { return null; }
-}
-
-async function computeRoute(o, d) {
-  const key = `${o.lat},${o.lng}>${d.lat},${d.lng}`;
-  if (routeCache.has(key)) return routeCache.get(key);
-  let result = null;
-  for (const mode of ["DRIVE", "TRANSIT", "WALK"]) {
-    const r = await routeOne(o, d, mode);
-    if (r) { result = { mode, ...r }; break; }
-  }
-  routeCache.set(key, result);
-  return result;
-}
-
-function fmtDist(m) {
-  return m >= 1000 ? `${(m / 1000).toFixed(1)}km` : `${Math.round(m / 10) * 10}m`;
-}
-
-// 직선 거리(하버사인) — 경로를 못 구했을 때 폴백
-function straightMeters(o, d) {
-  const R = 6371000, toRad = (x) => (x * Math.PI) / 180;
-  const dLat = toRad(d.lat - o.lat), dLng = toRad(d.lng - o.lng);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(o.lat)) * Math.cos(toRad(d.lat)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
-}
-
-// 두 항목 사이 이동 구간 (비동기로 채움; 결과 없으면 스스로 제거)
-function legRow(a, b) {
-  const el = h(`<div class="tl-leg">
-    <div class="tl-time"></div>
-    <div class="tl-rail dashed"></div>
-    <div class="tl-leg-body"><span class="tl-leg-txt">이동 시간 계산 중…</span></div>
-  </div>`);
-  const o = { lat: a.lat, lng: a.lng }, d = { lat: b.lat, lng: b.lng };
-  computeRoute(o, d).then((r) => {
-    const bodyEl = el.querySelector(".tl-leg-body");
-    if (!r) {
-      // 경로 못 구함 → 직선 거리만
-      bodyEl.innerHTML = `<span class="tl-leg-mode">📍 직선</span><span class="tl-leg-dist">${fmtDist(straightMeters(o, d))}</span>`;
-      return;
-    }
-    const m = MODE_INFO[r.mode];
-    bodyEl.innerHTML =
-      `<span class="tl-leg-mode">${m.icon} ${m.name}</span>` +
-      `<span class="tl-leg-dot">·</span>` +
-      `<span class="tl-leg-dur">${r.min}분</span>` +
-      `<span class="tl-leg-dist">${fmtDist(r.meters)}</span>`;
-  });
-  return el;
 }
 
 function itemCard(it) {
