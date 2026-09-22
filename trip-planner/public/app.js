@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore, doc, collection, addDoc, setDoc, updateDoc, deleteDoc,
-  getDoc, onSnapshot, serverTimestamp,
+  getDoc, getDocs, onSnapshot, serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -446,6 +446,30 @@ function paint() {
       shell.appendChild(del);
     }
   }
+
+  // 여행 전체 삭제
+  const delTrip = h(`<div style="text-align:center;margin-top:24px"><button class="btn danger sm" id="delTrip">🗑 이 여행 삭제</button></div>`);
+  delTrip.querySelector("#delTrip").addEventListener("click", async () => {
+    if (!confirm(`"${trip.title}" 여행을 삭제할까요?\n일정·장소가 모두 사라지고 되돌릴 수 없어요.`)) return;
+    const btn = delTrip.querySelector("#delTrip");
+    btn.disabled = true; btn.textContent = "삭제 중…";
+    try {
+      const snap = await getDocs(collection(db, "trips", tripId, "items"));
+      await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+      await deleteDoc(doc(db, "trips", tripId));
+      try {
+        const list = JSON.parse(localStorage.getItem("recentTrips") || "[]").filter((x) => x.id !== tripId);
+        localStorage.setItem("recentTrips", JSON.stringify(list));
+      } catch {}
+      cleanup(); // trip 리스너 해제 → '찾을 수 없음' 깜빡임 방지
+      toast("여행을 삭제했어요");
+      go("/");
+    } catch (e) {
+      toast("삭제 실패: " + e.message);
+      btn.disabled = false; btn.textContent = "🗑 이 여행 삭제";
+    }
+  });
+  shell.appendChild(delTrip);
 
   APP.appendChild(shell);
   APP.appendChild(promoFooter());
