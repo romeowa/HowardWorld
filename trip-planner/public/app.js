@@ -114,16 +114,20 @@ function promoFooter() {
       href: isIOS ? "https://apps.apple.com/app/id6754002478" : "https://ninigu.net",
     },
   ];
-  return h(`<footer class="promo">
+  const el = h(`<footer class="promo">
     <div class="promo-title">만든 사람의 다른 앱</div>
     <div class="promo-cards">
-      ${apps.map((a) => `<a class="promo-card" href="${a.href}" target="_blank" rel="noopener">
+      ${apps.map((a) => `<a class="promo-card" href="${a.href}" target="_blank" rel="noopener" data-promo="${esc(a.name)}">
         <img class="pc-icon" src="${a.icon}" alt="${a.name}" width="34" height="34" loading="lazy" />
         <span class="pc-text"><span class="pc-name">${a.name}</span><span class="pc-desc">${a.desc}</span></span>
         <span class="pc-go">→</span>
       </a>`).join("")}
     </div>
   </footer>`);
+  el.querySelectorAll(".promo-card").forEach((c) =>
+    c.addEventListener("click", () => logEvent("promo_click", { promo: c.dataset.promo }))
+  );
+  return el;
 }
 
 // ---------- 사용 로그 (events 컬렉션) ----------
@@ -134,8 +138,48 @@ function deviceId() {
   if (!d) { d = Math.random().toString(36).slice(2, 10); try { localStorage.setItem("deviceId", d); } catch {} }
   return d;
 }
-function logEvent(type, extra = {}) {
-  try { addDoc(collection(db, "events"), { type, app: "trip-planner", ts: serverTimestamp(), dev: deviceId(), ...extra }); } catch {}
+// 디바이스 환경(OS · 브라우저 · 폼팩터) — 개인 식별 아닌 대략치
+function platformInfo() {
+  const ua = navigator.userAgent || "";
+  let os = "기타";
+  if (/iPhone|iPad|iPod/.test(ua)) os = "iOS";
+  else if (/Android/.test(ua)) os = "Android";
+  else if (/Macintosh|Mac OS X/.test(ua)) os = "macOS";
+  else if (/Windows/.test(ua)) os = "Windows";
+  else if (/Linux/.test(ua)) os = "Linux";
+  let br = "기타";
+  if (/Edg\//.test(ua)) br = "Edge";
+  else if (/SamsungBrowser/.test(ua)) br = "Samsung";
+  else if (/CriOS/.test(ua)) br = "Chrome";
+  else if (/FxiOS|Firefox\//.test(ua)) br = "Firefox";
+  else if (/OPR\/|Opera/.test(ua)) br = "Opera";
+  else if (/Chrome\//.test(ua)) br = "Chrome";
+  else if (/Safari\//.test(ua)) br = "Safari";
+  const form = /Mobi|iPhone|iPod|Android.*Mobile/.test(ua) ? "모바일" : (/iPad|Tablet/.test(ua) ? "태블릿" : "데스크톱");
+  return { os, br, form };
+}
+// IP 기반 대략 위치(국가·도시) — 권한 팝업 없음, 세션당 1회 조회 후 캐시
+let _geo = null, _geoDone = false, _geoPromise = null;
+function fetchGeo() {
+  if (_geoDone) return Promise.resolve(_geo);
+  if (_geoPromise) return _geoPromise;
+  _geoPromise = fetch("https://ipwho.is/?fields=success,country_code,city,region")
+    .then((r) => r.json())
+    .then((j) => { if (j && j.success !== false) _geo = { country: j.country_code || null, city: j.city || null }; })
+    .catch(() => {})
+    .finally(() => { _geoDone = true; });
+  return _geoPromise;
+}
+async function logEvent(type, extra = {}) {
+  const p = platformInfo();
+  try { await fetchGeo(); } catch {}
+  const g = _geo || {};
+  try {
+    addDoc(collection(db, "events"), {
+      type, app: "trip-planner", ts: serverTimestamp(), dev: deviceId(),
+      os: p.os, br: p.br, form: p.form, country: g.country || null, city: g.city || null, ...extra,
+    });
+  } catch {}
 }
 
 // ---------- 라우팅 ----------
@@ -997,34 +1041,42 @@ async function loadEvents(container, days) {
     container.innerHTML = `<div class="admin-card"><p class="sub">조회 실패: ${esc(e.message || e)}</p></div>`;
     return;
   }
-  const byApp = {}, byType = {}, byDay = {};
+  const byType = {}, byDay = {}, byPlat = {}, byLoc = {};
   docs.forEach((e) => {
     const t = e.ts && e.ts.toDate ? e.ts.toDate() : null;
-    byApp[e.app || "?"] = (byApp[e.app || "?"] || 0) + 1;
     byType[e.type || "?"] = (byType[e.type || "?"] || 0) + 1;
+    if (e.os || e.br) { const k = `${e.os || "?"} · ${e.br || "?"}`; byPlat[k] = (byPlat[k] || 0) + 1; }
+    if (e.country || e.city) { const k = `${e.country || "?"} · ${e.city || "?"}`; byLoc[k] = (byLoc[k] || 0) + 1; }
     if (t) { const k = ymd(t); byDay[k] = (byDay[k] || 0) + 1; }
   });
   const maxDay = Math.max(1, ...Object.values(byDay));
   const rows = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="stat-row"><span>${esc(k)}</span><b>${v}</b></div>`).join("") || `<div class="stat-row muted">없음</div>`;
   const dayBars = Object.keys(byDay).sort().map((k) => `<div class="day-bar"><span class="db-date">${k.slice(5)}</span><span class="db-track"><span class="db-fill" style="width:${(byDay[k] / maxDay) * 100}%"></span></span><b>${byDay[k]}</b></div>`).join("") || `<div class="stat-row muted">없음</div>`;
-  const recent = docs.slice(0, 40).map((e) => {
+  const recent = docs.slice(0, 50).map((e) => {
     const t = e.ts && e.ts.toDate ? e.ts.toDate() : null;
     const when = t ? t.toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "?";
-    const extra = e.type === "check_run" ? ` <span class="muted">감시 ${e.watches ?? "?"}·알림 ${e.notified ?? 0}·에러 ${e.errors ?? 0}</span>` : (e.trip ? ` <span class="muted">${esc(String(e.trip)).slice(0, 8)}</span>` : "");
-    return `<div class="ev-row"><span class="ev-app ev-${e.app === "flight-watch" ? "fw" : "tp"}">${e.app === "flight-watch" ? "항공" : "여행"}</span><span class="ev-type">${esc(e.type || "?")}</span>${extra}<span class="ev-when">${when}</span></div>`;
+    let extra = "";
+    if (e.type === "check_run") extra = ` <span class="muted">감시 ${e.watches ?? "?"}·알림 ${e.notified ?? 0}·에러 ${e.errors ?? 0}</span>`;
+    else if (e.type === "promo_click") extra = ` <span class="ev-promo">${esc(e.promo || "?")}</span>`;
+    else if (e.trip) extra = ` <span class="muted">${esc(String(e.trip)).slice(0, 8)}</span>`;
+    const dev = (e.os || e.br) ? `<span class="ev-dev">${esc([e.form, e.os, e.br].filter(Boolean).join("·"))}</span>` : "";
+    const loc = (e.country || e.city) ? `<span class="ev-loc">📍${esc([e.country, e.city].filter(Boolean).join(" "))}</span>` : "";
+    return `<div class="ev-row"><span class="ev-type">${esc(e.type || "?")}</span>${extra}${dev}${loc}<span class="ev-when">${when}</span></div>`;
   }).join("");
 
   container.innerHTML = `
     <div class="admin-total">최근 ${days}일 · 총 <b>${docs.length}</b>건</div>
     <div class="stat-grid">
-      <div class="stat-box"><h3>앱별</h3>${rows(byApp)}</div>
       <div class="stat-box"><h3>유형별</h3>${rows(byType)}</div>
+      <div class="stat-box"><h3>디바이스 (OS · 브라우저)</h3>${rows(byPlat)}</div>
+      <div class="stat-box"><h3>지역 (국가 · 도시)</h3>${rows(byLoc)}</div>
+      <div class="stat-box"><h3>날짜별</h3>${dayBars}</div>
     </div>
-    <div class="stat-box"><h3>날짜별</h3>${dayBars}</div>
     <div class="stat-box"><h3>최근 활동</h3><div class="ev-list">${recent || '<div class="stat-row muted">없음</div>'}</div></div>
   `;
 }
 
 // 시작
 updateOnlineBanner();
+fetchGeo(); // 위치 미리 조회(비차단)
 route();

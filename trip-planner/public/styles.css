@@ -319,3 +319,6 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .trip-filter { display: inline-flex; background: var(--surface); border-radius: 10px; padding: 3px; margin-bottom: 10px; }
 .trip-filter button { padding: 5px 12px; border-radius: 8px; font-size: 13px; color: var(--muted-2); }
 .trip-filter button.on { background: var(--text); color: var(--card); font-weight: 500; }
+.ev-dev { font-size: 11px; color: var(--muted); }
+.ev-loc { font-size: 11px; color: var(--accent-dark); }
+.ev-promo { font-size: 11px; color: var(--amber); font-weight: 500; }
