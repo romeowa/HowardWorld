@@ -182,6 +182,40 @@ async function logEvent(type, extra = {}) {
   } catch {}
 }
 
+// ---------- 홈 화면에 추가 (PWA 설치) ----------
+let deferredInstall = null;
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredInstall = e; });
+const isStandalone = () => window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
+
+function installButton() {
+  if (isStandalone()) return null; // 이미 설치됨
+  const btn = h(`<button class="btn ghost sm" id="installBtn">📲 홈 화면에 추가</button>`);
+  btn.addEventListener("click", async () => {
+    if (deferredInstall) {
+      deferredInstall.prompt();
+      const { outcome } = await deferredInstall.userChoice;
+      logEvent("install", { outcome });
+      deferredInstall = null;
+      if (outcome === "accepted") btn.remove();
+    } else {
+      logEvent("install_guide", {});
+      showInstallGuide();
+    }
+  });
+  return btn;
+}
+
+function showInstallGuide() {
+  const steps = isIOS()
+    ? `1. Safari 하단(또는 상단)의 <b>공유</b> 버튼 <span class="ios-share">⬆︎</span> 을 탭<br>2. 목록에서 <b>홈 화면에 추가</b> 선택<br>3. 오른쪽 위 <b>추가</b> 탭`
+    : `브라우저 메뉴( ⋮ )에서 <b>앱 설치</b> 또는 <b>홈 화면에 추가</b>를 선택하세요.`;
+  const bg = h(`<div class="modal-bg"><div class="modal"><h3>📲 홈 화면에 추가</h3><p class="install-steps">${steps}</p><div class="modal-actions"><button class="btn" id="okGuide">확인</button></div></div></div>`);
+  document.body.appendChild(bg);
+  bg.addEventListener("click", (e) => { if (e.target === bg) bg.remove(); });
+  bg.querySelector("#okGuide").addEventListener("click", () => bg.remove());
+}
+
 // ---------- 라우팅 ----------
 let unsubTrip = null, unsubItems = null;
 function cleanup() {
@@ -260,6 +294,8 @@ async function renderHome() {
       </div>
     </div>`);
   shell.appendChild(header);
+  const ib = installButton();
+  if (ib) header.querySelector(".cal-actions").insertBefore(ib, header.querySelector("#newTrip"));
   header.querySelector("#newTrip").addEventListener("click", createTrip);
   header.querySelector("#prevM").addEventListener("click", () => { homeMonth = new Date(y, m - 1, 1); renderHome(); });
   header.querySelector("#nextM").addEventListener("click", () => { homeMonth = new Date(y, m + 1, 1); renderHome(); });
