@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, doc, collection, addDoc, setDoc, updateDoc, deleteDoc,
+  initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
+  doc, collection, addDoc, setDoc, updateDoc, deleteDoc,
   getDoc, getDocs, onSnapshot, serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -13,7 +14,28 @@ const firebaseConfig = {
   appId: "1:940701312592:web:8882de89e067b9a727d355",
 };
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+// 오프라인 캐시(IndexedDB) — 한 번 불러온 여행/일정을 데이터 없이도 열람
+let db;
+try {
+  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+} catch {
+  db = getFirestore(app); // 미지원 환경 → 메모리 캐시 기본
+}
+
+// 서비스워커 등록 (앱 셸 오프라인)
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+}
+
+// 오프라인 표시 배너
+function updateOnlineBanner() {
+  let el = document.querySelector(".offline-bar");
+  if (!navigator.onLine) {
+    if (!el) { el = h(`<div class="offline-bar">오프라인 · 저장된 일정만 보여요</div>`); document.body.appendChild(el); }
+  } else if (el) el.remove();
+}
+window.addEventListener("online", updateOnlineBanner);
+window.addEventListener("offline", updateOnlineBanner);
 
 // 구글 API 키 — config.js(깃 미포함)에서 주입. 리퍼러+API 제한된 브라우저 키.
 const PLACES_KEY = (window.TRIP_CONFIG && window.TRIP_CONFIG.googleKey) || "";
@@ -799,4 +821,5 @@ function openEditor(existing) {
 }
 
 // 시작
+updateOnlineBanner();
 route();
