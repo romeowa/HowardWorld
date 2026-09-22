@@ -22,4 +22,6 @@ trip-planner: 링크 하나로 함께 짜는 여행 일정 공유 웹앱. 공용
 - 사용 로그: 공용 Firestore `events` 컬렉션(공개 create). trip-planner가 trip_open/create·item_add/delete·trip_delete 기록, flight-watch 크롤러가 check_run 기록.
 - 관리자 페이지 `/admin`: 구글 로그인(romeowa@gmail.com만) 후 events 대시보드(앱별·유형별·날짜별·최근). 규칙: events read는 `request.auth.token.email == 'romeowa@gmail.com'`만. **주의**: Firestore SDK가 인증 토큰을 요청에 안 붙이는 문제로 SDK 쿼리는 permission-denied → admin 조회는 `auth.currentUser.getIdToken()`을 Authorization 헤더에 실어 **REST runQuery로 직접 호출**함. Auth는 firebase-auth 정적 import + 시작 시 getAuth(app). 구글 로그인 provider + howard-trips.web.app 승인 도메인은 콘솔에서 활성화 완료.
 - CLI 요약도 가능: `node tools/usage-report.js [일수]`(서비스 계정). 비용 예산 알림은 콘솔에서 설정 완료(월 ₩1만, 50/90/100% 이메일).
+- events 필드: type·app·dev(기기ID)·os·br·form·country·city, 그리고 유형별 부가(trip, promo, check_run의 watches/notified/errors). 위치는 ipwho.is IP기반(세션1회, 권한팝업 없음). admin은 기기(dev)별로 묶어 표시.
+- PWA 설치: 홈/여행 상단에 "홈 화면에 추가" 버튼(Android=beforeinstallprompt, iOS=공유 안내). 설치 앱은 별도 저장소라 localStorage 최근목록이 비어 시작 → 홈 "☁︎ 내 여행 불러오기"로 관리자(romeowa) 구글 로그인 시 Firestore에서 전체 trips 로드(세션 유지). trips list 규칙은 관리자에게만 허용.
 - 구조: public/app.js 단일 SPA + styles.css + config.js(키) + sw.js. 캐시: firebase.json에 js/css/html no-cache 헤더, 에셋 ?v 버전.
