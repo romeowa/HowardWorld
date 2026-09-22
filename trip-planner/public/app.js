@@ -28,6 +28,19 @@ try {
 
 // Auth를 시작 시점에 등록 → Firestore가 처음부터 인증 토큰을 첨부(관리자 조회에 필요)
 const auth = getAuth(app);
+const ADMIN_EMAIL = "romeowa@gmail.com";
+
+// 로그인 상태 추적 (설치 앱/새 기기에서 관리자 로그인 시 전체 여행 불러오기용)
+let authUser = null, authInitialized = false, _authReadyResolve;
+const authReady = new Promise((res) => { _authReadyResolve = res; });
+const isOwner = () => authUser && authUser.email === ADMIN_EMAIL;
+onAuthStateChanged(auth, (u) => {
+  const wasOwner = isOwner();
+  authUser = u;
+  if (!authInitialized) { authInitialized = true; _authReadyResolve(); return; }
+  // 로그인/로그아웃 전환 시 홈이면 다시 그림
+  if (location.pathname === "/" && wasOwner !== isOwner()) renderHome();
+});
 
 // 서비스워커 등록 (앱 셸 오프라인)
 if ("serviceWorker" in navigator) {
@@ -248,28 +261,58 @@ const fmtMD = (d) => `${d.getMonth() + 1}.${d.getDate()}`;
 let homeMonth = null;          // 현재 보는 달 (해당 월 1일 Date)
 let homeView = "month";        // "month" | "list"
 
+// 관리자용: 내 여행 전체를 Firestore에서 (list는 규칙상 관리자만 허용)
+async function fetchAllTrips() {
+  const idToken = await auth.currentUser.getIdToken();
+  const body = { structuredQuery: { from: [{ collectionId: "trips" }], orderBy: [{ field: { fieldPath: "createdAt" }, direction: "DESCENDING" }], limit: 500 } };
+  const res = await fetch("https://firestore.googleapis.com/v1/projects/howardworld/databases/(default)/documents:runQuery", {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` }, body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error("trips list " + res.status);
+  return (await res.json()).filter((r) => r.document).map((r) => {
+    const f = r.document.fields || {};
+    const created = fsVal(f.createdAt);
+    return {
+      id: r.document.name.split("/").pop(),
+      title: fsVal(f.title) || "제목 없는 여행",
+      startDate: fsVal(f.startDate) || null,
+      dayCount: fsVal(f.dayCount) || 1,
+      ts: created instanceof Date ? created.getTime() : 0,
+    };
+  });
+}
+
 async function renderHome() {
   APP.innerHTML = `<div class="loading">불러오는 중…</div>`;
-  let recent = [];
-  try { recent = JSON.parse(localStorage.getItem("recentTrips") || "[]"); } catch {}
+  await authReady;
 
-  // 최근 여행의 최신 정보를 Firestore에서 (제목·시작일·일수) — 순서 유지
-  const arr = new Array(recent.length).fill(null);
-  await Promise.all(recent.map(async (r, i) => {
+  let trips;
+  if (isOwner()) {
+    // 관리자 로그인: 이 기기의 localStorage와 무관하게 내 여행 전체를 불러옴
     try {
-      const snap = await getDoc(doc(db, "trips", r.id));
-      if (!snap.exists()) return; // 삭제됨 → 목록에서 제거
-      const d = snap.data();
-      arr[i] = { id: r.id, title: d.title || "제목 없는 여행", startDate: d.startDate || null, dayCount: d.dayCount || 1, ts: r.ts || 0 };
+      trips = (await fetchAllTrips()).filter((t) => !pendingDeletes.has(t.id));
     } catch {
-      // 네트워크 실패 시 로컬 캐시로 대체
-      arr[i] = { id: r.id, title: r.title || "제목 없는 여행", startDate: r.startDate ?? null, dayCount: r.dayCount ?? 1, ts: r.ts || 0 };
+      trips = []; // 실패 시 빈 목록(아래에서 안내)
     }
-  }));
-  const trips = arr.filter(Boolean).filter((t) => !pendingDeletes.has(t.id));
+  } else {
+    // 비로그인: 이 기기에 저장된 최근 연 여행만
+    let recent = [];
+    try { recent = JSON.parse(localStorage.getItem("recentTrips") || "[]"); } catch {}
+    const arr = new Array(recent.length).fill(null);
+    await Promise.all(recent.map(async (r, i) => {
+      try {
+        const snap = await getDoc(doc(db, "trips", r.id));
+        if (!snap.exists()) return;
+        const d = snap.data();
+        arr[i] = { id: r.id, title: d.title || "제목 없는 여행", startDate: d.startDate || null, dayCount: d.dayCount || 1, ts: r.ts || 0 };
+      } catch {
+        arr[i] = { id: r.id, title: r.title || "제목 없는 여행", startDate: r.startDate ?? null, dayCount: r.dayCount ?? 1, ts: r.ts || 0 };
+      }
+    }));
+    trips = arr.filter(Boolean).filter((t) => !pendingDeletes.has(t.id));
+    try { localStorage.setItem("recentTrips", JSON.stringify(trips.map((t) => ({ id: t.id, title: t.title, startDate: t.startDate, dayCount: t.dayCount, ts: t.ts })))); } catch {}
+  }
   trips.forEach((t) => { t.color = TRIP_COLORS[hashId(t.id) % TRIP_COLORS.length]; });
-  // 삭제된 항목 반영해 localStorage 갱신
-  try { localStorage.setItem("recentTrips", JSON.stringify(trips.map(({ color, ...t }) => t))); } catch {}
 
   if (!homeMonth) {
     const now = new Date();
@@ -292,12 +335,23 @@ async function renderHome() {
         </span>
       </div>
       <div class="cal-actions">
+        ${isOwner()
+          ? `<button class="btn ghost sm" id="ownerBtn" title="내 여행 전체 표시 중 · 로그아웃">☁︎ 내 여행</button>`
+          : `<button class="btn ghost sm" id="ownerBtn" title="로그인하면 이 기기와 무관하게 내 여행 전체를 봅니다">☁︎ 내 여행 불러오기</button>`}
         <button class="btn sm" id="newTrip">+ 새 여행</button>
       </div>
     </div>`);
   shell.appendChild(header);
   const ib = installButton();
-  if (ib) header.querySelector(".cal-actions").insertBefore(ib, header.querySelector("#newTrip"));
+  if (ib) header.querySelector(".cal-actions").insertBefore(ib, header.querySelector("#ownerBtn"));
+  header.querySelector("#ownerBtn").addEventListener("click", async () => {
+    if (isOwner()) {
+      if (confirm("로그아웃할까요? 이 기기 최근 목록만 보이게 됩니다.")) await signOut(auth);
+    } else {
+      try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+      catch (e) { toast("로그인 실패: " + (e.code || e.message)); }
+    }
+  });
   header.querySelector("#newTrip").addEventListener("click", createTrip);
   header.querySelector("#prevM").addEventListener("click", () => { homeMonth = new Date(y, m - 1, 1); renderHome(); });
   header.querySelector("#nextM").addEventListener("click", () => { homeMonth = new Date(y, m + 1, 1); renderHome(); });
@@ -932,7 +986,6 @@ function openEditor(existing) {
 
 // ---------- 관리자 (활동 로그) ----------
 // romeowa@gmail.com 구글 로그인일 때만 events 조회 가능(Firestore 규칙이 서버에서 강제).
-const ADMIN_EMAIL = "romeowa@gmail.com";
 
 function renderAdmin() {
   APP.innerHTML = `<div class="loading">관리자 확인 중…</div>`;
