@@ -322,3 +322,12 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .ev-dev { font-size: 11px; color: var(--muted); }
 .ev-loc { font-size: 11px; color: var(--accent-dark); }
 .ev-promo { font-size: 11px; color: var(--amber); font-weight: 500; }
+
+/* admin 여행 목록: 높이 제한 + 스크롤로 컴팩트하게 */
+.trip-list-box { max-height: 300px; overflow-y: auto; padding: 8px 12px; }
+.trip-list-box .trip-row { padding: 8px 6px; border-bottom: 1px solid var(--line-soft); border-radius: 0; background: none; }
+.trip-list-box .trip-row:last-child { border-bottom: none; }
+.trip-list-box .trip-row:hover { background: var(--surface); }
+.trip-list-box .tr-bar { height: 26px; }
+.trip-filterbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.trip-shown { font-family: var(--mono); font-size: 11px; color: var(--muted); }

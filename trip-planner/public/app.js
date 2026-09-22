@@ -983,8 +983,8 @@ function renderTrips(container, docs) {
   const seg = (val, label) => `<button class="${tripFilter === val ? "on" : ""}" data-f="${val}">${label}</button>`;
   container.innerHTML =
     `<div class="admin-total">여행 <b>${docs.length}</b>개${emptyN ? ` · 빈 여행 ${emptyN}개` : ""} <button class="btn ghost sm" id="clearRecents">이 기기 홈 목록 비우기</button></div>` +
-    `<div class="trip-filter">${seg("all", "전체")}${seg("nonempty", "일정 있음")}${seg("empty", "빈 여행")}</div>` +
-    `<div class="stat-box">${rowsHtml || '<div class="stat-row muted">해당하는 여행이 없어요</div>'}</div>`;
+    `<div class="trip-filterbar"><div class="trip-filter">${seg("all", "전체")}${seg("nonempty", "일정 있음")}${seg("empty", "빈 여행")}</div><span class="trip-shown">${shown.length}개 표시</span></div>` +
+    `<div class="stat-box trip-list-box">${rowsHtml || '<div class="stat-row muted">해당하는 여행이 없어요</div>'}</div>`;
   // admin에서 여는 여행은 홈 최근목록에 기록하지 않음(관리 목적 열람)
   container.querySelectorAll(".trip-row").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); skipRememberOnce = true; go(a.getAttribute("href")); }));
   container.querySelectorAll(".trip-filter button").forEach((b) => b.addEventListener("click", () => { tripFilter = b.dataset.f; renderTrips(container, docs); }));
