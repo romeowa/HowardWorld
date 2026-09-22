@@ -3,6 +3,7 @@ import {
   initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, collection, addDoc, setDoc, updateDoc, deleteDoc,
   getDoc, getDocs, onSnapshot, serverTimestamp,
+  query, where, orderBy, limit,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -143,7 +144,8 @@ window.addEventListener("popstate", route);
 function route() {
   cleanup();
   const m = location.pathname.match(/^\/t\/([A-Za-z0-9_-]+)/);
-  if (m) renderTrip(m[1]);
+  if (location.pathname === "/admin") renderAdmin();
+  else if (m) renderTrip(m[1]);
   else renderHome();
 }
 
@@ -833,6 +835,103 @@ function openEditor(existing) {
       }
     } catch (e) { toast("저장 실패: " + e.message); }
   }
+}
+
+// ---------- 관리자 (활동 로그) ----------
+// romeowa@gmail.com 구글 로그인일 때만 events 조회 가능(Firestore 규칙이 서버에서 강제).
+const ADMIN_EMAIL = "romeowa@gmail.com";
+let _auth = null;
+
+async function getAuthLib() {
+  const m = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+  if (!_auth) _auth = m.getAuth(app);
+  return { m, auth: _auth };
+}
+
+async function renderAdmin() {
+  APP.innerHTML = `<div class="loading">관리자 확인 중…</div>`;
+  let lib;
+  try { lib = await getAuthLib(); }
+  catch { APP.innerHTML = `<div class="admin-wrap"><p class="sub">로그인 모듈을 불러오지 못했어요.</p></div>`; return; }
+  const { m, auth } = lib;
+  m.onAuthStateChanged(auth, (user) => paintAdmin(m, auth, user));
+}
+
+function paintAdmin(m, auth, user) {
+  APP.innerHTML = "";
+  const wrap = h(`<div class="admin-wrap"></div>`);
+  wrap.appendChild(h(`<div class="admin-head"><h1>📊 활동 로그</h1><a class="admin-home" href="/">← 홈</a></div>`));
+  wrap.querySelector(".admin-home").addEventListener("click", (e) => { e.preventDefault(); go("/"); });
+
+  if (!user) {
+    const box = h(`<div class="admin-card"><p class="sub">관리자 구글 계정으로 로그인하세요.</p><button class="btn" id="signin">Google로 로그인</button></div>`);
+    box.querySelector("#signin").addEventListener("click", async () => {
+      try { await m.signInWithPopup(auth, new m.GoogleAuthProvider()); }
+      catch (e) { toast("로그인 실패: " + (e.code || e.message)); }
+    });
+    wrap.appendChild(box);
+    APP.appendChild(wrap);
+    return;
+  }
+
+  if (user.email !== ADMIN_EMAIL) {
+    const box = h(`<div class="admin-card"><p class="sub">이 계정(<b>${esc(user.email)}</b>)은 접근 권한이 없습니다.</p><button class="btn ghost" id="signout">로그아웃</button></div>`);
+    box.querySelector("#signout").addEventListener("click", () => m.signOut(auth));
+    wrap.appendChild(box);
+    APP.appendChild(wrap);
+    return;
+  }
+
+  // 관리자 확인됨 → events 로드
+  const bar = h(`<div class="admin-bar"><span>${esc(user.email)}</span><span class="admin-actions"><select id="rangeSel"><option value="7">최근 7일</option><option value="14" selected>최근 14일</option><option value="30">최근 30일</option><option value="90">최근 90일</option></select><button class="btn ghost sm" id="signout">로그아웃</button></span></div>`);
+  bar.querySelector("#signout").addEventListener("click", () => m.signOut(auth));
+  wrap.appendChild(bar);
+  const content = h(`<div id="adminContent"><div class="loading">불러오는 중…</div></div>`);
+  wrap.appendChild(content);
+  APP.appendChild(wrap);
+
+  const load = (days) => loadEvents(content, parseInt(days, 10));
+  bar.querySelector("#rangeSel").addEventListener("change", (e) => load(e.target.value));
+  load(14);
+}
+
+async function loadEvents(container, days) {
+  container.innerHTML = `<div class="loading">불러오는 중…</div>`;
+  const since = new Date(Date.now() - days * 86400000);
+  let docs = [];
+  try {
+    const snap = await getDocs(query(collection(db, "events"), where("ts", ">=", since), orderBy("ts", "desc"), limit(1000)));
+    docs = snap.docs.map((d) => d.data());
+  } catch (e) {
+    container.innerHTML = `<div class="admin-card"><p class="sub">조회 실패: ${esc(e.code || e.message)}</p></div>`;
+    return;
+  }
+  const byApp = {}, byType = {}, byDay = {};
+  docs.forEach((e) => {
+    const t = e.ts && e.ts.toDate ? e.ts.toDate() : null;
+    byApp[e.app || "?"] = (byApp[e.app || "?"] || 0) + 1;
+    byType[e.type || "?"] = (byType[e.type || "?"] || 0) + 1;
+    if (t) { const k = ymd(t); byDay[k] = (byDay[k] || 0) + 1; }
+  });
+  const maxDay = Math.max(1, ...Object.values(byDay));
+  const rows = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="stat-row"><span>${esc(k)}</span><b>${v}</b></div>`).join("") || `<div class="stat-row muted">없음</div>`;
+  const dayBars = Object.keys(byDay).sort().map((k) => `<div class="day-bar"><span class="db-date">${k.slice(5)}</span><span class="db-track"><span class="db-fill" style="width:${(byDay[k] / maxDay) * 100}%"></span></span><b>${byDay[k]}</b></div>`).join("") || `<div class="stat-row muted">없음</div>`;
+  const recent = docs.slice(0, 40).map((e) => {
+    const t = e.ts && e.ts.toDate ? e.ts.toDate() : null;
+    const when = t ? t.toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "?";
+    const extra = e.type === "check_run" ? ` <span class="muted">감시 ${e.watches ?? "?"}·알림 ${e.notified ?? 0}·에러 ${e.errors ?? 0}</span>` : (e.trip ? ` <span class="muted">${esc(String(e.trip)).slice(0, 8)}</span>` : "");
+    return `<div class="ev-row"><span class="ev-app ev-${e.app === "flight-watch" ? "fw" : "tp"}">${e.app === "flight-watch" ? "항공" : "여행"}</span><span class="ev-type">${esc(e.type || "?")}</span>${extra}<span class="ev-when">${when}</span></div>`;
+  }).join("");
+
+  container.innerHTML = `
+    <div class="admin-total">최근 ${days}일 · 총 <b>${docs.length}</b>건</div>
+    <div class="stat-grid">
+      <div class="stat-box"><h3>앱별</h3>${rows(byApp)}</div>
+      <div class="stat-box"><h3>유형별</h3>${rows(byType)}</div>
+    </div>
+    <div class="stat-box"><h3>날짜별</h3>${dayBars}</div>
+    <div class="stat-box"><h3>최근 활동</h3><div class="ev-list">${recent || '<div class="stat-row muted">없음</div>'}</div></div>
+  `;
 }
 
 // 시작

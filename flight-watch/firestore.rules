@@ -39,11 +39,13 @@ service cloud.firestore {
     }
 
     // --- 공용 사용 로그 ---
-    // 앱 활동 기록(누구나 남길 수 있으나 조회는 관리자(Admin SDK)만).
-    // 열람은 tools/usage-report.js 또는 Firebase 콘솔에서.
+    // 누구나 남길 수 있으나 조회는 관리자 구글 계정으로 로그인했을 때만(웹 admin).
     match /events/{eventId} {
       allow create: if true;
-      allow read, list, update, delete: if false;
+      allow read, list: if request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == 'romeowa@gmail.com';
+      allow update, delete: if false;
     }
   }
 }

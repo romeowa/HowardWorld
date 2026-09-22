@@ -275,3 +275,40 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
   background: var(--amber); color: #fff; text-align: center;
   font-size: 12.5px; font-weight: 500; padding: 7px 12px calc(7px + env(safe-area-inset-bottom));
 }
+
+/* ---------- 관리자: 활동 로그 ---------- */
+.admin-wrap { max-width: 760px; margin: 0 auto; padding: 20px 16px calc(40px + env(safe-area-inset-bottom)); }
+.admin-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; }
+.admin-head h1 { font-size: 24px; font-weight: 600; letter-spacing: -.02em; }
+.admin-home { font-size: 13px; color: var(--muted); text-decoration: none; }
+.admin-home:hover { color: var(--accent); }
+.admin-card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 24px; text-align: center; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+.admin-card .sub { color: var(--muted); }
+.admin-card .btn { align-self: center; }
+.admin-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+.admin-actions { display: flex; align-items: center; gap: 8px; }
+.admin-actions select { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--card); color: var(--text); font-size: 13px; }
+.admin-total { font-family: var(--mono); font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+.admin-total b { color: var(--text); }
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+@media (max-width: 520px) { .stat-grid { grid-template-columns: 1fr; } }
+.stat-box { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; }
+.stat-box h3 { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; font-weight: 500; }
+.stat-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; font-size: 14px; border-bottom: 1px solid var(--line-soft); }
+.stat-row:last-child { border-bottom: none; }
+.stat-row.muted { color: var(--muted); justify-content: flex-start; }
+.stat-row b { font-family: var(--mono); }
+.day-bar { display: flex; align-items: center; gap: 10px; padding: 3px 0; }
+.db-date { font-family: var(--mono); font-size: 11px; color: var(--muted); width: 42px; flex: 0 0 auto; }
+.db-track { flex: 1; height: 8px; background: var(--surface); border-radius: 5px; overflow: hidden; }
+.db-fill { display: block; height: 100%; background: var(--accent); border-radius: 5px; }
+.day-bar b { font-family: var(--mono); font-size: 12px; width: 28px; text-align: right; flex: 0 0 auto; }
+.ev-list { display: flex; flex-direction: column; }
+.ev-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--line-soft); }
+.ev-row:last-child { border-bottom: none; }
+.ev-app { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 5px; flex: 0 0 auto; }
+.ev-tp { background: #e3f0ee; color: var(--accent-dark); }
+.ev-fw { background: #fdf0e3; color: var(--amber); }
+.ev-type { font-family: var(--mono); font-size: 12px; }
+.ev-when { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); flex: 0 0 auto; }
+.ev-row .muted { color: var(--muted); font-size: 11px; }
