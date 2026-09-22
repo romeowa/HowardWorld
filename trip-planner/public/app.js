@@ -144,7 +144,7 @@ async function renderHome() {
       arr[i] = { id: r.id, title: r.title || "제목 없는 여행", startDate: r.startDate ?? null, dayCount: r.dayCount ?? 1, ts: r.ts || 0 };
     }
   }));
-  const trips = arr.filter(Boolean);
+  const trips = arr.filter(Boolean).filter((t) => !pendingDeletes.has(t.id));
   trips.forEach((t) => { t.color = TRIP_COLORS[hashId(t.id) % TRIP_COLORS.length]; });
   // 삭제된 항목 반영해 localStorage 갱신
   try { localStorage.setItem("recentTrips", JSON.stringify(trips.map(({ color, ...t }) => t))); } catch {}
@@ -298,13 +298,44 @@ function tripRow(t, sub) {
     <span class="tr-go">›</span>
   </a>`);
   row.addEventListener("click", (e) => { e.preventDefault(); go(`/t/${t.id}`); });
-  row.querySelector(".tr-del").addEventListener("click", async (e) => {
+  row.querySelector(".tr-del").addEventListener("click", (e) => {
     e.preventDefault(); e.stopPropagation();
-    if (!confirm(`"${t.title}" 여행을 삭제할까요?\n일정·장소가 모두 사라지고 되돌릴 수 없어요.`)) return;
-    try { await deleteTripFull(t.id); toast("여행을 삭제했어요"); renderHome(); }
-    catch (err) { toast("삭제 실패: " + err.message); }
+    softDeleteTrip(t.id, t.title);
   });
   return row;
+}
+
+// 실행취소(undo) 기반 소프트 삭제
+const pendingDeletes = new Set();   // 삭제 대기 중(UI에서 숨김) 여행 id
+let undoState = null;               // { id, timer }
+
+function commitPendingDelete() {
+  if (!undoState) return;
+  const { id, timer } = undoState; clearTimeout(timer); undoState = null;
+  if (pendingDeletes.delete(id)) deleteTripFull(id).catch((e) => console.error("삭제 실패", e));
+  const t = document.querySelector(".toast"); if (t) t.classList.remove("show");
+}
+
+// 여행 삭제 요청 — 즉시 숨기고 5초간 실행취소 토스트. 시간 지나면 실제 삭제.
+function softDeleteTrip(id, title) {
+  if (pendingDeletes.has(id)) return;
+  commitPendingDelete();              // 직전 대기건은 바로 확정
+  pendingDeletes.add(id);
+  if (location.pathname === "/") renderHome();   // 홈이면 목록에서 숨김
+  else { cleanup(); go("/"); }                   // 여행 화면이면 홈으로
+
+  let el = document.querySelector(".toast");
+  if (!el) { el = h(`<div class="toast"></div>`); document.body.appendChild(el); }
+  clearTimeout(el._t);
+  el.innerHTML = `<span>‘${esc(title || "여행")}’ 삭제됨</span><button class="toast-undo">실행취소</button>`;
+  void el.offsetWidth;               // 강제 리플로우 후 표시 (async 리렌더와 무관하게 확실히)
+  el.classList.add("show");
+  const timer = setTimeout(commitPendingDelete, 6000);
+  undoState = { id, timer };
+  el.querySelector(".toast-undo").addEventListener("click", () => {
+    clearTimeout(timer); undoState = null; el.classList.remove("show");
+    if (pendingDeletes.delete(id) && location.pathname === "/") renderHome();
+  });
 }
 
 // 여행 + 하위 항목 전부 삭제 + 최근 목록에서 제거 (공용)
@@ -467,20 +498,7 @@ function paint() {
 
   // 여행 전체 삭제
   const delTrip = h(`<div style="text-align:center;margin-top:24px"><button class="btn danger sm" id="delTrip">🗑 이 여행 삭제</button></div>`);
-  delTrip.querySelector("#delTrip").addEventListener("click", async () => {
-    if (!confirm(`"${trip.title}" 여행을 삭제할까요?\n일정·장소가 모두 사라지고 되돌릴 수 없어요.`)) return;
-    const btn = delTrip.querySelector("#delTrip");
-    btn.disabled = true; btn.textContent = "삭제 중…";
-    try {
-      await deleteTripFull(tripId);
-      cleanup(); // trip 리스너 해제 → '찾을 수 없음' 깜빡임 방지
-      toast("여행을 삭제했어요");
-      go("/");
-    } catch (e) {
-      toast("삭제 실패: " + e.message);
-      btn.disabled = false; btn.textContent = "🗑 이 여행 삭제";
-    }
-  });
+  delTrip.querySelector("#delTrip").addEventListener("click", () => softDeleteTrip(tripId, trip.title));
   shell.appendChild(delTrip);
 
   APP.appendChild(shell);
