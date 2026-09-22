@@ -188,9 +188,11 @@ window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); defe
 const isStandalone = () => window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
 
-function installButton() {
+function installButton(compact = false) {
   if (isStandalone()) return null; // 이미 설치됨
-  const btn = h(`<button class="btn ghost sm" id="installBtn">📲 홈 화면에 추가</button>`);
+  const btn = compact
+    ? h(`<button class="btn ghost sm install-icon" title="홈 화면에 추가">📲</button>`)
+    : h(`<button class="btn ghost sm" id="installBtn">📲 홈 화면에 추가</button>`);
   btn.addEventListener("click", async () => {
     if (deferredInstall) {
       deferredInstall.prompt();
@@ -544,6 +546,8 @@ function paint() {
       <button class="btn ghost sm" id="share">🔗 링크</button>
     </div></div>`);
   APP.appendChild(bar);
+  const ib = installButton(true);
+  if (ib) bar.querySelector(".topbar-inner").insertBefore(ib, bar.querySelector("#share"));
   const titleInput = bar.querySelector(".trip-title");
   titleInput.addEventListener("change", () => updateDoc(doc(db, "trips", tripId), { title: titleInput.value.trim() || "새 여행" }));
   bar.querySelector(".home-link").addEventListener("click", (e) => { e.preventDefault(); go("/"); });
