@@ -414,17 +414,19 @@ let curDay = 0;
 let tripId = null;
 let dayMap = null;
 let markerById = {};   // 항목 id → 지도 마커 (리스트 클릭 시 지도 이동용)
+let skipRememberOnce = false;  // admin에서 열람 시 홈 최근목록에 기록 안 함
 
 function renderTrip(id) {
   tripId = id;
   trip = null; items = []; curDay = 0; dayMap = null;
+  const remember = !skipRememberOnce; skipRememberOnce = false;
   APP.innerHTML = `<div class="loading">여행을 불러오는 중…</div>`;
-  logEvent("trip_open", { trip: id });
+  if (remember) logEvent("trip_open", { trip: id });
 
   unsubTrip = onSnapshot(doc(db, "trips", id), (snap) => {
     if (!snap.exists()) { APP.innerHTML = `<div class="wrap home"><h1>🔍</h1><p class="sub">여행을 찾을 수 없어요. 링크가 정확한지 확인해 주세요.</p><button class="btn ghost" onclick="location.href='/'">홈으로</button></div>`; cleanup(); return; }
     trip = snap.data();
-    rememberTrip(id, { title: trip.title, startDate: trip.startDate ?? null, dayCount: trip.dayCount ?? 1 });
+    if (remember) rememberTrip(id, { title: trip.title, startDate: trip.startDate ?? null, dayCount: trip.dayCount ?? 1 });
     paint();
   }, (err) => { APP.innerHTML = `<div class="loading">불러오기 실패: ${esc(err.message)}</div>`; });
 
@@ -935,11 +937,16 @@ function renderTrips(container, docs) {
   }).join("");
   const seg = (val, label) => `<button class="${tripFilter === val ? "on" : ""}" data-f="${val}">${label}</button>`;
   container.innerHTML =
-    `<div class="admin-total">여행 <b>${docs.length}</b>개${emptyN ? ` · 빈 여행 ${emptyN}개` : ""}</div>` +
+    `<div class="admin-total">여행 <b>${docs.length}</b>개${emptyN ? ` · 빈 여행 ${emptyN}개` : ""} <button class="btn ghost sm" id="clearRecents">이 기기 홈 목록 비우기</button></div>` +
     `<div class="trip-filter">${seg("all", "전체")}${seg("nonempty", "일정 있음")}${seg("empty", "빈 여행")}</div>` +
     `<div class="stat-box">${rowsHtml || '<div class="stat-row muted">해당하는 여행이 없어요</div>'}</div>`;
-  container.querySelectorAll(".trip-row").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); go(a.getAttribute("href")); }));
+  // admin에서 여는 여행은 홈 최근목록에 기록하지 않음(관리 목적 열람)
+  container.querySelectorAll(".trip-row").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); skipRememberOnce = true; go(a.getAttribute("href")); }));
   container.querySelectorAll(".trip-filter button").forEach((b) => b.addEventListener("click", () => { tripFilter = b.dataset.f; renderTrips(container, docs); }));
+  container.querySelector("#clearRecents").addEventListener("click", () => {
+    try { localStorage.removeItem("recentTrips"); } catch {}
+    toast("이 기기의 홈 최근 목록을 비웠어요");
+  });
 }
 
 // Firestore REST 필드 → JS 값 (admin에서 필요한 타입만)
