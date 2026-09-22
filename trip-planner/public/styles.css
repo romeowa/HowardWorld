@@ -316,3 +316,6 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .admin-total .btn { margin-left: 8px; vertical-align: middle; }
 .trip-row.is-empty { opacity: .7; }
 .tr-empty { color: var(--danger); font-weight: 500; }
+.trip-filter { display: inline-flex; background: var(--surface); border-radius: 10px; padding: 3px; margin-bottom: 10px; }
+.trip-filter button { padding: 5px 12px; border-radius: 8px; font-size: 13px; color: var(--muted-2); }
+.trip-filter button.on { background: var(--text); color: var(--card); font-weight: 500; }
