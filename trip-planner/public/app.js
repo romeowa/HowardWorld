@@ -294,10 +294,28 @@ function tripRow(t, sub) {
   const row = h(`<a class="trip-row" href="/t/${t.id}">
     <span class="tr-bar" style="background:${t.color}"></span>
     <span class="tr-body"><span class="tr-name">${esc(t.title)}</span><span class="tr-sub">${esc(sub)}</span></span>
+    <button class="tr-del" title="여행 삭제">🗑</button>
     <span class="tr-go">›</span>
   </a>`);
   row.addEventListener("click", (e) => { e.preventDefault(); go(`/t/${t.id}`); });
+  row.querySelector(".tr-del").addEventListener("click", async (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (!confirm(`"${t.title}" 여행을 삭제할까요?\n일정·장소가 모두 사라지고 되돌릴 수 없어요.`)) return;
+    try { await deleteTripFull(t.id); toast("여행을 삭제했어요"); renderHome(); }
+    catch (err) { toast("삭제 실패: " + err.message); }
+  });
   return row;
+}
+
+// 여행 + 하위 항목 전부 삭제 + 최근 목록에서 제거 (공용)
+async function deleteTripFull(id) {
+  const snap = await getDocs(collection(db, "trips", id, "items"));
+  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+  await deleteDoc(doc(db, "trips", id));
+  try {
+    const list = JSON.parse(localStorage.getItem("recentTrips") || "[]").filter((x) => x.id !== id);
+    localStorage.setItem("recentTrips", JSON.stringify(list));
+  } catch {}
 }
 
 async function createTrip() {
@@ -454,13 +472,7 @@ function paint() {
     const btn = delTrip.querySelector("#delTrip");
     btn.disabled = true; btn.textContent = "삭제 중…";
     try {
-      const snap = await getDocs(collection(db, "trips", tripId, "items"));
-      await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
-      await deleteDoc(doc(db, "trips", tripId));
-      try {
-        const list = JSON.parse(localStorage.getItem("recentTrips") || "[]").filter((x) => x.id !== tripId);
-        localStorage.setItem("recentTrips", JSON.stringify(list));
-      } catch {}
+      await deleteTripFull(tripId);
       cleanup(); // trip 리스너 해제 → '찾을 수 없음' 깜빡임 방지
       toast("여행을 삭제했어요");
       go("/");
