@@ -1052,27 +1052,53 @@ async function loadEvents(container, days) {
   const maxDay = Math.max(1, ...Object.values(byDay));
   const rows = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="stat-row"><span>${esc(k)}</span><b>${v}</b></div>`).join("") || `<div class="stat-row muted">없음</div>`;
   const dayBars = Object.keys(byDay).sort().map((k) => `<div class="day-bar"><span class="db-date">${k.slice(5)}</span><span class="db-track"><span class="db-fill" style="width:${(byDay[k] / maxDay) * 100}%"></span></span><b>${byDay[k]}</b></div>`).join("") || `<div class="stat-row muted">없음</div>`;
-  const recent = docs.slice(0, 50).map((e) => {
+  // 한 이벤트의 내부 줄(유형·부가정보·시각) — 기기 헤더에 환경/위치가 있으니 여기선 생략
+  const evInner = (e) => {
     const t = e.ts && e.ts.toDate ? e.ts.toDate() : null;
     const when = t ? t.toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "?";
     let extra = "";
     if (e.type === "check_run") extra = ` <span class="muted">감시 ${e.watches ?? "?"}·알림 ${e.notified ?? 0}·에러 ${e.errors ?? 0}</span>`;
     else if (e.type === "promo_click") extra = ` <span class="ev-promo">${esc(e.promo || "?")}</span>`;
     else if (e.trip) extra = ` <span class="muted">${esc(String(e.trip)).slice(0, 8)}</span>`;
-    const dev = (e.os || e.br) ? `<span class="ev-dev">${esc([e.form, e.os, e.br].filter(Boolean).join("·"))}</span>` : "";
-    const loc = (e.country || e.city) ? `<span class="ev-loc">📍${esc([e.country, e.city].filter(Boolean).join(" "))}</span>` : "";
-    return `<div class="ev-row"><span class="ev-type">${esc(e.type || "?")}</span>${extra}${dev}${loc}<span class="ev-when">${when}</span></div>`;
+    return `<div class="ev-row"><span class="ev-type">${esc(e.type || "?")}</span>${extra}<span class="ev-when">${when}</span></div>`;
+  };
+
+  // 기기(deviceId)별로 묶기
+  const groups = {};
+  docs.forEach((e) => { (groups[e.dev || "?"] ||= []).push(e); });
+  const groupArr = Object.entries(groups).map(([dev, evs]) => {
+    evs.sort((a, b) => ((b.ts && b.ts.toDate && b.ts.toDate()) || 0) - ((a.ts && a.ts.toDate && a.ts.toDate()) || 0));
+    const top = evs[0] || {};
+    const lastMs = top.ts && top.ts.toDate ? top.ts.toDate().getTime() : 0;
+    return { dev, evs, top, lastMs };
+  }).sort((a, b) => b.lastMs - a.lastMs);
+
+  const groupsHtml = groupArr.map((g) => {
+    const e = g.top;
+    const env = esc([e.form, e.os, e.br].filter(Boolean).join(" · ")) || "환경 미상";
+    const loc = (e.country || e.city) ? `<span class="dg-loc">📍${esc([e.country, e.city].filter(Boolean).join(" "))}</span>` : "";
+    const last = g.lastMs ? new Date(g.lastMs).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "?";
+    const shown = g.evs.slice(0, 30).map(evInner).join("");
+    const more = g.evs.length > 30 ? `<div class="stat-row muted">…외 ${g.evs.length - 30}건</div>` : "";
+    return `<div class="dev-group">
+      <div class="dev-head">
+        <span class="dg-env">📱 ${env}</span>${loc}
+        <span class="dg-id">#${esc(g.dev)}</span>
+        <span class="dg-meta">${g.evs.length}건 · 최근 ${last}</span>
+      </div>
+      <div class="dev-events">${shown}${more}</div>
+    </div>`;
   }).join("");
 
   container.innerHTML = `
-    <div class="admin-total">최근 ${days}일 · 총 <b>${docs.length}</b>건</div>
+    <div class="admin-total">최근 ${days}일 · 총 <b>${docs.length}</b>건 · 기기 ${groupArr.length}대</div>
     <div class="stat-grid">
       <div class="stat-box"><h3>유형별</h3>${rows(byType)}</div>
       <div class="stat-box"><h3>디바이스 (OS · 브라우저)</h3>${rows(byPlat)}</div>
       <div class="stat-box"><h3>지역 (국가 · 도시)</h3>${rows(byLoc)}</div>
       <div class="stat-box"><h3>날짜별</h3>${dayBars}</div>
     </div>
-    <div class="stat-box"><h3>최근 활동</h3><div class="ev-list">${recent || '<div class="stat-row muted">없음</div>'}</div></div>
+    <div class="stat-box"><h3>기기별 활동</h3>${groupsHtml || '<div class="stat-row muted">없음</div>'}</div>
   `;
 }
 
