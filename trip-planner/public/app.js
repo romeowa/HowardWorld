@@ -912,14 +912,30 @@ async function loadTrips(container) {
     container.innerHTML = `<div class="stat-box"><h3>여행</h3><div class="stat-row muted">조회 실패: ${esc(e.message || e)}</div></div>`;
     return;
   }
+  // 각 여행의 항목 개수 (items는 공개 읽기라 SDK로 조회 가능)
+  await Promise.all(docs.map(async (t) => {
+    try { const s = await getDocs(collection(db, "trips", t.id, "items")); t.itemCount = s.size; }
+    catch { t.itemCount = null; }
+  }));
+  const emptyIds = docs.filter((t) => t.itemCount === 0).map((t) => t.id);
+
   const rowsHtml = docs.map((t) => {
     const start = t.startDate ? String(t.startDate) : null;
     const range = start ? `${start}${t.dayCount > 1 ? ` · ${t.dayCount}일` : ""}` : "날짜 미정";
-    const made = t.createdAt instanceof Date ? t.createdAt.toLocaleDateString("ko-KR", { year: "2-digit", month: "short", day: "numeric" }) : "";
-    return `<a class="trip-row" href="/t/${t.id}"><span class="tr-bar" style="background:${TRIP_COLORS[hashId(t.id) % TRIP_COLORS.length]}"></span><span class="tr-body"><span class="tr-name">${esc(t.title || "제목 없음")}</span><span class="tr-sub">${esc(range)}${made ? ` · 생성 ${esc(made)}` : ""}</span></span><span class="tr-go">›</span></a>`;
+    const cnt = t.itemCount === 0 ? `<span class="tr-empty">비어있음</span>` : (t.itemCount != null ? `${t.itemCount}곳` : "");
+    return `<a class="trip-row ${t.itemCount === 0 ? "is-empty" : ""}" href="/t/${t.id}"><span class="tr-bar" style="background:${TRIP_COLORS[hashId(t.id) % TRIP_COLORS.length]}"></span><span class="tr-body"><span class="tr-name">${esc(t.title || "제목 없음")}</span><span class="tr-sub">${esc(range)} · ${cnt}</span></span><span class="tr-go">›</span></a>`;
   }).join("");
-  container.innerHTML = `<div class="admin-total">여행 <b>${docs.length}</b>개</div><div class="stat-box">${rowsHtml || '<div class="stat-row muted">아직 만들어진 여행이 없어요</div>'}</div>`;
+  const cleanBtn = emptyIds.length ? `<button class="btn danger sm" id="cleanEmpty">🗑 빈 여행 ${emptyIds.length}개 정리</button>` : "";
+  container.innerHTML = `<div class="admin-total">여행 <b>${docs.length}</b>개${emptyIds.length ? ` · 빈 여행 ${emptyIds.length}개` : ""} ${cleanBtn}</div><div class="stat-box">${rowsHtml || '<div class="stat-row muted">아직 만들어진 여행이 없어요</div>'}</div>`;
   container.querySelectorAll(".trip-row").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); go(a.getAttribute("href")); }));
+  const cb = container.querySelector("#cleanEmpty");
+  if (cb) cb.addEventListener("click", async () => {
+    if (!confirm(`항목이 하나도 없는 빈 여행 ${emptyIds.length}개를 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    cb.disabled = true; cb.textContent = "삭제 중…";
+    for (const id of emptyIds) { logEvent("trip_delete", { trip: id, reason: "empty-cleanup" }); await deleteTripFull(id).catch(() => {}); }
+    toast(`빈 여행 ${emptyIds.length}개 삭제됨`);
+    loadTrips(container);
+  });
 }
 
 // Firestore REST 필드 → JS 값 (admin에서 필요한 타입만)
