@@ -890,20 +890,51 @@ function paintAdmin(user) {
   load(14);
 }
 
+// Firestore REST 필드 → JS 값 (admin에서 필요한 타입만)
+function fsVal(v) {
+  if (!v) return undefined;
+  if ("stringValue" in v) return v.stringValue;
+  if ("integerValue" in v) return parseInt(v.integerValue, 10);
+  if ("doubleValue" in v) return v.doubleValue;
+  if ("booleanValue" in v) return v.booleanValue;
+  if ("timestampValue" in v) return new Date(v.timestampValue);
+  return undefined;
+}
+
 async function loadEvents(container, days) {
   container.innerHTML = `<div class="loading">불러오는 중…</div>`;
   const since = new Date(Date.now() - days * 86400000);
   let docs = [];
+  // SDK가 인증 토큰을 요청에 붙이지 못하는 경우가 있어, ID 토큰을 직접 실어 REST로 조회
   try {
-    const snap = await getDocs(query(collection(db, "events"), where("ts", ">=", since), orderBy("ts", "desc"), limit(1000)));
-    docs = snap.docs.map((d) => d.data());
+    const idToken = await auth.currentUser.getIdToken();
+    const body = {
+      structuredQuery: {
+        from: [{ collectionId: "events" }],
+        where: { fieldFilter: { field: { fieldPath: "ts" }, op: "GREATER_THAN_OR_EQUAL", value: { timestampValue: since.toISOString() } } },
+        orderBy: [{ field: { fieldPath: "ts" }, direction: "DESCENDING" }],
+        limit: 1000,
+      },
+    };
+    const res = await fetch("https://firestore.googleapis.com/v1/projects/howardworld/databases/(default)/documents:runQuery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      container.innerHTML = `<div class="admin-card"><p class="sub">조회 실패 (HTTP ${res.status})</p><div class="admin-diag">${esc(t.slice(0, 160))}</div></div>`;
+      return;
+    }
+    const rows = await res.json();
+    docs = rows.filter((r) => r.document).map((r) => {
+      const f = r.document.fields || {};
+      const o = {};
+      for (const k in f) o[k] = fsVal(f[k]);
+      return { ...o, ts: o.ts ? { toDate: () => o.ts } : null };
+    });
   } catch (e) {
-    let diag = "";
-    try {
-      const u = auth.currentUser;
-      if (u) { const tr = await u.getIdTokenResult(true); diag = `<div class="admin-diag">토큰 email: <b>${esc(tr.claims.email || "(없음)")}</b> · verified: ${String(tr.claims.email_verified)} · provider: ${esc(tr.signInProvider || "?")}</div>`; }
-    } catch {}
-    container.innerHTML = `<div class="admin-card"><p class="sub">조회 실패: ${esc(e.code || e.message)}</p>${diag}</div>`;
+    container.innerHTML = `<div class="admin-card"><p class="sub">조회 실패: ${esc(e.message || e)}</p></div>`;
     return;
   }
   const byApp = {}, byType = {}, byDay = {};
