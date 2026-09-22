@@ -255,25 +255,32 @@ function buildCalendar(month, trips) {
     cal.appendChild(week);
   }
 
-  // 이번 달 여행 목록
-  const monthLast = new Date(y, m + 1, 0);
-  const inMonth = trips
-    .filter((t) => t.startDate)
-    .map((t) => { const s = parseDate(t.startDate); return { ...t, s, e: addDays(s, (t.dayCount || 1) - 1) }; })
-    .filter((t) => t.e >= first && t.s <= monthLast)
-    .sort((a, b) => a.s - b.s);
-  const undated = trips.filter((t) => !t.startDate);
-
+  // 전체 여행 목록 (날짜 있는 것 먼저, 시작일 오름차순 → 날짜 미정)
   const foot = h(`<div class="cal-foot"></div>`);
-  if (inMonth.length) {
-    foot.appendChild(h(`<div class="cal-foot-title">이번 달 여행 ${inMonth.length}</div>`));
-    inMonth.forEach((t) => foot.appendChild(tripRow(t, `${fmtMD(t.s)} — ${fmtMD(t.e)} · ${t.dayCount}일`)));
+  if (trips.length) {
+    const monthLast = new Date(y, m + 1, 0);
+    const inThisMonth = (t) => {
+      if (!t.startDate) return false;
+      const s = parseDate(t.startDate), e = addDays(s, (t.dayCount || 1) - 1);
+      return e >= first && s <= monthLast;
+    };
+    const sorted = [...trips].sort((a, b) => {
+      if (a.startDate && b.startDate) return parseDate(a.startDate) - parseDate(b.startDate);
+      if (a.startDate) return -1;
+      if (b.startDate) return 1;
+      return 0;
+    });
+    foot.appendChild(h(`<div class="cal-foot-title">전체 여행 ${trips.length}</div>`));
+    sorted.forEach((t) => {
+      const sub = t.startDate
+        ? `${fmtMD(parseDate(t.startDate))} — ${fmtMD(addDays(parseDate(t.startDate), (t.dayCount || 1) - 1))} · ${t.dayCount}일`
+        : "시작일 미정";
+      const row = tripRow(t, sub);
+      if (inThisMonth(t)) row.classList.add("this-month"); // 이번 달 여행 강조
+      foot.appendChild(row);
+    });
   } else {
-    foot.appendChild(h(`<div class="cal-foot-empty">이번 달엔 잡힌 여행이 없어요.</div>`));
-  }
-  if (undated.length) {
-    foot.appendChild(h(`<div class="cal-foot-title">날짜 미정 ${undated.length}</div>`));
-    undated.forEach((t) => foot.appendChild(tripRow(t, "시작일 미정")));
+    foot.appendChild(h(`<div class="cal-foot-empty">아직 잡힌 여행이 없어요. “+ 새 여행”으로 시작해 보세요.</div>`));
   }
   cal.appendChild(foot);
   return cal;
