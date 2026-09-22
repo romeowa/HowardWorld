@@ -342,6 +342,7 @@ function tripRow(t, sub) {
   row.addEventListener("click", (e) => { e.preventDefault(); go(`/t/${t.id}`); });
   row.querySelector(".tr-del").addEventListener("click", (e) => {
     e.preventDefault(); e.stopPropagation();
+    if (!confirm(`‘${t.title || "이 여행"}’을(를) 삭제할까요?\n여행과 모든 일정이 영구 삭제되며, 링크를 가진 모두에게서 사라집니다.`)) return;
     softDeleteTrip(t.id, t.title);
   });
   return row;
