@@ -580,6 +580,14 @@ function fmtDist(m) {
   return m >= 1000 ? `${(m / 1000).toFixed(1)}km` : `${Math.round(m / 10) * 10}m`;
 }
 
+// 직선 거리(하버사인) — 경로를 못 구했을 때 폴백
+function straightMeters(o, d) {
+  const R = 6371000, toRad = (x) => (x * Math.PI) / 180;
+  const dLat = toRad(d.lat - o.lat), dLng = toRad(d.lng - o.lng);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(o.lat)) * Math.cos(toRad(d.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
 // 두 항목 사이 이동 구간 (비동기로 채움; 결과 없으면 스스로 제거)
 function legRow(a, b) {
   const el = h(`<div class="tl-leg">
@@ -587,10 +595,16 @@ function legRow(a, b) {
     <div class="tl-rail dashed"></div>
     <div class="tl-leg-body"><span class="tl-leg-txt">이동 시간 계산 중…</span></div>
   </div>`);
-  computeRoute({ lat: a.lat, lng: a.lng }, { lat: b.lat, lng: b.lng }).then((r) => {
-    if (!r) { el.remove(); return; }
+  const o = { lat: a.lat, lng: a.lng }, d = { lat: b.lat, lng: b.lng };
+  computeRoute(o, d).then((r) => {
+    const bodyEl = el.querySelector(".tl-leg-body");
+    if (!r) {
+      // 경로 못 구함 → 직선 거리만
+      bodyEl.innerHTML = `<span class="tl-leg-mode">📍 직선</span><span class="tl-leg-dist">${fmtDist(straightMeters(o, d))}</span>`;
+      return;
+    }
     const m = MODE_INFO[r.mode];
-    el.querySelector(".tl-leg-body").innerHTML =
+    bodyEl.innerHTML =
       `<span class="tl-leg-mode">${m.icon} ${m.name}</span>` +
       `<span class="tl-leg-dot">·</span>` +
       `<span class="tl-leg-dur">${r.min}분</span>` +

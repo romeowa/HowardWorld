@@ -1,10 +1,11 @@
 // 여행 일정 서비스워커 — 앱 셸 오프라인 캐시
 // 버전을 올리면 activate에서 옛 캐시를 비우고 새 셸을 받는다.
-const VERSION = "v1";
+const VERSION = "v2";
 const CACHE = `trip-shell-${VERSION}`;
 
-// 앱 구동에 필요한 최소 셸 (버전 쿼리는 fetch 핸들러가 무시하고 매칭)
-const CORE = ["/", "/index.html", "/styles.css", "/app.js", "/manifest.json", "/icon-192.png", "/icon-512.png"];
+// 버전 없는 셸만 미리 캐시. 버전 붙는 app.js/styles.css는 실행 중 전체 URL로 캐시돼
+// ?v= 를 올리면 자연히 새로 받는다(구버전 캐시 히트 방지).
+const CORE = ["/", "/index.html", "/manifest.json", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE)).catch(() => {}));
@@ -35,13 +36,12 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // 정적 자원: stale-while-revalidate (버전 쿼리 무시하고 경로로 매칭)
-  const key = sameOrigin ? url.pathname : req.url;
+  // 정적 자원: stale-while-revalidate, 전체 URL(쿼리 포함)로 캐시 → ?v= 바뀌면 새로 받음
   e.respondWith(
     caches.open(CACHE).then((cache) =>
-      cache.match(key).then((cached) => {
+      cache.match(req).then((cached) => {
         const network = fetch(req)
-          .then((res) => { if (res && res.ok) cache.put(key, res.clone()); return res; })
+          .then((res) => { if (res && res.ok) cache.put(req, res.clone()); return res; })
           .catch(() => cached);
         return cached || network;
       })
