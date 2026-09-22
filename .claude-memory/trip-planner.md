@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: f2a2b738-2280-4be0-a63c-ca09b5c4f9ff
-  modified: 2026-09-22T15:46:39.331Z
+  modified: 2026-09-22T16:05:15.129Z
 ---
 
 trip-planner: 링크 하나로 함께 짜는 여행 일정 공유 웹앱. 공용 [[howardworld-firebase-setup]] 위에 올림.
@@ -19,5 +19,7 @@ trip-planner: 링크 하나로 함께 짜는 여행 일정 공유 웹앱. 공용
 - 디자인: Claude Design 시안 기반 웜 라이트 타임라인(1a) + 월별 달력 홈(2a). IBM Plex Sans KR + JetBrains Mono. 여행 화면은 넓으면 타임라인|지도 2단, 좁으면 세로 1단(반응형).
 - 오프라인(PWA): sw.js(앱 셸 stale-while-revalidate, 전체 URL로 캐시) + Firestore persistentLocalCache. 오프라인 배너. SW 버전 올릴 때 sw.js의 VERSION 상수 갱신.
 - 시도했다 뺀 것: 장소 간 이동시간(구글 Routes API) — 국내는 지도반출 규제로 자동차/도보 경로 안 나오고 대중교통만, 품질 별로라 제거. 비용/예산 기능도 제거. (Routes API는 키에 활성화돼 있음)
-- 사용 로그: 공용 Firestore `events` 컬렉션(공개 create, 조회는 Admin만). trip-planner가 trip_open/create·item_add/delete·trip_delete 기록, flight-watch 크롤러가 check_run 기록. 요약은 `node tools/usage-report.js [일수]`(서비스 계정 필요). 비용 모니터링용 예산 알림은 콘솔에서 수동 설정.
+- 사용 로그: 공용 Firestore `events` 컬렉션(공개 create). trip-planner가 trip_open/create·item_add/delete·trip_delete 기록, flight-watch 크롤러가 check_run 기록.
+- 관리자 페이지 `/admin`: 구글 로그인(romeowa@gmail.com만) 후 events 대시보드(앱별·유형별·날짜별·최근). 규칙: events read는 `request.auth.token.email == 'romeowa@gmail.com'`만. **주의**: Firestore SDK가 인증 토큰을 요청에 안 붙이는 문제로 SDK 쿼리는 permission-denied → admin 조회는 `auth.currentUser.getIdToken()`을 Authorization 헤더에 실어 **REST runQuery로 직접 호출**함. Auth는 firebase-auth 정적 import + 시작 시 getAuth(app). 구글 로그인 provider + howard-trips.web.app 승인 도메인은 콘솔에서 활성화 완료.
+- CLI 요약도 가능: `node tools/usage-report.js [일수]`(서비스 계정). 비용 예산 알림은 콘솔에서 설정 완료(월 ₩1만, 50/90/100% 이메일).
 - 구조: public/app.js 단일 SPA + styles.css + config.js(키) + sw.js. 캐시: firebase.json에 js/css/html no-cache 헤더, 에셋 ?v 버전.
