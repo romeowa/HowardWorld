@@ -903,7 +903,12 @@ async function loadEvents(container, days) {
     const snap = await getDocs(query(collection(db, "events"), where("ts", ">=", since), orderBy("ts", "desc"), limit(1000)));
     docs = snap.docs.map((d) => d.data());
   } catch (e) {
-    container.innerHTML = `<div class="admin-card"><p class="sub">조회 실패: ${esc(e.code || e.message)}</p></div>`;
+    let diag = "";
+    try {
+      const u = _auth && _auth.currentUser;
+      if (u) { const tr = await u.getIdTokenResult(true); diag = `<div class="admin-diag">토큰 email: <b>${esc(tr.claims.email || "(없음)")}</b> · verified: ${String(tr.claims.email_verified)} · provider: ${esc(tr.signInProvider || "?")}</div>`; }
+    } catch {}
+    container.innerHTML = `<div class="admin-card"><p class="sub">조회 실패: ${esc(e.code || e.message)}</p>${diag}</div>`;
     return;
   }
   const byApp = {}, byType = {}, byDay = {};

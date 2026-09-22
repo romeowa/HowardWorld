@@ -43,7 +43,6 @@ service cloud.firestore {
     match /events/{eventId} {
       allow create: if true;
       allow read, list: if request.auth != null
-        && request.auth.token.email_verified == true
         && request.auth.token.email == 'romeowa@gmail.com';
       allow update, delete: if false;
     }

@@ -312,3 +312,4 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .ev-type { font-family: var(--mono); font-size: 12px; }
 .ev-when { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); flex: 0 0 auto; }
 .ev-row .muted { color: var(--muted); font-size: 11px; }
+.admin-diag { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 4px; }
