@@ -201,6 +201,13 @@ async function checkAll(trigger) {
       trigger,
       results,
     });
+    // 공용 사용 로그
+    const notified = results.filter((r) => r.notified).length;
+    const errors = results.filter((r) => r.status === "error").length;
+    await db.collection("events").add({
+      type: "check_run", app: "flight-watch", ts: FieldValue.serverTimestamp(),
+      trigger, watches: results.length, notified, errors,
+    }).catch(() => {});
   } finally {
     running = false;
     if (pendingTrigger) {

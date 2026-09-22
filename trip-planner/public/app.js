@@ -119,6 +119,18 @@ function promoFooter() {
   </footer>`);
 }
 
+// ---------- 사용 로그 (events 컬렉션) ----------
+// 앱 활동을 가볍게 기록. 개인 식별 정보 없이 유형·트립ID·기기ID만. 조회는 관리자만(규칙).
+function deviceId() {
+  let d;
+  try { d = localStorage.getItem("deviceId"); } catch {}
+  if (!d) { d = Math.random().toString(36).slice(2, 10); try { localStorage.setItem("deviceId", d); } catch {} }
+  return d;
+}
+function logEvent(type, extra = {}) {
+  try { addDoc(collection(db, "events"), { type, app: "trip-planner", ts: serverTimestamp(), dev: deviceId(), ...extra }); } catch {}
+}
+
 // ---------- 라우팅 ----------
 let unsubTrip = null, unsubItems = null;
 function cleanup() {
@@ -334,7 +346,7 @@ let undoState = null;               // { id, timer }
 function commitPendingDelete() {
   if (!undoState) return;
   const { id, timer } = undoState; clearTimeout(timer); undoState = null;
-  if (pendingDeletes.delete(id)) deleteTripFull(id).catch((e) => console.error("삭제 실패", e));
+  if (pendingDeletes.delete(id)) { logEvent("trip_delete", { trip: id }); deleteTripFull(id).catch((e) => console.error("삭제 실패", e)); }
   const t = document.querySelector(".toast"); if (t) t.classList.remove("show");
 }
 
@@ -379,6 +391,7 @@ async function createTrip() {
       title: "새 여행", startDate: null, dayCount: 3, createdAt: serverTimestamp(),
     });
     rememberTrip(ref.id, { title: "새 여행", startDate: null, dayCount: 3 });
+    logEvent("trip_create", { trip: ref.id });
     go(`/t/${ref.id}`);
   } catch (e) {
     toast("생성 실패: " + e.message);
@@ -398,6 +411,7 @@ function renderTrip(id) {
   tripId = id;
   trip = null; items = []; curDay = 0; dayMap = null;
   APP.innerHTML = `<div class="loading">여행을 불러오는 중…</div>`;
+  logEvent("trip_open", { trip: id });
 
   unsubTrip = onSnapshot(doc(db, "trips", id), (snap) => {
     if (!snap.exists()) { APP.innerHTML = `<div class="wrap home"><h1>🔍</h1><p class="sub">여행을 찾을 수 없어요. 링크가 정확한지 확인해 주세요.</p><button class="btn ghost" onclick="location.href='/'">홈으로</button></div>`; cleanup(); return; }
@@ -552,7 +566,7 @@ function itemCard(it) {
   row.querySelector(".edit").addEventListener("click", (e) => { e.stopPropagation(); openEditor(it); });
   row.querySelector(".del").addEventListener("click", (e) => {
     e.stopPropagation();
-    if (confirm(`"${it.name || TYPES[it.type]?.label}" 삭제할까요?`)) deleteDoc(doc(db, "trips", tripId, "items", it.id));
+    if (confirm(`"${it.name || TYPES[it.type]?.label}" 삭제할까요?`)) { deleteDoc(doc(db, "trips", tripId, "items", it.id)); logEvent("item_delete", { trip: tripId }); }
   });
   // 내용 클릭 → 지도에서 해당 위치로 이동
   row.querySelector(".tl-content").addEventListener("click", (e) => {
@@ -805,6 +819,7 @@ function openEditor(existing) {
         close();
       } else {
         await addDoc(collection(db, "trips", tripId, "items"), { ...data, order: Date.now(), createdAt: serverTimestamp() });
+        logEvent("item_add", { trip: tripId });
         // 모달을 닫지 않고 폼만 비워 이어서 입력 (날짜·종류는 유지)
         toast(`추가됨 — 이어서 입력하세요`);
         nameEl.value = ""; addrEl.value = "";

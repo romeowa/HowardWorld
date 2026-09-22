@@ -37,5 +37,13 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false; // 데몬(Admin SDK)만 기록
     }
+
+    // --- 공용 사용 로그 ---
+    // 앱 활동 기록(누구나 남길 수 있으나 조회는 관리자(Admin SDK)만).
+    // 열람은 tools/usage-report.js 또는 Firebase 콘솔에서.
+    match /events/{eventId} {
+      allow create: if true;
+      allow read, list, update, delete: if false;
+    }
   }
 }
