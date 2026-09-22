@@ -93,7 +93,13 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
   border-bottom: 1px solid var(--line-soft);
 }
 .topbar-inner { max-width: 760px; margin: 0 auto; padding: 12px 16px; display: flex; align-items: center; gap: 10px; }
-.topbar .home-link { font-size: 20px; text-decoration: none; }
+.topbar .home-link {
+  display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto;
+  font-size: 14px; font-weight: 500; text-decoration: none; white-space: nowrap;
+  color: var(--text); background: var(--card); border: 1px solid var(--line);
+  padding: 7px 12px; border-radius: 10px;
+}
+.topbar .home-link:hover { background: var(--surface); border-color: var(--accent); color: var(--accent); }
 .trip-title {
   flex: 1; font-size: 22px; font-weight: 600; letter-spacing: -.02em; border: none; background: transparent;
   color: var(--text); padding: 4px 6px; border-radius: 8px; min-width: 0;

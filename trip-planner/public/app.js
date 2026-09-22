@@ -363,7 +363,7 @@ function paint() {
   // 상단 바 (지도 있으면 넓은 폭으로)
   const bar = h(`
     <div class="topbar"><div class="topbar-inner ${hasMap ? "wide" : ""}">
-      <a class="home-link" href="/" title="홈">🧳</a>
+      <a class="home-link" href="/" title="홈으로 가기">← 홈</a>
       <input class="trip-title" value="${esc(trip.title)}" placeholder="여행 제목" />
       <button class="btn ghost sm" id="share">🔗 링크</button>
     </div></div>`);
@@ -379,13 +379,21 @@ function paint() {
   // 여행 전체를 감싸는 셸 (지도 있으면 넓게)
   const shell = h(`<div class="trip-shell ${hasMap ? "wide" : ""}"></div>`);
 
-  // 시작일
+  // 시작일 · 종료일 (종료일은 시작일+일수에서 파생; 종료일을 바꾸면 일수가 재계산됨)
+  const endVal = trip.startDate ? ymd(addDays(parseDate(trip.startDate), trip.dayCount - 1)) : "";
   const meta = h(`<div class="trip-meta">
-    <label>시작일 <input type="date" id="startDate" value="${trip.startDate || ""}"/></label>
+    <label>시작 <input type="date" id="startDate" value="${trip.startDate || ""}"/></label>
+    <label>종료 <input type="date" id="endDate" value="${endVal}" min="${trip.startDate || ""}" ${trip.startDate ? "" : "disabled title='시작일을 먼저 선택하세요'"}/></label>
     <span class="count">${trip.dayCount}일 · ${items.length}곳</span>
   </div>`);
   meta.querySelector("#startDate").addEventListener("change", (e) =>
     updateDoc(doc(db, "trips", tripId), { startDate: e.target.value || null }));
+  meta.querySelector("#endDate").addEventListener("change", (e) => {
+    if (!trip.startDate || !e.target.value) return;
+    const days = dayDiff(parseDate(trip.startDate), parseDate(e.target.value)) + 1;
+    if (days < 1) { toast("종료일이 시작일보다 빨라요"); paint(); return; }
+    updateDoc(doc(db, "trips", tripId), { dayCount: days });
+  });
   shell.appendChild(meta);
 
   // Day 탭
