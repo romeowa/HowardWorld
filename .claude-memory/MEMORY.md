@@ -1,3 +1,4 @@
 # Memory Index
 
-- [HowardWorld Firebase 구성](howardworld-firebase-setup.md) — Firebase 프로젝트 howardworld 공유, flight-watch가 첫 프로젝트, 남은 수동 단계 있음
+- [HowardWorld Firebase 구성](howardworld-firebase-setup.md) — 공용 Firebase(howardworld) 인프라 + flight-watch(항공권 감시)
+- [trip-planner](trip-planner.md) — 링크로 함께 짜는 여행 일정 웹앱 (howard-trips.web.app, 구글맵/Places)

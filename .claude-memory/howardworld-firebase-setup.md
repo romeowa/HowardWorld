@@ -1,19 +1,25 @@
 ---
 name: howardworld-firebase-setup
-description: HowardWorld 레포의 Firebase 프로젝트 구성과 첫 프로젝트(flight-watch) 컨텍스트
-metadata: 
-  node_type: memory
+description: HowardWorld 레포의 공용 Firebase(howardworld) 구성과 flight-watch 프로젝트 컨텍스트
+metadata:
   type: project
-  originSessionId: f2a2b738-2280-4be0-a63c-ca09b5c4f9ff
 ---
 
-HowardWorld는 잡다한 개인 프로젝트 모음 레포. 서버 사이드는 Firebase 프로젝트 `howardworld` (project number 940701312592)를 공유.
+HowardWorld는 잡다한 개인 프로젝트 모음 레포. 서버는 Firebase 프로젝트 `howardworld` (project number 940701312592)를 공유. 프로젝트별 상세는 별도 memory 파일 참고: [[trip-planner]].
 
-- Firestore: `(default)` DB, asia-northeast3 (서울)
-- 웹 앱: "flight-watch" (appId 1:940701312592:web:8882de89e067b9a727d355), Hosting: https://howardworld.web.app
-- Spark(무료) 플랜으로 충분 — Functions 안 씀 (Amadeus가 2026-07-17 Self-Service API 종료 + 신규가입 중단이라 Mac 크롤링으로 전환)
-- 첫 프로젝트 flight-watch: Mac launchd 상주 데몬(`com.howard.flight-watch`)이 Playwright로 구글플라이트 크롤링(30분 간격), 조건 매칭 후 FCM 웹 푸시. 크롤러는 hl=en aria-label 파싱 방식 — 구글 DOM 변경 시 crawler/googleFlights.js 수리 필요
-- Admin SDK 키: flight-watch/crawler/serviceAccount.json (gitignore됨, firebase-adminsdk-fbsvc SA)
-- 메뉴바 앱: flight-watch/macapp (SwiftUI 단일 파일, build.sh로 swiftc 빌드, ~/Applications/FlightWatch.app 설치됨). Firestore REST 공개 읽기로 상태 표시, launchctl로 데몬 제어 — control/notifications 컬렉션 규칙(공개 read)에 의존하므로 규칙 잠글 때 같이 수정 필요
-- 알림 경로: Mac은 데몬이 notifications 컬렉션에 기록 → 맥앱이 15초 폴링으로 감지해 UNUserNotificationCenter 네이티브 알림. iPhone은 FCM 웹 푸시(PWA, VAPID 키 적용됨) 그대로
-- 남은 수동 단계: VAPID 키 생성(콘솔→클라우드 메시징→웹 푸시 인증서) 후 public/app.js의 VAPID_KEY에 삽입 + hosting 재배포 — 상세는 flight-watch/README.md
+## 공용 인프라
+- Firestore: `(default)` DB, asia-northeast3 (서울). 여러 프로젝트가 이 하나의 Firestore를 공유.
+- **보안 규칙은 flight-watch/firestore.rules 단일 파일에서만 관리** → `cd flight-watch && firebase deploy --only firestore:rules`. 다른 프로젝트 firebase.json에는 firestore 규칙 설정을 넣지 않아 덮어쓰기 방지.
+- 결제: 2026-09 기준 **Blaze(결제) 활성** (billing account "Firebase Payment" 012FC2-…). 그래서 구글맵/Places 같은 유료 API 사용 가능. 다만 개인 사용량이라 실비용은 거의 0.
+
+## flight-watch (첫 프로젝트)
+- 목적: 항공권 조건(직항/가격 등) 감시 → 조건 충족 시 Mac/iPhone 알림.
+- 데이터 소스: Amadeus가 2026-07-17 Self-Service API 종료해서 **Mac에서 구글플라이트 크롤링**으로 전환. 크롤러는 `hl=en` aria-label 파싱 + 직항 감시는 nonstop 필터 사용 — 구글 DOM 변경 시 crawler/googleFlights.js 수리 필요.
+- 실행: Mac launchd 상주 데몬 `com.howard.flight-watch`, Playwright, **1시간 간격**. 로그 ~/Library/Logs/flight-watch.log (5MB 자가 로테이션).
+- 알림: 데몬이 Firestore `notifications` 컬렉션에 기록 → ① 맥앱이 15초 폴링해 UNUserNotificationCenter 네이티브 알림, ② iPhone은 FCM 웹 푸시(PWA, VAPID 적용됨).
+- 메뉴바 앱: flight-watch/macapp (SwiftUI 단일 파일, build.sh로 swiftc 빌드 → ~/Applications/FlightWatch.app). Firestore REST 공개 읽기로 상태 표시, launchctl로 데몬 제어. 감시 추가/수정/삭제, 가격 그래프.
+- Admin SDK 키: flight-watch/crawler/serviceAccount.json (gitignore, firebase-adminsdk-fbsvc SA).
+- Hosting(웹 UI): https://howardworld.web.app (기본 사이트).
+
+## 기타 계정 내 프로젝트
+- `halfred-fa78c`: halfred 생성 command 백업용으로 별도 생성 (이 레포와 별개, 2026-09 시점 미착수).
