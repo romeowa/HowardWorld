@@ -9,7 +9,8 @@ service cloud.firestore {
     // 링크(문서 ID)를 아는 사람만 접근. 전체 목록 조회(list)는 차단.
     match /trips/{tripId} {
       allow get, write: if true;
-      allow list: if false;
+      // 목록 조회는 관리자만(웹 /admin). 일반 사용자는 링크(get)로만 접근.
+      allow list: if request.auth != null && request.auth.token.email == 'romeowa@gmail.com';
       match /items/{itemId} {
         allow read, write: if true; // tripId(비밀 링크)를 아는 사람만 도달
       }

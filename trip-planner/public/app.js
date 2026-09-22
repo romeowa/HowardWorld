@@ -881,13 +881,45 @@ function paintAdmin(user) {
   const bar = h(`<div class="admin-bar"><span>${esc(user.email)}</span><span class="admin-actions"><select id="rangeSel"><option value="7">최근 7일</option><option value="14" selected>최근 14일</option><option value="30">최근 30일</option><option value="90">최근 90일</option></select><button class="btn ghost sm" id="signout">로그아웃</button></span></div>`);
   bar.querySelector("#signout").addEventListener("click", () => signOut(auth));
   wrap.appendChild(bar);
+  const tripsBox = h(`<div id="adminTrips"><div class="loading">불러오는 중…</div></div>`);
   const content = h(`<div id="adminContent"><div class="loading">불러오는 중…</div></div>`);
+  wrap.appendChild(tripsBox);
   wrap.appendChild(content);
   APP.appendChild(wrap);
 
+  loadTrips(tripsBox);
   const load = (days) => loadEvents(content, parseInt(days, 10));
   bar.querySelector("#rangeSel").addEventListener("change", (e) => load(e.target.value));
   load(14);
+}
+
+// 만들어진 여행 목록 (관리자 전용 — 규칙이 list를 관리자에게만 허용)
+async function loadTrips(container) {
+  let docs = [];
+  try {
+    const idToken = await auth.currentUser.getIdToken();
+    const body = { structuredQuery: { from: [{ collectionId: "trips" }], orderBy: [{ field: { fieldPath: "createdAt" }, direction: "DESCENDING" }], limit: 500 } };
+    const res = await fetch("https://firestore.googleapis.com/v1/projects/howardworld/databases/(default)/documents:runQuery", {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` }, body: JSON.stringify(body),
+    });
+    if (!res.ok) { container.innerHTML = `<div class="stat-box"><h3>여행</h3><div class="stat-row muted">조회 실패 (HTTP ${res.status})</div></div>`; return; }
+    docs = (await res.json()).filter((r) => r.document).map((r) => {
+      const f = r.document.fields || {}; const o = { id: r.document.name.split("/").pop() };
+      for (const k in f) o[k] = fsVal(f[k]);
+      return o;
+    });
+  } catch (e) {
+    container.innerHTML = `<div class="stat-box"><h3>여행</h3><div class="stat-row muted">조회 실패: ${esc(e.message || e)}</div></div>`;
+    return;
+  }
+  const rowsHtml = docs.map((t) => {
+    const start = t.startDate ? String(t.startDate) : null;
+    const range = start ? `${start}${t.dayCount > 1 ? ` · ${t.dayCount}일` : ""}` : "날짜 미정";
+    const made = t.createdAt instanceof Date ? t.createdAt.toLocaleDateString("ko-KR", { year: "2-digit", month: "short", day: "numeric" }) : "";
+    return `<a class="trip-row" href="/t/${t.id}"><span class="tr-bar" style="background:${TRIP_COLORS[hashId(t.id) % TRIP_COLORS.length]}"></span><span class="tr-body"><span class="tr-name">${esc(t.title || "제목 없음")}</span><span class="tr-sub">${esc(range)}${made ? ` · 생성 ${esc(made)}` : ""}</span></span><span class="tr-go">›</span></a>`;
+  }).join("");
+  container.innerHTML = `<div class="admin-total">여행 <b>${docs.length}</b>개</div><div class="stat-box">${rowsHtml || '<div class="stat-row muted">아직 만들어진 여행이 없어요</div>'}</div>`;
+  container.querySelectorAll(".trip-row").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); go(a.getAttribute("href")); }));
 }
 
 // Firestore REST 필드 → JS 값 (admin에서 필요한 타입만)
