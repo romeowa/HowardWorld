@@ -5,6 +5,9 @@ import {
   getDoc, getDocs, onSnapshot, serverTimestamp,
   query, where, orderBy, limit,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAx1DsvOcDSiDvPYG32Nw6wiFRQz8X5PB8",
@@ -22,6 +25,9 @@ try {
 } catch {
   db = getFirestore(app); // 미지원 환경 → 메모리 캐시 기본
 }
+
+// Auth를 시작 시점에 등록 → Firestore가 처음부터 인증 토큰을 첨부(관리자 조회에 필요)
+const auth = getAuth(app);
 
 // 서비스워커 등록 (앱 셸 오프라인)
 if ("serviceWorker" in navigator) {
@@ -840,24 +846,13 @@ function openEditor(existing) {
 // ---------- 관리자 (활동 로그) ----------
 // romeowa@gmail.com 구글 로그인일 때만 events 조회 가능(Firestore 규칙이 서버에서 강제).
 const ADMIN_EMAIL = "romeowa@gmail.com";
-let _auth = null;
 
-async function getAuthLib() {
-  const m = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
-  if (!_auth) _auth = m.getAuth(app);
-  return { m, auth: _auth };
-}
-
-async function renderAdmin() {
+function renderAdmin() {
   APP.innerHTML = `<div class="loading">관리자 확인 중…</div>`;
-  let lib;
-  try { lib = await getAuthLib(); }
-  catch { APP.innerHTML = `<div class="admin-wrap"><p class="sub">로그인 모듈을 불러오지 못했어요.</p></div>`; return; }
-  const { m, auth } = lib;
-  m.onAuthStateChanged(auth, (user) => paintAdmin(m, auth, user));
+  onAuthStateChanged(auth, (user) => paintAdmin(user));
 }
 
-function paintAdmin(m, auth, user) {
+function paintAdmin(user) {
   APP.innerHTML = "";
   const wrap = h(`<div class="admin-wrap"></div>`);
   wrap.appendChild(h(`<div class="admin-head"><h1>📊 활동 로그</h1><a class="admin-home" href="/">← 홈</a></div>`));
@@ -866,7 +861,7 @@ function paintAdmin(m, auth, user) {
   if (!user) {
     const box = h(`<div class="admin-card"><p class="sub">관리자 구글 계정으로 로그인하세요.</p><button class="btn" id="signin">Google로 로그인</button></div>`);
     box.querySelector("#signin").addEventListener("click", async () => {
-      try { await m.signInWithPopup(auth, new m.GoogleAuthProvider()); }
+      try { await signInWithPopup(auth, new GoogleAuthProvider()); }
       catch (e) { toast("로그인 실패: " + (e.code || e.message)); }
     });
     wrap.appendChild(box);
@@ -876,7 +871,7 @@ function paintAdmin(m, auth, user) {
 
   if (user.email !== ADMIN_EMAIL) {
     const box = h(`<div class="admin-card"><p class="sub">이 계정(<b>${esc(user.email)}</b>)은 접근 권한이 없습니다.</p><button class="btn ghost" id="signout">로그아웃</button></div>`);
-    box.querySelector("#signout").addEventListener("click", () => m.signOut(auth));
+    box.querySelector("#signout").addEventListener("click", () => signOut(auth));
     wrap.appendChild(box);
     APP.appendChild(wrap);
     return;
@@ -884,7 +879,7 @@ function paintAdmin(m, auth, user) {
 
   // 관리자 확인됨 → events 로드
   const bar = h(`<div class="admin-bar"><span>${esc(user.email)}</span><span class="admin-actions"><select id="rangeSel"><option value="7">최근 7일</option><option value="14" selected>최근 14일</option><option value="30">최근 30일</option><option value="90">최근 90일</option></select><button class="btn ghost sm" id="signout">로그아웃</button></span></div>`);
-  bar.querySelector("#signout").addEventListener("click", () => m.signOut(auth));
+  bar.querySelector("#signout").addEventListener("click", () => signOut(auth));
   wrap.appendChild(bar);
   const content = h(`<div id="adminContent"><div class="loading">불러오는 중…</div></div>`);
   wrap.appendChild(content);
@@ -905,7 +900,7 @@ async function loadEvents(container, days) {
   } catch (e) {
     let diag = "";
     try {
-      const u = _auth && _auth.currentUser;
+      const u = auth.currentUser;
       if (u) { const tr = await u.getIdTokenResult(true); diag = `<div class="admin-diag">토큰 email: <b>${esc(tr.claims.email || "(없음)")}</b> · verified: ${String(tr.claims.email_verified)} · provider: ${esc(tr.signInProvider || "?")}</div>`; }
     } catch {}
     container.innerHTML = `<div class="admin-card"><p class="sub">조회 실패: ${esc(e.code || e.message)}</p>${diag}</div>`;
