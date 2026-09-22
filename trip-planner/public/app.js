@@ -144,6 +144,7 @@ const dayDiff = (a, b) => Math.round((b - a) / 86400000);
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 const fmtMD = (d) => `${d.getMonth() + 1}.${d.getDate()}`;
+const fmtWon = (n) => new Intl.NumberFormat("ko-KR").format(Math.round(n)) + "원";
 
 let homeMonth = null;          // 현재 보는 달 (해당 월 1일 Date)
 let homeView = "month";        // "month" | "list"
@@ -430,6 +431,11 @@ function paint() {
   const pinned = dayItems.filter((it) => it.lat != null);
   const hasMap = pinned.length > 0;
 
+  // 비용 합계
+  const people = Math.max(1, trip.people || 1);
+  const dayCost = dayItems.reduce((s, it) => s + (it.cost || 0), 0);
+  const tripCost = items.reduce((s, it) => s + (it.cost || 0), 0);
+
   APP.innerHTML = "";
   // 상단 바 (지도 있으면 넓은 폭으로)
   const bar = h(`
@@ -456,6 +462,8 @@ function paint() {
     <label>시작 <input type="date" id="startDate" value="${trip.startDate || ""}"/></label>
     <label>종료 <input type="date" id="endDate" value="${endVal}" min="${trip.startDate || ""}" ${trip.startDate ? "" : "disabled title='시작일을 먼저 선택하세요'"}/></label>
     <span class="count">${trip.dayCount}일 · ${items.length}곳</span>
+    <span class="people">인원 <button class="ppl-btn" id="pplMinus" title="줄이기">−</button><b id="pplN">${people}</b><button class="ppl-btn" id="pplPlus" title="늘리기">+</button></span>
+    ${tripCost ? `<span class="trip-total">총 ${fmtWon(tripCost)}${people > 1 ? ` · 1인 ${fmtWon(tripCost / people)}` : ""}</span>` : ""}
   </div>`);
   meta.querySelector("#startDate").addEventListener("change", (e) =>
     updateDoc(doc(db, "trips", tripId), { startDate: e.target.value || null }));
@@ -465,6 +473,8 @@ function paint() {
     if (days < 1) { toast("종료일이 시작일보다 빨라요"); paint(); return; }
     updateDoc(doc(db, "trips", tripId), { dayCount: days });
   });
+  meta.querySelector("#pplMinus").addEventListener("click", () => updateDoc(doc(db, "trips", tripId), { people: Math.max(1, people - 1) }));
+  meta.querySelector("#pplPlus").addEventListener("click", () => updateDoc(doc(db, "trips", tripId), { people: people + 1 }));
   shell.appendChild(meta);
 
   // Day 탭
@@ -494,6 +504,11 @@ function paint() {
     if (next && it.lat != null && next.lat != null) list.appendChild(legRow(it, next));
   });
   main.appendChild(list);
+
+  // 이 날 비용 합계
+  if (dayCost) {
+    main.appendChild(h(`<div class="day-total">이 날 합계 <b>${fmtWon(dayCost)}</b>${people > 1 ? ` · 1인 ${fmtWon(dayCost / people)}` : ""}</div>`));
+  }
 
   // 추가 버튼 (주요 액션)
   const addRow = h(`<div class="add-row"><button class="btn block" id="addItem">+ 장소 추가</button></div>`);
@@ -632,6 +647,7 @@ function itemCard(it) {
         </div>
         ${it.address ? `<div class="tl-addr">${mapLink ? `<a href="${mapLink}" target="_blank" rel="noopener">${esc(it.address)}<span class="tl-ext"> ↗</span></a>` : esc(it.address)}</div>` : ""}
         ${it.memo ? `<div class="tl-memo">${esc(it.memo)}</div>` : ""}
+        ${it.cost ? `<div class="tl-cost">💰 ${fmtWon(it.cost)}</div>` : ""}
       </div>
     </div>`);
   row.querySelector(".edit").addEventListener("click", (e) => { e.stopPropagation(); openEditor(it); });
@@ -724,7 +740,7 @@ let pickMap = null, pickMarker = null, editState = null;
 function openEditor(existing) {
   editState = existing
     ? { ...existing }
-    : { day: curDay, type: "place", name: "", address: "", lat: null, lng: null, time: "", memo: "" };
+    : { day: curDay, type: "place", name: "", address: "", lat: null, lng: null, time: "", memo: "", cost: null };
 
   const bg = h(`<div class="modal-bg"></div>`);
   const modal = h(`
@@ -745,7 +761,10 @@ function openEditor(existing) {
       </div>
       <div class="field"><label>이름</label><input id="name" value="${esc(editState.name)}" placeholder="장소/메뉴/활동 이름" /></div>
       <div class="field"><label>주소 · 위치</label><input id="address" value="${esc(editState.address)}" placeholder="주소 또는 위치 설명" /></div>
-      <div class="field"><label>시간</label><input id="time" type="time" value="${esc(editState.time)}" /></div>
+      <div class="field-row">
+        <div class="field"><label>시간</label><input id="time" type="time" value="${esc(editState.time)}" /></div>
+        <div class="field"><label>비용 (원)</label><input id="cost" type="number" inputmode="numeric" min="0" step="1000" placeholder="예: 30000" value="${editState.cost ?? ""}" /></div>
+      </div>
       <div class="field"><label>메모</label><textarea id="memo" placeholder="예약 정보, 팁, 준비물…">${esc(editState.memo)}</textarea></div>
       <div class="modal-actions">
         <button class="btn ghost" id="cancel">${existing ? "취소" : "닫기"}</button>
@@ -879,10 +898,12 @@ function openEditor(existing) {
     editState.address = addrEl.value.trim();
     editState.time = modal.querySelector("#time").value;
     editState.memo = modal.querySelector("#memo").value.trim();
+    const costRaw = modal.querySelector("#cost").value;
+    editState.cost = costRaw === "" ? null : Math.max(0, Math.round(parseFloat(costRaw)) || 0);
     if (!editState.name && !editState.address && !editState.memo) { toast("이름이나 메모를 입력해 주세요"); return; }
     const data = {
       day: editState.day, type: editState.type, name: editState.name, address: editState.address,
-      lat: editState.lat, lng: editState.lng, time: editState.time, memo: editState.memo,
+      lat: editState.lat, lng: editState.lng, time: editState.time, memo: editState.memo, cost: editState.cost,
     };
     try {
       if (existing) {
@@ -893,8 +914,9 @@ function openEditor(existing) {
         // 모달을 닫지 않고 폼만 비워 이어서 입력 (날짜·종류는 유지)
         toast(`추가됨 — 이어서 입력하세요`);
         nameEl.value = ""; addrEl.value = "";
-        modal.querySelector("#time").value = ""; modal.querySelector("#memo").value = "";
+        modal.querySelector("#time").value = ""; modal.querySelector("#memo").value = ""; modal.querySelector("#cost").value = "";
         editState.name = editState.address = editState.time = editState.memo = "";
+        editState.cost = null;
         editState.lat = editState.lng = null;
         if (pickMarker) { pickMarker.setMap(null); pickMarker = null; }
         updatePicked();
