@@ -151,6 +151,7 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .tl-addr { font-size: 13px; color: var(--muted); }
 .tl-addr a { color: var(--muted); text-decoration: none; }
 .tl-addr a:hover { color: var(--accent); text-decoration: underline; }
+.tl-ext { color: var(--muted); font-size: 11px; }
 .tl-memo {
   font-size: 13.5px; line-height: 1.5; color: var(--muted-2);
   background: var(--surface); border-radius: 10px; padding: 8px 10px; white-space: pre-wrap;

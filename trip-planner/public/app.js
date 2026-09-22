@@ -170,10 +170,6 @@ async function renderHome() {
         </span>
       </div>
       <div class="cal-actions">
-        <span class="cal-toggle">
-          <button class="${homeView === "month" ? "on" : ""}" id="vMonth">월</button>
-          <button class="${homeView === "list" ? "on" : ""}" id="vList">목록</button>
-        </span>
         <button class="btn sm" id="newTrip">+ 새 여행</button>
       </div>
     </div>`);
@@ -182,11 +178,8 @@ async function renderHome() {
   header.querySelector("#prevM").addEventListener("click", () => { homeMonth = new Date(y, m - 1, 1); renderHome(); });
   header.querySelector("#nextM").addEventListener("click", () => { homeMonth = new Date(y, m + 1, 1); renderHome(); });
   header.querySelector("#todayBtn").addEventListener("click", () => { const n = new Date(); homeMonth = new Date(n.getFullYear(), n.getMonth(), 1); renderHome(); });
-  header.querySelector("#vMonth").addEventListener("click", () => { homeView = "month"; renderHome(); });
-  header.querySelector("#vList").addEventListener("click", () => { homeView = "list"; renderHome(); });
 
-  if (homeView === "month") shell.appendChild(buildCalendar(homeMonth, trips));
-  else shell.appendChild(buildTripList(trips));
+  shell.appendChild(buildCalendar(homeMonth, trips));
 
   APP.appendChild(shell);
   APP.appendChild(promoFooter());
@@ -480,7 +473,7 @@ function itemCard(it) {
             <button class="del" title="삭제">🗑️</button>
           </span>
         </div>
-        ${it.address ? `<div class="tl-addr">${mapLink ? `<a href="${mapLink}" target="_blank" rel="noopener">📍 ${esc(it.address)}</a>` : esc(it.address)}</div>` : ""}
+        ${it.address ? `<div class="tl-addr">${mapLink ? `<a href="${mapLink}" target="_blank" rel="noopener">${esc(it.address)}<span class="tl-ext"> ↗</span></a>` : esc(it.address)}</div>` : ""}
         ${it.memo ? `<div class="tl-memo">${esc(it.memo)}</div>` : ""}
       </div>
     </div>`);
