@@ -44,13 +44,7 @@ exports.share = onRequest(
     }
 
     const url = `${BASE}${req.path}`;
-    const html = `<!DOCTYPE html>
-<html lang="ko"><head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-<title>${esc(title)} · 여행 일정</title>
-<meta name="description" content="${esc(desc)}"/>
-<meta property="og:type" content="website"/>
+    const ogMeta = `<meta property="og:type" content="website"/>
 <meta property="og:site_name" content="여행 일정"/>
 <meta property="og:title" content="${esc(title)}"/>
 <meta property="og:description" content="${esc(desc)}"/>
@@ -61,19 +55,20 @@ exports.share = onRequest(
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="${esc(title)}"/>
 <meta name="twitter:description" content="${esc(desc)}"/>
-<meta name="twitter:image" content="${BASE}/og.png"/>
-<meta name="theme-color" content="#f2f0ec"/>
-<link rel="apple-touch-icon" href="/icon-192.png"/>
-<link rel="manifest" href="/manifest.json"/>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="/styles.css"/>
-</head><body>
-<div id="app"><div class="loading">불러오는 중…</div></div>
-<script src="/config.js"></script>
-<script type="module" src="/app.js"></script>
-</body></html>`;
+<meta name="twitter:image" content="${BASE}/og.png"/>`;
+
+    // 배포된 최신 index.html을 가져와 OG 태그만 주입 → 앱 셸(버전 붙은 app.js 등)이 항상 최신
+    let html;
+    try {
+      const shellRes = await fetch(`${BASE}/index.html`, { cache: "no-store" });
+      html = await shellRes.text();
+      html = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${esc(title)} · 여행 일정</title>`);
+      html = html.replace(/<meta name="description"[^>]*>/, `<meta name="description" content="${esc(desc)}"/>`);
+      html = html.replace("</head>", ogMeta + "\n</head>");
+    } catch (e) {
+      console.error("shell fetch 실패", e);
+      html = `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/><title>${esc(title)} · 여행 일정</title><meta name="description" content="${esc(desc)}"/>${ogMeta}<link rel="stylesheet" href="/styles.css"/></head><body><div id="app"><div class="loading">불러오는 중…</div></div><script src="/config.js"></script><script type="module" src="/app.js"></script></body></html>`;
+    }
 
     // 미리보기 캐시는 짧게(제목 변경 반영 지연 최소화), 브라우저는 매번 새로
     res.set("Cache-Control", "no-cache, s-maxage=120");
