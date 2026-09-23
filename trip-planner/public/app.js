@@ -214,39 +214,26 @@ const fmtMD = (d) => `${d.getMonth() + 1}.${d.getDate()}`;
 
 let homeMonth = null;          // 현재 보는 달 (해당 월 1일 Date)
 let homeView = "month";        // "month" | "list"
+let homeTrips = [];            // 홈에 표시 중인 여행 (메모리 캐시)
 
-async function renderHome() {
-  APP.innerHTML = `<div class="loading">불러오는 중…</div>`;
-
-  // 이 기기에 저장된 최근 연 여행만
+// 홈: localStorage 캐시로 즉시 렌더 → 백그라운드로 Firestore 최신화
+function renderHome() {
   let recent = [];
   try { recent = JSON.parse(localStorage.getItem("recentTrips") || "[]"); } catch {}
-  const arr = new Array(recent.length).fill(null);
-  // getDoc이 지연/응답없음이어도 홈이 멈추지 않도록 타임아웃(캐시 정보로 폴백)
-  const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
-  await Promise.all(recent.map(async (r, i) => {
-    try {
-      const snap = await withTimeout(getDoc(doc(db, "trips", r.id)), 5000);
-      if (!snap.exists()) return;
-      const d = snap.data();
-      arr[i] = { id: r.id, title: d.title || "제목 없는 여행", startDate: d.startDate || null, dayCount: d.dayCount || 1, ts: r.ts || 0 };
-    } catch {
-      arr[i] = { id: r.id, title: r.title || "제목 없는 여행", startDate: r.startDate ?? null, dayCount: r.dayCount ?? 1, ts: r.ts || 0 };
-    }
-  }));
-  const trips = arr.filter(Boolean).filter((t) => !pendingDeletes.has(t.id));
-  try { localStorage.setItem("recentTrips", JSON.stringify(trips.map((t) => ({ id: t.id, title: t.title, startDate: t.startDate, dayCount: t.dayCount, ts: t.ts })))); } catch {}
-  trips.forEach((t) => { t.color = TRIP_COLORS[hashId(t.id) % TRIP_COLORS.length]; });
+  homeTrips = recent
+    .map((r) => ({ id: r.id, title: r.title || "제목 없는 여행", startDate: r.startDate ?? null, dayCount: r.dayCount ?? 1, ts: r.ts || 0 }))
+    .filter((t) => !pendingDeletes.has(t.id));
+  paintHome();
+  refreshHomeTrips(recent);
+}
 
-  if (!homeMonth) {
-    const now = new Date();
-    homeMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  }
+// 순수 렌더 (네트워크 대기 없음) — 달 이동도 이걸로 즉시 다시 그림
+function paintHome() {
+  homeTrips.forEach((t) => { t.color = TRIP_COLORS[hashId(t.id) % TRIP_COLORS.length]; });
+  if (!homeMonth) { const now = new Date(); homeMonth = new Date(now.getFullYear(), now.getMonth(), 1); }
 
   APP.innerHTML = "";
   const shell = h(`<div class="home-shell"></div>`);
-
-  // 헤더
   const y = homeMonth.getFullYear(), m = homeMonth.getMonth();
   const header = h(`
     <div class="cal-head">
@@ -268,14 +255,35 @@ async function renderHome() {
   header.querySelector("#newTrip").addEventListener("click", createTrip);
   header.querySelector("#importAll").addEventListener("click", importTripsFromHome);
   header.querySelector("#exportAll").addEventListener("click", (e) => exportAllTrips(e.currentTarget));
-  header.querySelector("#prevM").addEventListener("click", () => { homeMonth = new Date(y, m - 1, 1); renderHome(); });
-  header.querySelector("#nextM").addEventListener("click", () => { homeMonth = new Date(y, m + 1, 1); renderHome(); });
-  header.querySelector("#todayBtn").addEventListener("click", () => { const n = new Date(); homeMonth = new Date(n.getFullYear(), n.getMonth(), 1); renderHome(); });
+  header.querySelector("#prevM").addEventListener("click", () => { homeMonth = new Date(y, m - 1, 1); paintHome(); });
+  header.querySelector("#nextM").addEventListener("click", () => { homeMonth = new Date(y, m + 1, 1); paintHome(); });
+  header.querySelector("#todayBtn").addEventListener("click", () => { const n = new Date(); homeMonth = new Date(n.getFullYear(), n.getMonth(), 1); paintHome(); });
 
-  shell.appendChild(buildCalendar(homeMonth, trips));
-
+  shell.appendChild(buildCalendar(homeMonth, homeTrips));
   APP.appendChild(shell);
   APP.appendChild(promoFooter());
+}
+
+// 백그라운드: 각 여행 최신 정보 조회 → 캐시 갱신, 달라졌을 때만 다시 그림
+async function refreshHomeTrips(recent) {
+  if (!recent.length) return;
+  const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
+  const arr = new Array(recent.length).fill(null);
+  await Promise.all(recent.map(async (r, i) => {
+    try {
+      const snap = await withTimeout(getDoc(doc(db, "trips", r.id)), 5000);
+      if (!snap.exists()) return; // 삭제됨 → 목록에서 제외
+      const d = snap.data();
+      arr[i] = { id: r.id, title: d.title || "제목 없는 여행", startDate: d.startDate || null, dayCount: d.dayCount || 1, ts: r.ts || 0 };
+    } catch {
+      arr[i] = { id: r.id, title: r.title || "제목 없는 여행", startDate: r.startDate ?? null, dayCount: r.dayCount ?? 1, ts: r.ts || 0 };
+    }
+  }));
+  const fresh = arr.filter(Boolean).filter((t) => !pendingDeletes.has(t.id));
+  try { localStorage.setItem("recentTrips", JSON.stringify(fresh.map((t) => ({ id: t.id, title: t.title, startDate: t.startDate, dayCount: t.dayCount, ts: t.ts })))); } catch {}
+  if (location.pathname !== "/") return;
+  const sig = (list) => JSON.stringify(list.map((t) => [t.id, t.title, t.startDate, t.dayCount]));
+  if (sig(fresh) !== sig(homeTrips)) { homeTrips = fresh; paintHome(); }
 }
 
 // 달력 그리드 + 여행 막대

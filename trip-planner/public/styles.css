@@ -17,7 +17,7 @@
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 body {
-  font-family: "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
+  font-family: "IBM Plex Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
   background: var(--bg); color: var(--text); line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   padding-bottom: env(safe-area-inset-bottom);
@@ -528,7 +528,7 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .stl-tally .tl-head span:first-child { text-align: left; }
 .stl-tally .tl-row { font-size: 13px; padding: 7px 0; text-align: right; font-family: var(--mono); border-bottom: 1px solid var(--line-soft); }
 .stl-tally .tl-row:last-child { border-bottom: none; }
-.stl-tally .tl-nm { display: flex; align-items: center; gap: 7px; text-align: left; font-family: "Pretendard", sans-serif; color: var(--text); }
+.stl-tally .tl-nm { display: flex; align-items: center; gap: 7px; text-align: left; font-family: "IBM Plex Sans KR", sans-serif; color: var(--text); }
 .stl-tally .tl-net { font-weight: 700; }
 
 /* 송금 제안 */
