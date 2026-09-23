@@ -906,11 +906,21 @@ async function openMapSheet(focus) {
   bg.hidden = false;
   const el = document.getElementById("dayMapSheet");
   if (el) el.innerHTML = "";
-  await renderDayMap(currentPinned, "dayMapSheet");
   if (focus && focus.lat != null) {
-    panTo(focus);
-    const m = markerById[focus.id];
-    if (m) m.info.open({ map: dayMap, anchor: m.mk });
+    // 특정 장소에서 열면 그 장소 한 곳만 점으로 표시 (전체 루트 X)
+    await google.maps.importLibrary("maps");
+    const pos = { lat: focus.lat, lng: focus.lng };
+    const map = new google.maps.Map(el, {
+      center: pos, zoom: 15, mapTypeControl: false, streetViewControl: false, fullscreenControl: false, gestureHandling: "greedy",
+    });
+    const mk = new google.maps.Marker({ position: pos, map });
+    new google.maps.InfoWindow({
+      content: `<div style="color:#1f2937;font-size:13px;line-height:1.45"><b>${esc(focus.name || "")}</b>${focus.time ? "<br>" + esc(focus.time) : ""}</div>`,
+    }).open({ map, anchor: mk });
+    dayMap = map;
+  } else {
+    // FAB '지도'로 열면 전체 루트 표시
+    await renderDayMap(currentPinned, "dayMapSheet");
   }
 }
 function closeMapSheet() { const bg = document.getElementById("mapSheetBg"); if (bg) bg.hidden = true; }
