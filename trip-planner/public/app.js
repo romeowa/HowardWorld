@@ -1057,6 +1057,12 @@ function renderSettleView(shell) {
   });
   view.appendChild(memSec);
 
+  // 모바일 '지출 추가' — 참여자 바로 아래. 예전에는 요약·정산을 지나 목록까지 내려가야
+  // 보였다. 데스크톱은 목록 위 빠른 추가 폼을 쓰므로 이 버튼을 감춘다(.stl-add).
+  const addBtn = h(`<button class="btn block stl-add">＋ 지출 추가</button>`);
+  addBtn.addEventListener("click", () => { if (!tripMembers().length) { toast("먼저 참여자를 추가해 주세요"); return; } openExpenseForm(null); });
+  view.appendChild(addBtn);
+
   const { names, share, paid, transfers, total } = computeSettlement();
   const avg = members.length ? total / members.length : (names.length ? total / names.length : 0);
 
@@ -1122,10 +1128,6 @@ function renderSettleView(shell) {
   // --- 내역 ---
   if (members.length) main.appendChild(buildInlineAdd(members, tripCats())); // 데스크톱 빠른 추가
   main.appendChild(h(`<div class="stl-listlabel">지출 내역</div>`));
-  const addBtn = h(`<button class="btn block stl-add">＋ 지출 추가</button>`);
-  addBtn.addEventListener("click", () => { if (!tripMembers().length) { toast("먼저 참여자를 추가해 주세요"); return; } openExpenseForm(null); });
-  main.appendChild(addBtn);
-
   const groups = new Map();
   expenses.forEach((e) => { const k = expDay(e); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(e); });
   const keys = [...groups.keys()].sort((a, b) => (a === "off" ? 1 : b === "off" ? -1 : a - b));

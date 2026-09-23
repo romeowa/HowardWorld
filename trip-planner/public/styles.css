@@ -568,7 +568,8 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .ef-amount input { flex: 1; min-width: 0; border: none; background: transparent; outline: none; font-family: var(--mono); font-size: 40px; font-weight: 700; letter-spacing: -.03em; color: var(--text); padding: 0; }
 .ef-amount span { font-size: 19px; color: var(--muted-2); }
 .ef-per { font-family: var(--mono); font-size: 13px; color: var(--muted); margin: 8px 0 12px; }
-.ef-desc { width: 100%; height: 46px; border: 1px solid var(--line); border-radius: 11px; padding: 0 13px; font-size: 15px; background: var(--card); color: var(--text); }
+/* 구분 칩 줄과는 한 칸 더 띄운다 — 칩이 크고 성격도 달라 9px 은 붙어 보인다. */
+.ef-desc { margin-top: 3px; width: 100%; height: 46px; border: 1px solid var(--line); border-radius: 11px; padding: 0 13px; font-size: 15px; background: var(--card); color: var(--text); }
 .ef-desc:focus { outline: none; border-color: var(--accent); }
 .ef-field { display: flex; flex-direction: column; gap: 9px; margin-top: 16px; }
 .ef-lbl { font-size: 13px; font-weight: 600; color: var(--muted-2); }
