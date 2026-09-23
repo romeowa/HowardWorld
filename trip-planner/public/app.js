@@ -468,6 +468,7 @@ const DEFAULT_CATS = ["숙박", "식사", "교통", "간식", "관광", "기타"
 let expenses = [];             // [{id, date, category, desc, amount, payer, sharedBy:[names], place, day}]
 let unsubExpenses = null;      // 정산 내역 실시간 구독 (여행 화면 동안 유지)
 let tripTab = "plan";          // "plan"(일정) | "settle"(정산)
+let inlineAdd = null;          // 데스크톱 상단 인라인 추가 폼 상태 {day, date, category, payer}
 const won = (n) => (Math.round(Number(n) || 0)).toLocaleString("ko-KR");
 
 // 참여자 색상 팔레트 (이름 → 아바타 색)
@@ -481,7 +482,7 @@ const initOf = (name) => (String(name || "?").trim()[0] || "?").toUpperCase();
 
 function renderTrip(id) {
   tripId = id;
-  trip = null; items = []; expenses = []; curDay = 0; viewDay = null; dayMap = null; tripTab = "plan";
+  trip = null; items = []; expenses = []; curDay = 0; viewDay = null; dayMap = null; tripTab = "plan"; inlineAdd = null;
   const remember = !skipRememberOnce; skipRememberOnce = false;
   APP.innerHTML = `<div class="loading">여행을 불러오는 중…</div>`;
   if (remember) logEvent("trip_open", { trip: id });
@@ -1101,6 +1102,8 @@ function renderSettleView(shell) {
   side.appendChild(trf);
 
   // --- 내역(일자별) ---
+  // 데스크톱: 상단 인라인 빠른 추가 폼 / 모바일: 큰 버튼 → 3b 모달
+  if (members.length) main.appendChild(buildInlineAdd(members, tripCats()));
   const addBtn = h(`<button class="btn block stl-add">＋ 지출 추가</button>`);
   addBtn.addEventListener("click", () => { if (!tripMembers().length) { toast("먼저 참여자를 추가해 주세요"); return; } openExpenseForm(null); });
   main.appendChild(addBtn);
@@ -1125,6 +1128,79 @@ function renderSettleView(shell) {
   body.appendChild(side);
   view.appendChild(body);
   shell.appendChild(view);
+}
+
+// 데스크톱 상단 인라인 빠른 추가 폼 (3a desktop) — 전원 나눔 기준, 세부 조정은 행 클릭(3b 모달)
+function buildInlineAdd(members, cats) {
+  if (!inlineAdd) inlineAdd = { day: 0, date: dateForDay(0), category: cats[0], payer: members[0] };
+  if (!cats.includes(inlineAdd.category)) inlineAdd.category = cats[0];
+  if (!members.includes(inlineAdd.payer)) inlineAdd.payer = members[0];
+  if (inlineAdd.day >= (trip.dayCount || 1)) { inlineAdd.day = 0; inlineAdd.date = dateForDay(0); }
+
+  const box = h(`<div class="stl-inline-add">
+    <div class="ia-days"></div>
+    <span class="ia-sep"></span>
+    <div class="ia-cats"></div>
+    <input class="ia-desc" placeholder="내역" />
+    <input class="ia-amt" inputmode="numeric" placeholder="금액" />
+    <span class="ia-lbl">결제</span>
+    <div class="ia-payers"></div>
+    <button class="btn sm ia-submit">추가</button>
+  </div>`);
+  const daysW = box.querySelector(".ia-days");
+  const catsW = box.querySelector(".ia-cats");
+  const payW = box.querySelector(".ia-payers");
+  const descEl = box.querySelector(".ia-desc");
+  const amtEl = box.querySelector(".ia-amt");
+
+  const renderDays = () => {
+    daysW.innerHTML = "";
+    for (let i = 0; i < (trip.dayCount || 1); i++) {
+      const { top } = dayLabel(trip.startDate, i);
+      const on = inlineAdd.day === i;
+      const b = h(`<button type="button" class="ia-chip ${on ? "on" : ""}">${top}</button>`);
+      b.addEventListener("click", () => { inlineAdd.day = i; inlineAdd.date = dateForDay(i); renderDays(); });
+      daysW.appendChild(b);
+    }
+  };
+  const renderCats = () => {
+    catsW.innerHTML = "";
+    cats.forEach((c) => {
+      const on = inlineAdd.category === c;
+      const b = h(`<button type="button" class="ia-chip ${on ? "on" : ""}" style="${on ? `background:${catColor(c)};border-color:${catColor(c)};color:#fff` : ""}">${esc(c)}</button>`);
+      b.addEventListener("click", () => { inlineAdd.category = c; renderCats(); });
+      catsW.appendChild(b);
+    });
+  };
+  const renderPay = () => {
+    payW.innerHTML = "";
+    members.forEach((m) => {
+      const on = inlineAdd.payer === m;
+      const b = h(`<button type="button" class="ia-av ${on ? "on" : ""}" title="결제: ${esc(m)}" style="${on ? `background:${memberColor(m)};border-color:${memberColor(m)};color:#fff` : ""}">${esc(initOf(m))}</button>`);
+      b.addEventListener("click", () => { inlineAdd.payer = m; renderPay(); });
+      payW.appendChild(b);
+    });
+  };
+  renderDays(); renderCats(); renderPay();
+
+  const submit = async () => {
+    const amt = Number(amtEl.value) || 0;
+    if (!amt) { toast("금액을 입력해 주세요"); amtEl.focus(); return; }
+    const data = {
+      amount: amt, desc: descEl.value.trim(), category: inlineAdd.category || "기타",
+      day: inlineAdd.day, date: inlineAdd.date || dateForDay(inlineAdd.day) || "",
+      place: "", payer: inlineAdd.payer || "", sharedBy: [...members],
+    };
+    try {
+      await addDoc(collection(db, "trips", tripId, "expenses"), { ...data, order: Date.now(), createdAt: serverTimestamp() });
+      logEvent("expense_add", { trip: tripId });
+      toast("추가됨 — 전원 나눔");
+    } catch (e) { toast("저장 실패: " + e.message); }
+  };
+  box.querySelector(".ia-submit").addEventListener("click", submit);
+  descEl.addEventListener("keydown", (e) => { if (e.key === "Enter") amtEl.focus(); });
+  amtEl.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  return box;
 }
 
 function expenseRow(e, members) {
