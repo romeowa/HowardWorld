@@ -757,6 +757,36 @@ function paint() {
   if (pinned.length) renderDayMap(pinned);
 }
 
+// ---------- 날씨 (Open-Meteo · API 키 불필요) ----------
+const WMO_EMOJI = (code) => {
+  if (code === 0) return "☀️";
+  if (code === 1 || code === 2) return "⛅";
+  if (code === 3) return "☁️";
+  if (code === 45 || code === 48) return "🌫️";
+  if (code >= 51 && code <= 57) return "🌦️";
+  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return "🌧️";
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "🌨️";
+  if (code >= 95) return "⛈️";
+  return "🌡️";
+};
+const weatherCache = new Map(); // key -> Promise<{code,tmax,tmin}|null>
+function getWeather(date, lat, lng) {
+  const key = `${date}|${lat.toFixed(2)}|${lng.toFixed(2)}`;
+  if (weatherCache.has(key)) return weatherCache.get(key);
+  const p = (async () => {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&start_date=${date}&end_date=${date}`;
+    const res = await fetch(url);
+    const j = await res.json();
+    const d = j.daily;
+    if (d && d.time && d.time.length && d.temperature_2m_max[0] != null) {
+      return { code: d.weather_code[0], tmax: Math.round(d.temperature_2m_max[0]), tmin: Math.round(d.temperature_2m_min[0]) };
+    }
+    return null; // 예보 범위 밖(대략 -92일~+16일) 등
+  })().catch(() => { weatherCache.delete(key); return null; });
+  weatherCache.set(key, p);
+  return p;
+}
+
 function itemCard(it) {
   const t = TYPES[it.type] || TYPES.note;
   // 주소 클릭 → 구글맵에서 해당 좌표 열기 (정확한 위치, 모바일에선 앱/웹뷰)
@@ -769,6 +799,7 @@ function itemCard(it) {
         <div class="tl-head">
           <span class="tl-emoji">${t.emoji}</span>
           <span class="tl-name">${esc(it.name) || t.label}</span>
+          <span class="tl-weather"></span>
           <span class="tl-acts">
             <button class="edit" title="수정">✏️</button>
             <button class="del" title="삭제">🗑️</button>
@@ -779,6 +810,14 @@ function itemCard(it) {
         ${it.lat != null ? `<div class="tl-inlinemap"></div>` : ""}
       </div>
     </div>`);
+  // 날짜(시작일+day)와 위치(핀)가 있으면 그 날/장소의 날씨 표시
+  const wEl = row.querySelector(".tl-weather");
+  if (wEl && trip && trip.startDate && it.lat != null && Number.isInteger(it.day)) {
+    const wdate = ymd(addDays(parseDate(trip.startDate), it.day));
+    getWeather(wdate, it.lat, it.lng).then((w) => {
+      if (w) { wEl.textContent = `${WMO_EMOJI(w.code)} ${w.tmax}°/${w.tmin}°`; wEl.title = `${wdate} 예보 · 최고 ${w.tmax}° / 최저 ${w.tmin}°`; }
+    });
+  }
   row.querySelector(".edit").addEventListener("click", (e) => { e.stopPropagation(); openEditor(it); });
   row.querySelector(".del").addEventListener("click", (e) => {
     e.stopPropagation();
