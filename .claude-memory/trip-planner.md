@@ -15,6 +15,7 @@ trip-planner: 링크 하나로 함께 짜는 여행 일정 공유 웹앱. 공용
 - 날씨: 일정 항목에 핀(lat/lng)+날짜(startDate+day)가 있으면 **Open-Meteo 예보**(api.open-meteo.com/v1/forecast, 무료·키 불필요)로 아이콘+최고/최저 기온 칩(.tl-weather) 표시. getWeather(date,lat,lng)가 좌표 소수2자리+날짜로 캐시. 예보 범위(약 -92~+16일) 밖이면 표시 안 함.
 - 지도·검색: **구글맵(Maps JavaScript API) + 구글 Places Text Search(New)**. (원래 OSM/Leaflet+Nominatim이었으나 아시아권 한글 검색이 약해 전환.) 핀 드롭 시 주소 역지오코딩만 무료 Nominatim 유지.
 - 구글 API 키: 리퍼러(howard-trips.web.app/*) + Places/Maps JS API로 제한된 **브라우저 키**. gcloud로 생성/관리. 키는 **public/config.js(gitignore)** 에 넣어 주입 — 소스/깃엔 미포함(브라우저엔 어차피 노출되지만 리퍼러 제한이 방어선). app.js는 window.TRIP_CONFIG.googleKey 사용.
+- 일정 화면 다듬기(1c/1d): 상단 ⋯ 더보기 메뉴(.tb-menu/.tb-dropdown)에 내보내기/가져오기(새 여행)/삭제 모음(하단 버튼 제거). 주소 한 줄(말줄임). 수정·삭제는 데스크톱 hover 시에만(@media hover), 모바일은 헤더 액션 숨기고 탭으로. 데스크톱(≥960)=우측 스티키 지도(#dayMap)+항목 클릭 시 인라인 미니지도. 모바일(<960)=목록 아래 지도 없음, 우하단 '🗺 지도' FAB→하단 지도 시트(openMapSheet, #dayMapSheet), 항목 탭→[지도(시트 열기)·길찾기·수정·삭제] 인라인 버튼(toggleActions). renderDayMap(pinned, elId) 공용. isMobileView()=matchMedia(max-width:959).
 - UI: 홈은 월별 달력 뷰(여행을 색 바로 표시) + 이 기기 localStorage 최근 목록만. 여행 화면은 전체 일정 리스트(Day별 섹션) + 상단 '전체'/날짜 탭(전체=다 보기, 날짜=그 날만 필터). 항목(장소/식사/액티비티/메모) 시간순 자동 정렬, 시간 입력은 24시간 시/분 드롭다운. 항목 클릭 시 아래로 확장되며 인라인 미니지도(핀 1개). 항목 "저장 후 계속" 연속 입력. 주소 클릭 시 구글맵 열기.
 - 광고: 피그맵/니니구(만든 사람의 다른 앱), 리스트 맨 끝에 붙임(화면 하단 고정 아님).
 - 디자인: Claude Design 시안 기반 웜 라이트 타임라인(1a) + 월별 달력 홈(2a). IBM Plex Sans KR + JetBrains Mono. 여행 화면은 넓으면 타임라인|지도 2단, 좁으면 세로 1단(반응형).
