@@ -1,9 +1,20 @@
 {
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "trip-planner",
+      "runtime": "nodejs20",
+      "ignore": ["node_modules", ".git", "*.log"]
+    }
+  ],
   "hosting": {
     "site": "howard-trips",
     "public": "public",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [{ "source": "**", "destination": "/index.html" }],
+    "rewrites": [
+      { "source": "/t/**", "function": { "functionId": "share", "region": "asia-northeast3" } },
+      { "source": "**", "destination": "/index.html" }
+    ],
     "headers": [
       {
         "source": "**/*.@(js|css|html)",
