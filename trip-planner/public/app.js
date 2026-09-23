@@ -1,14 +1,6 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import {
-  initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
-  doc, collection, addDoc, setDoc, updateDoc, deleteDoc,
-  getDoc, getDocs, onSnapshot, serverTimestamp,
-  query, where, orderBy, limit,
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import {
-  getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut,
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-
+// Firebase는 정적 import 대신 지연 로드 — 캐시 기반 홈을 먼저 그린 뒤 SDK(~0.5MB)를
+// 내려받아 최초 로드 체감 속도를 크게 줄인다. auth(147KB)는 /admin에서만 로드.
+const FB = "https://www.gstatic.com/firebasejs/10.12.2/";
 const firebaseConfig = {
   apiKey: "AIzaSyAx1DsvOcDSiDvPYG32Nw6wiFRQz8X5PB8",
   authDomain: "howardworld.firebaseapp.com",
@@ -17,17 +9,42 @@ const firebaseConfig = {
   messagingSenderId: "940701312592",
   appId: "1:940701312592:web:8882de89e067b9a727d355",
 };
-const app = initializeApp(firebaseConfig);
-// 오프라인 캐시(IndexedDB) — 한 번 불러온 여행/일정을 데이터 없이도 열람
-let db;
-try {
-  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
-} catch {
-  db = getFirestore(app); // 미지원 환경 → 메모리 캐시 기본
-}
+let app, db, dbRead, auth; // db=영구캐시(onSnapshot/오프라인), dbRead=메모리캐시(1회성 서버 읽기)
+// firestore/app 함수 바인딩 (지연 로드 후 채워짐)
+let initializeApp, initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
+  doc, collection, addDoc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, getDocFromServer, getDocsFromServer,
+  onSnapshot, serverTimestamp, query, where, orderBy, limit;
+// auth 함수 바인딩 (/admin에서만 로드)
+let getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut;
 
-// Auth를 시작 시점에 등록 → Firestore가 처음부터 인증 토큰을 첨부(관리자 조회에 필요)
-const auth = getAuth(app);
+const firebaseReady = (async () => {
+  const [appMod, fsMod] = await Promise.all([import(FB + "firebase-app.js"), import(FB + "firebase-firestore.js")]);
+  initializeApp = appMod.initializeApp;
+  ({ initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
+    doc, collection, addDoc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, getDocFromServer, getDocsFromServer,
+    onSnapshot, serverTimestamp, query, where, orderBy, limit } = fsMod);
+  app = initializeApp(firebaseConfig);
+  try {
+    db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+  } catch {
+    db = getFirestore(app); // 미지원 환경 → 메모리 캐시 기본
+  }
+  // 1회성 읽기(내보내기·홈 새로고침)용 별도 메모리 캐시 인스턴스 — 영구캐시 경유 시
+  // 1회성 읽기가 지연/멈추는 문제를 우회(네트워크 직행, 빠름).
+  try { dbRead = getFirestore(initializeApp(firebaseConfig, "reader")); } catch { dbRead = db; }
+})();
+
+let _authReady = null;
+function ensureAuth() {
+  if (!_authReady) _authReady = (async () => {
+    await firebaseReady;
+    const m = await import(FB + "firebase-auth.js");
+    ({ getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } = m);
+    auth = getAuth(app);
+    return auth;
+  })();
+  return _authReady;
+}
 const ADMIN_EMAIL = "romeowa@gmail.com";
 
 // 서비스워커 등록 (앱 셸 오프라인)
@@ -63,6 +80,7 @@ const TYPES = {
 const h = (html) => { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 const esc = (s) => (s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
 
 function toast(msg) {
   let el = document.querySelector(".toast");
@@ -176,6 +194,7 @@ async function logEvent(type, extra = {}) {
   try { await fetchGeo(); } catch {}
   const g = _geo || {};
   try {
+    await firebaseReady;
     addDoc(collection(db, "events"), {
       type, app: "trip-planner", ts: serverTimestamp(), dev: deviceId(),
       os: p.os, br: p.br, form: p.form, country: g.country || null, city: g.city || null, ...extra,
@@ -194,12 +213,18 @@ function cleanup() {
 function go(path) { history.pushState({}, "", path); route(); }
 window.addEventListener("popstate", route);
 
-function route() {
+async function route() {
   cleanup();
-  const m = location.pathname.match(/^\/t\/([A-Za-z0-9_-]+)/);
-  if (location.pathname === "/admin") renderAdmin();
+  const path = location.pathname;
+  const m = path.match(/^\/t\/([A-Za-z0-9_-]+)/);
+  // 홈: Firebase 로드 전에도 캐시로 즉시 렌더(내부 refresh는 ready를 기다림)
+  if (path === "/") { renderHome(); return; }
+  // 그 외: 가벼운 로딩 표시 후 SDK 준비되면 렌더
+  APP.innerHTML = `<div class="loading">불러오는 중…</div>`;
+  await firebaseReady;
+  if (path !== location.pathname) return; // 로드 중 이동했으면 취소
+  if (path === "/admin") renderAdmin();
   else if (m) renderTrip(m[1]);
-  else renderHome();
 }
 
 // ---------- 홈 (월별 달력) ----------
@@ -267,11 +292,11 @@ function paintHome() {
 // 백그라운드: 각 여행 최신 정보 조회 → 캐시 갱신, 달라졌을 때만 다시 그림
 async function refreshHomeTrips(recent) {
   if (!recent.length) return;
-  const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
+  await firebaseReady;
   const arr = new Array(recent.length).fill(null);
   await Promise.all(recent.map(async (r, i) => {
     try {
-      const snap = await withTimeout(getDoc(doc(db, "trips", r.id)), 5000);
+      const snap = await withTimeout(getDoc(doc(dbRead, "trips", r.id)), 5000);
       if (!snap.exists()) return; // 삭제됨 → 목록에서 제외
       const d = snap.data();
       arr[i] = { id: r.id, title: d.title || "제목 없는 여행", startDate: d.startDate || null, dayCount: d.dayCount || 1, ts: r.ts || 0 };
@@ -452,8 +477,12 @@ function softDeleteTrip(id, title) {
 
 // 여행 + 하위 항목 전부 삭제 + 최근 목록에서 제거 (공용)
 async function deleteTripFull(id) {
-  const snap = await getDocs(collection(db, "trips", id, "items"));
-  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+  await firebaseReady;
+  const [is, es] = await Promise.all([
+    getDocs(collection(db, "trips", id, "items")),
+    getDocs(collection(db, "trips", id, "expenses")),
+  ]);
+  await Promise.all([...is.docs.map((d) => deleteDoc(d.ref)), ...es.docs.map((d) => deleteDoc(d.ref))]);
   await deleteDoc(doc(db, "trips", id));
   try {
     const list = JSON.parse(localStorage.getItem("recentTrips") || "[]").filter((x) => x.id !== id);
@@ -465,6 +494,7 @@ async function createTrip() {
   const btn = document.getElementById("newTrip");
   if (btn) { btn.disabled = true; btn.textContent = "만드는 중…"; }
   try {
+    await firebaseReady;
     const ref = await addDoc(collection(db, "trips"), {
       title: "새 여행", startDate: null, dayCount: 3, createdAt: serverTimestamp(),
     });
@@ -508,12 +538,14 @@ const cleanTrip = (t) => ({
 });
 const stripId = (d) => { const { id, createdAt, ...rest } = d; return rest; };
 async function fetchTripBundle(id) {
-  const tsnap = await getDoc(doc(db, "trips", id));
+  await firebaseReady;
+  // 메모리캐시 인스턴스(dbRead)로 읽음 — 영구캐시 경유 1회성 읽기 지연 회피
+  const [tsnap, is, es] = await withTimeout(Promise.all([
+    getDoc(doc(dbRead, "trips", id)),
+    getDocs(collection(dbRead, "trips", id, "items")),
+    getDocs(collection(dbRead, "trips", id, "expenses")),
+  ]), 8000);
   if (!tsnap.exists()) throw new Error("여행을 찾을 수 없어요");
-  const [is, es] = await Promise.all([
-    getDocs(collection(db, "trips", id, "items")),
-    getDocs(collection(db, "trips", id, "expenses")),
-  ]);
   return {
     trip: cleanTrip(tsnap.data()),
     items: is.docs.map((d) => stripId({ ...d.data() })),
@@ -533,8 +565,9 @@ async function exportAllTrips(btn) {
   if (!recent.length) { toast("내보낼 여행이 없어요"); return; }
   if (btn) { btn.disabled = true; btn.textContent = "내보내는 중…"; }
   try {
-    const bundles = [];
-    for (const r of recent) { try { bundles.push(await fetchTripBundle(r.id)); } catch {} }
+    // 여러 여행을 병렬로 수집(순차 대기 X). 응답 없는 여행은 건너뜀.
+    const results = await Promise.all(recent.map((r) => fetchTripBundle(r.id).catch(() => null)));
+    const bundles = results.filter(Boolean);
     if (!bundles.length) { toast("내보낼 여행이 없어요"); return; }
     downloadJSON(`trips-backup-${ymd(new Date())}.json`, { app: "trip-planner", kind: "trips", version: EXPORT_VERSION, exportedAt: new Date().toISOString(), trips: bundles });
     toast(`${bundles.length}개 여행을 내보냈어요`);
@@ -547,6 +580,7 @@ function parseBundles(text) {
   return null;
 }
 async function createTripFromBundle(b) {
+  await firebaseReady;
   const t = cleanTrip(b.trip || {});
   const base = { title: t.title, startDate: t.startDate, dayCount: t.dayCount, members: t.members, memberColors: t.memberColors, createdAt: serverTimestamp() };
   if (t.expenseCategories) base.expenseCategories = t.expenseCategories;
@@ -1657,8 +1691,9 @@ function openExpenseForm(existing) {
 // ---------- 관리자 (활동 로그) ----------
 // romeowa@gmail.com 구글 로그인일 때만 events 조회 가능(Firestore 규칙이 서버에서 강제).
 
-function renderAdmin() {
+async function renderAdmin() {
   APP.innerHTML = `<div class="loading">관리자 확인 중…</div>`;
+  await ensureAuth();
   onAuthStateChanged(auth, (user) => paintAdmin(user));
 }
 
