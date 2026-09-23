@@ -150,7 +150,7 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .tl-head { display: flex; align-items: center; gap: 8px; }
 .tl-name { font-size: 17px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; }
 .tl-emoji { font-size: 15px; flex: 0 0 auto; }
-.tl-addr { font-size: 13px; color: var(--muted); }
+.tl-addr { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tl-addr a { color: var(--muted); text-decoration: none; }
 .tl-addr a:hover { color: var(--accent); text-decoration: underline; }
 .tl-ext { color: var(--muted); font-size: 11px; }
@@ -660,3 +660,20 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 
 /* 항목 날씨 칩 */
 .tl-weather { font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; flex: 0 0 auto; }
+
+/* ---------- 1c/1d 다듬기 ---------- */
+/* 상단 ⋯ 더보기 메뉴 */
+.tb-menu { position: relative; flex: 0 0 auto; }
+.tb-dropdown { position: absolute; right: 0; top: 42px; width: 200px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 16px 40px -18px rgba(40,34,20,.4); padding: 6px; display: flex; flex-direction: column; z-index: 30; }
+.tb-dropdown[hidden] { display: none; }
+.tb-dropdown button { text-align: left; padding: 10px 12px; border-radius: 8px; font-size: 14px; color: var(--text); background: none; }
+.tb-dropdown button:hover { background: var(--surface); }
+.tb-dropdown button.danger { color: var(--danger); }
+.tb-dropdown button.danger:hover { background: #fbe9e7; }
+.tb-dropdown .sep { height: 1px; background: var(--line-soft); margin: 4px 6px; }
+
+/* 수정·삭제는 마우스 올렸을 때만 (터치 기기는 항상 표시) */
+@media (hover: hover) {
+  .tl-acts { opacity: 0; transition: opacity .12s; }
+  .tl-row:hover .tl-acts, .tl-acts:focus-within { opacity: 1; }
+}

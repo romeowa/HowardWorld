@@ -688,6 +688,15 @@ function paint() {
       <a class="home-link" href="/" title="홈으로 가기">← 홈</a>
       <input class="trip-title" value="${esc(trip.title)}" placeholder="여행 제목" />
       <button class="btn ghost sm" id="share">🔗 링크</button>
+      <div class="tb-menu">
+        <button class="btn ghost sm" id="tripMenuBtn" title="더보기">⋯</button>
+        <div class="tb-dropdown" id="tripMenu" hidden>
+          <button data-act="export">⬇ 이 여행 내보내기</button>
+          <button data-act="import">⬆ 가져오기 (새 여행)</button>
+          <div class="sep"></div>
+          <button data-act="delete" class="danger">🗑 이 여행 삭제…</button>
+        </div>
+      </div>
     </div></div>`);
   APP.appendChild(bar);
   const titleInput = bar.querySelector(".trip-title");
@@ -697,6 +706,22 @@ function paint() {
     try { await navigator.clipboard.writeText(location.href); toast("링크를 복사했어요"); }
     catch { prompt("이 링크를 공유하세요:", location.href); }
   });
+  // ⋯ 더보기 메뉴 (내보내기 / 가져오기 / 삭제)
+  const menu = bar.querySelector("#tripMenu");
+  const closeMenu = () => { menu.hidden = true; document.removeEventListener("click", onDocClick); };
+  const onDocClick = (e) => { if (!e.target.closest(".tb-menu")) closeMenu(); };
+  bar.querySelector("#tripMenuBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (menu.hidden) { menu.hidden = false; setTimeout(() => document.addEventListener("click", onDocClick), 0); }
+    else closeMenu();
+  });
+  menu.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    closeMenu();
+    const a = b.dataset.act;
+    if (a === "export") exportCurrentTrip();
+    else if (a === "import") importTripsFromHome();
+    else if (a === "delete") softDeleteTrip(tripId, trip.title);
+  }));
 
   // 여행 전체를 감싸는 셸 (지도 있으면 넓게, 정산 탭도 넓게)
   const shell = h(`<div class="trip-shell ${hasMap || tripTab === "settle" ? "wide" : ""}"></div>`);
@@ -795,16 +820,7 @@ function paint() {
     }
   }
 
-  // 내보내기 / 가져오기(새 여행으로 복제)
-  const io = h(`<div class="trip-io"><button class="btn ghost sm" id="expTrip">⬇ 이 여행 내보내기</button><button class="btn ghost sm" id="impTrip">⬆ 가져오기(새 여행)</button></div>`);
-  io.querySelector("#expTrip").addEventListener("click", exportCurrentTrip);
-  io.querySelector("#impTrip").addEventListener("click", importTripsFromHome);
-  shell.appendChild(io);
-
-  // 여행 전체 삭제
-  const delTrip = h(`<div style="text-align:center;margin-top:16px"><button class="btn danger sm" id="delTrip">🗑 이 여행 삭제</button></div>`);
-  delTrip.querySelector("#delTrip").addEventListener("click", () => softDeleteTrip(tripId, trip.title));
-  shell.appendChild(delTrip);
+  // 내보내기 / 가져오기 / 삭제는 상단 ⋯ 메뉴로 이동함
 
   APP.appendChild(shell);
   APP.appendChild(promoFooter());
