@@ -47,9 +47,28 @@ function ensureAuth() {
 }
 const ADMIN_EMAIL = "romeowa@gmail.com";
 
-// 서비스워커 등록 (앱 셸 오프라인)
+// 서비스워커 등록 (앱 셸 오프라인) + 새 버전 자동 반영
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+  const hadController = !!navigator.serviceWorker.controller;
+  let refreshing = false;
+  // 새 SW가 제어를 넘겨받으면(=새 버전 활성화) 한 번 새로고침해 최신 화면으로
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (refreshing) return; refreshing = true;
+    if (hadController) location.reload(); // 첫 방문(설치)엔 새로고침 안 함
+  });
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").then((reg) => {
+      reg.update && reg.update();
+      // 대기 중인 새 SW가 있으면 즉시 활성화 유도
+      if (reg.waiting) reg.waiting.postMessage("skipWaiting");
+      reg.addEventListener("updatefound", () => {
+        const nw = reg.installing;
+        if (nw) nw.addEventListener("statechange", () => {
+          if (nw.state === "installed" && reg.waiting) reg.waiting.postMessage("skipWaiting");
+        });
+      });
+    }).catch(() => {});
+  });
 }
 
 // 오프라인 표시 배너

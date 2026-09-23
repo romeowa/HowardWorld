@@ -1,6 +1,6 @@
 // 여행 일정 서비스워커 — 앱 셸 오프라인 캐시
 // 버전을 올리면 activate에서 옛 캐시를 비우고 새 셸을 받는다.
-const VERSION = "v23";
+const VERSION = "v24";
 const CACHE = `trip-shell-${VERSION}`;
 
 // 버전 없는 셸만 미리 캐시. 버전 붙는 app.js/styles.css는 실행 중 전체 URL로 캐시돼
@@ -11,6 +11,8 @@ self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE)).catch(() => {}));
   self.skipWaiting();
 });
+
+self.addEventListener("message", (e) => { if (e.data === "skipWaiting") self.skipWaiting(); });
 
 self.addEventListener("activate", (e) => {
   e.waitUntil(
