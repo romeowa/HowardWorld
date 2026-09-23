@@ -476,7 +476,8 @@ const MEMBER_COLORS = ["#0f766e", "#b45309", "#6d5bd0", "#be123c", "#0369a1", "#
 // 카테고리 색상 (기본 구분 + 커스텀은 해시로 배정)
 const CAT_COLORS = { "숙박": "#6d5bd0", "식사": "#b45309", "교통": "#0369a1", "간식": "#be123c", "관광": "#4d7c0f", "기타": "#6f6a5f" };
 const CAT_PALETTE = ["#0f766e", "#b45309", "#6d5bd0", "#be123c", "#0369a1", "#4d7c0f", "#9d174d", "#0e7490"];
-const memberColor = (name) => MEMBER_COLORS[hashId(String(name || "")) % MEMBER_COLORS.length];
+// 참여자별 색: 추가 시 trip.memberColors에 저장한 랜덤 색을 우선, 없으면 이름 해시로 폴백
+const memberColor = (name) => (trip && trip.memberColors && trip.memberColors[name]) || MEMBER_COLORS[hashId(String(name || "")) % MEMBER_COLORS.length];
 const catColor = (c) => CAT_COLORS[c] || CAT_PALETTE[hashId(String(c || "기타")) % CAT_PALETTE.length];
 const initOf = (name) => (String(name || "?").trim()[0] || "?").toUpperCase();
 
@@ -996,6 +997,18 @@ const tripMembers = () => (Array.isArray(trip?.members) ? trip.members : []);
 const tripCats = () => { const c = trip?.expenseCategories; return Array.isArray(c) && c.length ? c : DEFAULT_CATS; };
 const saveMembers = (list) => updateDoc(doc(db, "trips", tripId), { members: list });
 const saveCats = (list) => updateDoc(doc(db, "trips", tripId), { expenseCategories: list });
+// 새 참여자 추가 — 기존 참여자들과 겹치지 않는 색을 랜덤 배정해 저장
+async function addMember(name) {
+  const members = tripMembers();
+  const colors = { ...(trip.memberColors || {}) };
+  if (!colors[name]) {
+    const used = new Set(members.map((m) => memberColor(m)));
+    const free = MEMBER_COLORS.filter((c) => !used.has(c));
+    const pool = free.length ? free : MEMBER_COLORS;
+    colors[name] = pool[Math.floor(Math.random() * pool.length)];
+  }
+  await updateDoc(doc(db, "trips", tripId), { members: [...members, name], memberColors: colors });
+}
 
 // 정산 탭 뷰 (엑셀 정산표를 여행 안으로 — 3a 디자인)
 const dateForDay = (i) => (trip?.startDate ? ymd(addDays(parseDate(trip.startDate), i)) : "");
@@ -1040,7 +1053,7 @@ function renderSettleView(shell) {
     if (!v) return;
     if (members.includes(v)) { toast("이미 있는 참여자예요"); return; }
     inp.value = "";
-    await saveMembers([...members, v]);
+    await addMember(v);
   });
   view.appendChild(memSec);
 
