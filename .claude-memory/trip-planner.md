@@ -12,6 +12,7 @@ trip-planner: 링크 하나로 함께 짜는 여행 일정 공유 웹앱. 공용
 
 - Hosting: 멀티사이트 `howard-trips` → https://howard-trips.web.app (firebase.json에 "site":"howard-trips"). trip-planner/firebase.json에는 firestore 규칙 미포함(공용 규칙 덮어쓰기 방지).
 - 데이터: Firestore `trips/{id}` + `items` 서브컬렉션, onSnapshot 실시간 동기화. 로그인 없이 **URL(/t/{랜덤ID}) = 편집권한**. 규칙은 trips get/write 공개 + list 차단(링크 모르면 접근 불가).
+- 날씨: 일정 항목에 핀(lat/lng)+날짜(startDate+day)가 있으면 **Open-Meteo 예보**(api.open-meteo.com/v1/forecast, 무료·키 불필요)로 아이콘+최고/최저 기온 칩(.tl-weather) 표시. getWeather(date,lat,lng)가 좌표 소수2자리+날짜로 캐시. 예보 범위(약 -92~+16일) 밖이면 표시 안 함.
 - 지도·검색: **구글맵(Maps JavaScript API) + 구글 Places Text Search(New)**. (원래 OSM/Leaflet+Nominatim이었으나 아시아권 한글 검색이 약해 전환.) 핀 드롭 시 주소 역지오코딩만 무료 Nominatim 유지.
 - 구글 API 키: 리퍼러(howard-trips.web.app/*) + Places/Maps JS API로 제한된 **브라우저 키**. gcloud로 생성/관리. 키는 **public/config.js(gitignore)** 에 넣어 주입 — 소스/깃엔 미포함(브라우저엔 어차피 노출되지만 리퍼러 제한이 방어선). app.js는 window.TRIP_CONFIG.googleKey 사용.
 - UI: 홈은 월별 달력 뷰(여행을 색 바로 표시) + 이 기기 localStorage 최근 목록만. 여행 화면은 전체 일정 리스트(Day별 섹션) + 상단 '전체'/날짜 탭(전체=다 보기, 날짜=그 날만 필터). 항목(장소/식사/액티비티/메모) 시간순 자동 정렬, 시간 입력은 24시간 시/분 드롭다운. 항목 클릭 시 아래로 확장되며 인라인 미니지도(핀 1개). 항목 "저장 후 계속" 연속 입력. 주소 클릭 시 구글맵 열기.
