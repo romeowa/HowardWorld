@@ -575,7 +575,8 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .ef-all:hover { background: var(--surface-2); }
 .ef-cats, .ef-days, .ef-stops, .ef-payers, .ef-who { display: flex; flex-wrap: wrap; gap: 6px; }
 .ef-chip { padding: 8px 13px; border-radius: 10px; font-size: 14px; border: 1px solid var(--line); background: var(--card); color: var(--muted-2); }
-.ef-chip.ghost { border-style: dashed; color: var(--muted); }
+.ef-chip.on { border-color: var(--accent); background: #e3f0ee; color: var(--accent-dark); font-weight: 600; }
+.ef-chip.ghost { border-style: dashed; color: var(--muted); font-weight: 400; }
 .ef-stop { padding: 7px 12px; border-radius: 16px; font-size: 13px; border: 1px solid var(--line); background: var(--card); color: var(--muted-2); }
 .ef-stop.on { border-color: var(--accent); background: #e3f0ee; color: var(--accent-dark); font-weight: 600; }
 .ef-nostop { font-size: 12.5px; color: var(--muted); }
