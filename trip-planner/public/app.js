@@ -706,11 +706,29 @@ function paint() {
 
   APP.innerHTML = "";
   // 상단 바 (지도 있으면 넓은 폭으로)
+  // 날짜·요약 텍스트 (헤더에 표시)
+  const wkOf = (d) => WEEK[d.getDay()];
+  const endVal = trip.startDate ? ymd(addDays(parseDate(trip.startDate), trip.dayCount - 1)) : "";
+  let summaryTxt;
+  if (trip.startDate) {
+    const s = parseDate(trip.startDate), e = addDays(s, (trip.dayCount || 1) - 1);
+    summaryTxt = `${fmtMD(s)}(${wkOf(s)}) — ${fmtMD(e)}(${wkOf(e)}) · ${trip.dayCount}일 · ${items.length}곳`;
+  } else summaryTxt = `${trip.dayCount}일 · ${items.length}곳`;
+  const mob = isMobileView();
+
   const bar = h(`
-    <div class="topbar"><div class="topbar-inner ${hasMap ? "wide" : ""}">
-      <a class="home-link" href="/" title="홈으로 가기">← 홈</a>
-      <input class="trip-title" value="${esc(trip.title)}" placeholder="여행 제목" />
-      <button class="btn ghost sm" id="share">🔗 링크</button>
+    <div class="topbar"><div class="topbar-inner ${hasMap || tripTab === "settle" ? "wide" : ""}">
+      <a class="home-link" href="/" title="홈으로 가기">←<span class="hl-txt"> 홈</span></a>
+      <div class="trip-headmeta">
+        <input class="trip-title" value="${esc(trip.title)}" placeholder="여행 제목" />
+        <button class="trip-summary" id="tripSummary" title="날짜 편집">${esc(summaryTxt)} <span class="ed">✎</span></button>
+      </div>
+      <div class="trip-tabs header">
+        <button class="tt ${tripTab === "plan" ? "on" : ""}" data-tab="plan">일정</button>
+        <button class="tt ${tripTab === "settle" ? "on" : ""}" data-tab="settle">정산</button>
+      </div>
+      <span class="tb-spacer"></span>
+      <button class="btn ghost sm tb-share" id="share">${mob ? "링크" : "🔗 링크 복사"}</button>
       <div class="tb-menu">
         <button class="btn ghost sm" id="tripMenuBtn" title="더보기">⋯</button>
         <div class="tb-dropdown" id="tripMenu" hidden>
@@ -720,6 +738,10 @@ function paint() {
           <button data-act="delete" class="danger">🗑 이 여행 삭제…</button>
         </div>
       </div>
+    </div>
+    <div class="trip-dates" id="tripDates" hidden>
+      <label>시작 <input type="date" id="startDate" value="${trip.startDate || ""}"/></label>
+      <label>종료 <input type="date" id="endDate" value="${endVal}" min="${trip.startDate || ""}" ${trip.startDate ? "" : "disabled title='시작일을 먼저 선택하세요'"}/></label>
     </div></div>`);
   APP.appendChild(bar);
   const titleInput = bar.querySelector(".trip-title");
@@ -729,6 +751,24 @@ function paint() {
     try { await navigator.clipboard.writeText(location.href); toast("링크를 복사했어요"); }
     catch { prompt("이 링크를 공유하세요:", location.href); }
   });
+  // 날짜 편집 토글
+  const datesEl = bar.querySelector("#tripDates");
+  bar.querySelector("#tripSummary").addEventListener("click", () => { datesEl.hidden = !datesEl.hidden; });
+  bar.querySelector("#startDate").addEventListener("change", (e) =>
+    updateDoc(doc(db, "trips", tripId), { startDate: e.target.value || null }));
+  bar.querySelector("#endDate").addEventListener("change", (e) => {
+    if (!trip.startDate || !e.target.value) return;
+    const days = dayDiff(parseDate(trip.startDate), parseDate(e.target.value)) + 1;
+    if (days < 1) { toast("종료일이 시작일보다 빨라요"); paint(); return; }
+    updateDoc(doc(db, "trips", tripId), { dayCount: days });
+  });
+  // 헤더 탭 (데스크톱)
+  bar.querySelectorAll(".trip-tabs.header .tt").forEach((b) => b.addEventListener("click", () => {
+    if (tripTab === b.dataset.tab) return;
+    tripTab = b.dataset.tab;
+    if (tripTab === "settle") logEvent("settle_open", { trip: tripId });
+    paint();
+  }));
   // ⋯ 더보기 메뉴 (내보내기 / 가져오기 / 삭제)
   const menu = bar.querySelector("#tripMenu");
   const closeMenu = () => { menu.hidden = true; document.removeEventListener("click", onDocClick); };
@@ -749,20 +789,7 @@ function paint() {
   // 여행 전체를 감싸는 셸 (지도 있으면 넓게, 정산 탭도 넓게)
   const shell = h(`<div class="trip-shell ${hasMap || tripTab === "settle" ? "wide" : ""}"></div>`);
 
-  // 일정 / 정산 탭
-  const tabs = h(`<div class="trip-tabs">
-    <button class="tt ${tripTab === "plan" ? "on" : ""}" data-tab="plan">일정</button>
-    <button class="tt ${tripTab === "settle" ? "on" : ""}" data-tab="settle">정산</button>
-  </div>`);
-  tabs.querySelectorAll(".tt").forEach((b) => b.addEventListener("click", () => {
-    if (tripTab === b.dataset.tab) return;
-    tripTab = b.dataset.tab;
-    if (tripTab === "settle") logEvent("settle_open", { trip: tripId });
-    paint();
-  }));
-  shell.appendChild(tabs);
-
-  // 모바일 하단 탭바 (일정/정산) — 데스크톱은 위 세그먼트 토글 사용
+  // 모바일 하단 탭바 (일정/정산) — 데스크톱은 헤더 세그먼트 토글 사용
   const bnav = h(`<div class="bottom-nav">
     <button class="bn ${tripTab === "plan" ? "on" : ""}" data-tab="plan">일정</button>
     <button class="bn ${tripTab === "settle" ? "on" : ""}" data-tab="settle">정산</button>
@@ -782,23 +809,6 @@ function paint() {
     APP.appendChild(promoFooter());
     return;
   }
-
-  // 시작일 · 종료일 (종료일은 시작일+일수에서 파생; 종료일을 바꾸면 일수가 재계산됨)
-  const endVal = trip.startDate ? ymd(addDays(parseDate(trip.startDate), trip.dayCount - 1)) : "";
-  const meta = h(`<div class="trip-meta">
-    <label>시작 <input type="date" id="startDate" value="${trip.startDate || ""}"/></label>
-    <label>종료 <input type="date" id="endDate" value="${endVal}" min="${trip.startDate || ""}" ${trip.startDate ? "" : "disabled title='시작일을 먼저 선택하세요'"}/></label>
-    <span class="count">${trip.dayCount}일 · ${items.length}곳</span>
-  </div>`);
-  meta.querySelector("#startDate").addEventListener("change", (e) =>
-    updateDoc(doc(db, "trips", tripId), { startDate: e.target.value || null }));
-  meta.querySelector("#endDate").addEventListener("change", (e) => {
-    if (!trip.startDate || !e.target.value) return;
-    const days = dayDiff(parseDate(trip.startDate), parseDate(e.target.value)) + 1;
-    if (days < 1) { toast("종료일이 시작일보다 빨라요"); paint(); return; }
-    updateDoc(doc(db, "trips", tripId), { dayCount: days });
-  });
-  shell.appendChild(meta);
 
   // Day 탭 — "전체"(전 일정) + 날짜별(그 날만 필터)
   const days = h(`<div class="days"></div>`);
@@ -829,7 +839,7 @@ function paint() {
     const cnt = dayItems.length ? `<span class="ds-cnt">${dayItems.length}곳</span>` : "";
     sec.appendChild(h(`<div class="day-sec-head"><span class="ds-top">${top}</span><span class="ds-sub">${esc(sub)}</span>${cnt}</div>`));
     dayItems.forEach((it) => sec.appendChild(itemCard(it)));
-    const add = h(`<button class="tl-add">＋ 이 날에 장소 추가</button>`);
+    const add = h(`<button class="tl-add">+ 장소 추가</button>`);
     add.addEventListener("click", () => openEditor(null, i));
     sec.appendChild(add);
     list.appendChild(sec);
@@ -848,7 +858,7 @@ function paint() {
   // 모바일 FAB 묶음: (지도) + (장소 추가). 지도 시트는 핀 있을 때만.
   const fabs = h(`<div class="fab-group"></div>`);
   if (hasMap) {
-    const fabMap = h(`<button class="fab ghost" id="mapFab" title="지도 보기">🗺 지도</button>`);
+    const fabMap = h(`<button class="fab ghost" id="mapFab" title="지도 보기">지도</button>`);
     fabMap.addEventListener("click", () => openMapSheet());
     fabs.appendChild(fabMap);
   }
