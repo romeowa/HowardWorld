@@ -999,7 +999,10 @@ function closeSettle() {
 function renderSettleBody() {
   const body = document.getElementById("settleBody");
   if (!body) return;
+  // 표 편집 중이면 포커스를 유지하기 위해 계산 값·요약만 갱신
+  if (isGridEditing()) { refreshGridComputed(); renderSummaries(); return; }
   const members = tripMembers();
+  const cats = tripCats();
   body.innerHTML = "";
 
   // 참여자
@@ -1009,12 +1012,12 @@ function renderSettleBody() {
     <form class="mem-add" id="memAdd"><input id="memName" placeholder="참여자 이름" maxlength="20" autocomplete="off" /><button class="btn sm" type="submit">+ 추가</button></form>
   </div>`);
   const chips = memSec.querySelector("#memChips");
-  if (!members.length) chips.appendChild(h(`<span class="mem-empty">참여자를 추가해 주세요</span>`));
+  if (!members.length) chips.appendChild(h(`<span class="mem-empty">참여자를 추가하면 아래 표에 열이 생겨요</span>`));
   members.forEach((name) => {
     const chip = h(`<span class="mem-chip">${esc(name)}<button title="삭제">✕</button></span>`);
     chip.querySelector("button").addEventListener("click", async () => {
       const used = expenses.some((e) => e.payer === name || (e.sharedBy || []).includes(name));
-      if (used && !confirm(`'${name}'님은 정산 내역에 포함돼 있어요. 참여자 목록에서 빼도 기존 내역엔 남습니다. 계속할까요?`)) return;
+      if (used && !confirm(`'${name}'님은 정산 내역에 포함돼 있어요. 빼도 기존 내역엔 남습니다. 계속할까요?`)) return;
       await saveMembers(members.filter((m) => m !== name));
     });
     chips.appendChild(chip);
@@ -1030,70 +1033,163 @@ function renderSettleBody() {
   });
   body.appendChild(memSec);
 
-  // 정산 내역
-  const listSec = h(`<div class="settle-sec">
+  // 정산 내역 표 (엑셀형 그리드)
+  const gridSec = h(`<div class="settle-sec">
     <div class="settle-sec-h">정산 내역 <span class="cnt">${expenses.length}건</span></div>
-    <div class="exp-list" id="expList"></div>
-    <button class="btn block" id="addExp">＋ 내역 추가</button>
+    <div class="grid-scroll"><table class="exp-grid"><thead></thead><tbody></tbody></table></div>
+    <button class="btn block" id="addRow">＋ 행 추가</button>
   </div>`);
-  const list = listSec.querySelector("#expList");
+  const trh = h(`<tr></tr>`);
+  ["날짜", "구분", "내역", "금액"].forEach((t) => trh.appendChild(h(`<th>${t}</th>`)));
+  members.forEach((m) => trh.appendChild(h(`<th class="mcol">${esc(m)}</th>`)));
+  trh.appendChild(h(`<th>결제</th>`));
+  trh.appendChild(h(`<th class="pcol">1인 비용</th>`));
+  trh.appendChild(h(`<th></th>`));
+  gridSec.querySelector("thead").appendChild(trh);
+  const tbody = gridSec.querySelector("tbody");
   const sorted = expenses.slice().sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.order || 0) - (b.order || 0));
-  if (!sorted.length) list.appendChild(h(`<div class="exp-empty">아직 정산 내역이 없어요.</div>`));
-  sorted.forEach((ex) => {
-    const n = (ex.sharedBy || []).length || 1;
-    const per = (Number(ex.amount) || 0) / n;
-    const row = h(`<div class="exp-row">
-      <div class="exp-main">
-        <div class="exp-top"><span class="exp-cat">${esc(ex.category || "기타")}</span><span class="exp-desc">${esc(ex.desc || "(내역 없음)")}</span></div>
-        <div class="exp-sub">${ex.date ? esc(ex.date) + " · " : ""}${esc(ex.payer || "?")} 결제 · ${n}명 · 1인 ${won(per)}원</div>
-      </div>
-      <div class="exp-amt">${won(ex.amount)}원</div>
-    </div>`);
-    row.querySelector(".exp-main").addEventListener("click", () => openExpenseEditor(ex));
-    list.appendChild(row);
-  });
-  listSec.querySelector("#addExp").addEventListener("click", () => {
-    if (!tripMembers().length) { toast("먼저 참여자를 추가해 주세요"); return; }
-    openExpenseEditor(null);
-  });
-  body.appendChild(listSec);
+  if (!sorted.length) tbody.appendChild(h(`<tr><td class="grid-empty" colspan="${members.length + 7}">아직 정산 내역이 없어요. 아래 ‘행 추가’로 시작하세요.</td></tr>`));
+  sorted.forEach((ex) => tbody.appendChild(buildRow(ex, members, cats)));
+  gridSec.querySelector("#addRow").addEventListener("click", addRow);
+  body.appendChild(gridSec);
 
-  // 정산표
-  const { names, share, paid, transfers } = computeSettlement();
-  if (names.length) {
-    const sumSec = h(`<div class="settle-sec"><div class="settle-sec-h">정산표</div></div>`);
-    const table = h(`<div class="settle-table"></div>`);
-    table.appendChild(h(`<div class="st-row st-head"><span>이름</span><span>비용</span><span>결제</span><span>정산</span></div>`));
-    names.forEach((nm) => {
-      const net = (paid[nm] || 0) - (share[nm] || 0);
-      const cls = net > 0 ? "recv" : net < 0 ? "send" : "";
-      const label = net > 0 ? `+${won(net)}` : net < 0 ? `${won(net)}` : "0";
-      table.appendChild(h(`<div class="st-row"><span class="st-name">${esc(nm)}</span><span>${won(share[nm] || 0)}</span><span>${won(paid[nm] || 0)}</span><span class="st-net ${cls}">${label}</span></div>`));
+  // 정산표 · 카테고리별 (요약)
+  body.appendChild(h(`<div id="sumWrap"></div>`));
+  renderSummaries();
+}
+
+function isGridEditing() {
+  const a = document.activeElement;
+  return !!(a && a.closest && a.closest(".exp-grid"));
+}
+const getExp = (id) => expenses.find((e) => e.id === id);
+const localSet = (id, partial) => { const e = getExp(id); if (e) Object.assign(e, partial); };
+const perOf = (e) => { const n = (e.sharedBy || []).length; return n ? (Number(e.amount) || 0) / n : 0; };
+function updateRowPer(tr, id) { const e = getExp(id); const cell = tr.querySelector(".c-per"); if (e && cell) cell.textContent = won(perOf(e)) + "원"; }
+function refreshGridComputed() {
+  document.querySelectorAll(".exp-grid tbody tr[data-id]").forEach((tr) => updateRowPer(tr, tr.dataset.id));
+}
+const commitExp = (id, partial) => updateDoc(doc(db, "trips", tripId, "expenses", id), partial).catch((e) => toast("저장 실패: " + e.message));
+
+function buildRow(ex, members, cats) {
+  const tr = h(`<tr data-id="${ex.id}"></tr>`);
+  // 날짜
+  const dTd = h(`<td></td>`); const dIn = h(`<input type="date" class="c-date" value="${ex.date || ""}" />`);
+  dIn.addEventListener("change", () => { localSet(ex.id, { date: dIn.value || "" }); commitExp(ex.id, { date: dIn.value || "" }); });
+  dTd.appendChild(dIn); tr.appendChild(dTd);
+  // 구분
+  const cTd = h(`<td></td>`);
+  const catOpts = cats.map((c) => `<option ${c === ex.category ? "selected" : ""}>${esc(c)}</option>`).join("")
+    + (ex.category && !cats.includes(ex.category) ? `<option selected>${esc(ex.category)}</option>` : "")
+    + `<option value="__new__">+ 새 구분</option>`;
+  const cSel = h(`<select class="c-cat">${catOpts}</select>`);
+  cSel.addEventListener("change", async () => {
+    if (cSel.value === "__new__") {
+      const name = (prompt("새 구분 이름") || "").trim();
+      if (name && !cats.includes(name)) {
+        const o = document.createElement("option"); o.textContent = name; o.selected = true;
+        cSel.insertBefore(o, cSel.lastElementChild); localSet(ex.id, { category: name });
+        await saveCats([...cats, name]); commitExp(ex.id, { category: name });
+      } else { cSel.value = ex.category || cats[0]; }
+    } else { localSet(ex.id, { category: cSel.value }); commitExp(ex.id, { category: cSel.value }); }
+  });
+  cTd.appendChild(cSel); tr.appendChild(cTd);
+  // 내역
+  const nTd = h(`<td></td>`); const nIn = h(`<input class="c-desc" value="${esc(ex.desc || "")}" placeholder="내역" />`);
+  nIn.addEventListener("input", () => localSet(ex.id, { desc: nIn.value }));
+  nIn.addEventListener("change", () => commitExp(ex.id, { desc: nIn.value.trim() }));
+  nTd.appendChild(nIn); tr.appendChild(nTd);
+  // 금액
+  const aTd = h(`<td></td>`); const aIn = h(`<input type="number" min="0" inputmode="numeric" class="c-amt" value="${ex.amount ?? ""}" placeholder="0" />`);
+  aIn.addEventListener("input", () => { localSet(ex.id, { amount: Number(aIn.value) || 0 }); updateRowPer(tr, ex.id); renderSummaries(); });
+  aIn.addEventListener("change", () => commitExp(ex.id, { amount: Number(aIn.value) || 0 }));
+  aTd.appendChild(aIn); tr.appendChild(aTd);
+  // 참여자 체크박스
+  members.forEach((m) => {
+    const td = h(`<td class="mcell"></td>`);
+    const cb = h(`<input type="checkbox" ${(ex.sharedBy || []).includes(m) ? "checked" : ""} />`);
+    cb.addEventListener("change", () => {
+      let sb = [...((getExp(ex.id) || {}).sharedBy || [])];
+      if (cb.checked) { if (!sb.includes(m)) sb.push(m); } else sb = sb.filter((x) => x !== m);
+      localSet(ex.id, { sharedBy: sb }); updateRowPer(tr, ex.id); renderSummaries(); commitExp(ex.id, { sharedBy: sb });
     });
-    sumSec.appendChild(table);
-    sumSec.appendChild(h(`<div class="st-legend"><span class="recv">+ 받을 금액</span> · <span class="send">− 보낼 금액</span></div>`));
+    td.appendChild(cb); tr.appendChild(td);
+  });
+  // 결제한 사람
+  const pTd = h(`<td></td>`);
+  const payerList = (members.includes(ex.payer) || !ex.payer) ? members : [...members, ex.payer];
+  const pSel = h(`<select class="c-payer">${payerList.map((m) => `<option ${m === ex.payer ? "selected" : ""}>${esc(m)}</option>`).join("")}</select>`);
+  pSel.addEventListener("change", () => { localSet(ex.id, { payer: pSel.value }); renderSummaries(); commitExp(ex.id, { payer: pSel.value }); });
+  pTd.appendChild(pSel); tr.appendChild(pTd);
+  // 1인 비용 (자동)
+  tr.appendChild(h(`<td class="c-per"></td>`));
+  // 행 삭제
+  const xTd = h(`<td></td>`); const xb = h(`<button class="row-del" title="행 삭제">✕</button>`);
+  xb.addEventListener("click", async () => { if (!confirm("이 행을 삭제할까요?")) return; try { await deleteDoc(doc(db, "trips", tripId, "expenses", ex.id)); } catch (e) { toast("삭제 실패: " + e.message); } });
+  xTd.appendChild(xb); tr.appendChild(xTd);
+  updateRowPer(tr, ex.id);
+  return tr;
+}
+
+async function addRow() {
+  const members = tripMembers();
+  if (!members.length) { toast("먼저 참여자를 추가해 주세요"); return; }
+  const cats = tripCats();
+  try {
+    await addDoc(collection(db, "trips", tripId, "expenses"), {
+      date: trip.startDate || "", category: cats[0], desc: "", amount: 0,
+      payer: members[0], sharedBy: [...members], order: Date.now(), createdAt: serverTimestamp(),
+    });
+    logEvent("expense_add", { trip: tripId });
+  } catch (e) { toast("추가 실패: " + e.message); }
+}
+
+function renderSummaries() {
+  const wrap = document.getElementById("sumWrap");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  const { names, share, paid, transfers } = computeSettlement();
+
+  // 정산표 (이름을 열로 — 엑셀형 매트릭스)
+  if (names.length) {
+    const sec = h(`<div class="settle-sec"><div class="settle-sec-h">정산표</div></div>`);
+    const scroll = h(`<div class="grid-scroll"></div>`);
+    const t = h(`<table class="tally"></table>`);
+    const head = h(`<tr><th>이름</th></tr>`);
+    names.forEach((n) => head.appendChild(h(`<th>${esc(n)}</th>`)));
+    t.appendChild(head);
+    const rShare = h(`<tr><th>개인별 비용 합계</th></tr>`);
+    names.forEach((n) => rShare.appendChild(h(`<td>${won(share[n] || 0)}</td>`)));
+    t.appendChild(rShare);
+    const rPaid = h(`<tr><th>개인별 결제 합계</th></tr>`);
+    names.forEach((n) => rPaid.appendChild(h(`<td>${won(paid[n] || 0)}</td>`)));
+    t.appendChild(rPaid);
+    const rRecv = h(`<tr class="row-recv"><th>정산 받을 금액</th></tr>`);
+    names.forEach((n) => { const net = (paid[n] || 0) - (share[n] || 0); rRecv.appendChild(h(`<td>${net > 0 ? won(net) : ""}</td>`)); });
+    t.appendChild(rRecv);
+    const rSend = h(`<tr class="row-send"><th>정산 보낼 금액</th></tr>`);
+    names.forEach((n) => { const net = (paid[n] || 0) - (share[n] || 0); rSend.appendChild(h(`<td>${net < 0 ? won(-net) : ""}</td>`)); });
+    t.appendChild(rSend);
+    scroll.appendChild(t); sec.appendChild(scroll);
     if (transfers.length) {
-      const tsec = h(`<div class="transfer"><div class="settle-sec-h">💸 송금 제안</div></div>`);
-      transfers.forEach((t) => tsec.appendChild(h(`<div class="tr-row"><span><b>${esc(t.from)}</b> → <b>${esc(t.to)}</b></span><span class="tr-amt">${won(t.amount)}원</span></div>`)));
-      sumSec.appendChild(tsec);
+      const ts = h(`<div class="transfer"><div class="settle-sec-h">💸 송금 제안</div></div>`);
+      transfers.forEach((x) => ts.appendChild(h(`<div class="tr-row"><span><b>${esc(x.from)}</b> → <b>${esc(x.to)}</b></span><span class="tr-amt">${won(x.amount)}원</span></div>`)));
+      sec.appendChild(ts);
     } else if (expenses.length) {
-      sumSec.appendChild(h(`<div class="tr-done">정산 완료! 주고받을 금액이 없어요.</div>`));
+      sec.appendChild(h(`<div class="tr-done">정산 완료! 주고받을 금액이 없어요.</div>`));
     }
-    body.appendChild(sumSec);
+    wrap.appendChild(sec);
   }
 
-  // 카테고리별
+  // 카테고리별 비용
   if (expenses.length) {
     const byCat = {}; let total = 0;
     expenses.forEach((e) => { const a = Number(e.amount) || 0; const c = e.category || "기타"; byCat[c] = (byCat[c] || 0) + a; total += a; });
-    const catSec = h(`<div class="settle-sec"><div class="settle-sec-h">카테고리별 비용</div></div>`);
+    const sec = h(`<div class="settle-sec"><div class="settle-sec-h">카테고리별 비용</div></div>`);
     const ct = h(`<div class="cat-table"></div>`);
-    Object.entries(byCat).sort((a, b) => b[1] - a[1]).forEach(([c, a]) => {
-      ct.appendChild(h(`<div class="cat-row"><span>${esc(c)}</span><span>${won(a)}원</span></div>`));
-    });
+    Object.entries(byCat).sort((a, b) => b[1] - a[1]).forEach(([c, a]) => ct.appendChild(h(`<div class="cat-row"><span>${esc(c)}</span><span>${won(a)}원</span></div>`)));
     ct.appendChild(h(`<div class="cat-row cat-total"><span>총계</span><span>${won(total)}원</span></div>`));
-    catSec.appendChild(ct);
-    body.appendChild(catSec);
+    sec.appendChild(ct); wrap.appendChild(sec);
   }
 }
 
@@ -1123,105 +1219,6 @@ function computeSettlement() {
     if (cred[j].v === 0) j++;
   }
   return { names, share, paid, transfers };
-}
-
-let expState = null;
-function openExpenseEditor(existing) {
-  const members = tripMembers();
-  const cats = tripCats();
-  // 편집 시 이미 목록에서 빠진 이름도 유지
-  const editMembers = [...new Set([...members, ...(existing?.sharedBy || []), ...(existing?.payer ? [existing.payer] : [])].filter(Boolean))];
-  expState = existing
-    ? { ...existing, sharedBy: [...(existing.sharedBy || [])] }
-    : { date: trip.startDate || "", category: cats[0], desc: "", amount: "", payer: members[0] || "", sharedBy: [...members] };
-
-  const bg = h(`<div class="modal-bg"></div>`);
-  const catOpts = cats.map((c) => `<option value="${esc(c)}" ${c === expState.category ? "selected" : ""}>${esc(c)}</option>`).join("")
-    + `<option value="__new__">+ 새 구분 추가…</option>`;
-  const payerOpts = editMembers.map((m) => `<option value="${esc(m)}" ${m === expState.payer ? "selected" : ""}>${esc(m)}</option>`).join("");
-  const modal = h(`
-    <div class="modal">
-      <h3>${existing ? "내역 수정" : "내역 추가"}</h3>
-      <div class="field"><label>날짜</label><input type="date" id="eDate" value="${expState.date || ""}" /></div>
-      <div class="field"><label>구분</label><select id="eCat">${catOpts}</select></div>
-      <div class="field"><label>내역</label><input id="eDesc" value="${esc(expState.desc)}" placeholder="예: 호텔 1박, 저녁 식사" /></div>
-      <div class="field"><label>금액</label><input id="eAmt" type="number" inputmode="numeric" min="0" value="${expState.amount ?? ""}" placeholder="0" /></div>
-      <div class="field"><label>결제한 사람</label><select id="ePayer">${payerOpts}</select></div>
-      <div class="field"><label>나눌 사람 <span class="per-hint" id="perHint"></span></label><div class="share-pick" id="sharePick"></div></div>
-      <div class="modal-actions">
-        ${existing ? `<button class="btn danger" id="eDel">삭제</button>` : ""}
-        <button class="btn ghost" id="eCancel">취소</button>
-        <button class="btn" id="eSave">저장</button>
-      </div>
-    </div>`);
-  bg.appendChild(modal);
-  document.body.appendChild(bg);
-  bg.addEventListener("click", (e) => { if (e.target === bg) bg.remove(); });
-
-  const amtEl = modal.querySelector("#eAmt");
-  const perHint = modal.querySelector("#perHint");
-  const sharePick = modal.querySelector("#sharePick");
-  const updatePer = () => {
-    const n = expState.sharedBy.length;
-    const amt = Number(amtEl.value) || 0;
-    perHint.textContent = n ? `· 1인 ${won(amt / n)}원` : "";
-  };
-  editMembers.forEach((m) => {
-    const b = h(`<button type="button" class="${expState.sharedBy.includes(m) ? "on" : ""}">${esc(m)}</button>`);
-    b.addEventListener("click", () => {
-      if (expState.sharedBy.includes(m)) expState.sharedBy = expState.sharedBy.filter((x) => x !== m);
-      else expState.sharedBy.push(m);
-      b.classList.toggle("on");
-      updatePer();
-    });
-    sharePick.appendChild(b);
-  });
-  const allBtn = h(`<button type="button" class="share-all">전체</button>`);
-  allBtn.addEventListener("click", () => {
-    const all = expState.sharedBy.length === editMembers.length;
-    expState.sharedBy = all ? [] : [...editMembers];
-    sharePick.querySelectorAll("button:not(.share-all)").forEach((b, idx) => b.classList.toggle("on", expState.sharedBy.includes(editMembers[idx])));
-    updatePer();
-  });
-  sharePick.appendChild(allBtn);
-  amtEl.addEventListener("input", updatePer);
-  updatePer();
-
-  const catSel = modal.querySelector("#eCat");
-  catSel.addEventListener("change", async () => {
-    if (catSel.value === "__new__") {
-      const name = (prompt("새 구분 이름") || "").trim();
-      if (name && !cats.includes(name)) {
-        const o = document.createElement("option"); o.value = name; o.textContent = name;
-        catSel.insertBefore(o, catSel.lastElementChild); catSel.value = name; expState.category = name;
-        await saveCats([...cats, name]);
-      } else { catSel.value = name && cats.includes(name) ? name : expState.category; expState.category = catSel.value; }
-    } else expState.category = catSel.value;
-  });
-
-  modal.querySelector("#eCancel").addEventListener("click", () => bg.remove());
-  if (existing) modal.querySelector("#eDel").addEventListener("click", async () => {
-    if (!confirm("이 내역을 삭제할까요?")) return;
-    try { await deleteDoc(doc(db, "trips", tripId, "expenses", existing.id)); bg.remove(); }
-    catch (e) { toast("삭제 실패: " + e.message); }
-  });
-  modal.querySelector("#eSave").addEventListener("click", async () => {
-    const data = {
-      date: modal.querySelector("#eDate").value || "",
-      category: expState.category || "기타",
-      desc: modal.querySelector("#eDesc").value.trim(),
-      amount: Number(amtEl.value) || 0,
-      payer: modal.querySelector("#ePayer").value || "",
-      sharedBy: expState.sharedBy,
-    };
-    if (!data.amount) { toast("금액을 입력해 주세요"); return; }
-    if (!data.sharedBy.length) { toast("나눌 사람을 한 명 이상 선택해 주세요"); return; }
-    try {
-      if (existing) await updateDoc(doc(db, "trips", tripId, "expenses", existing.id), data);
-      else { await addDoc(collection(db, "trips", tripId, "expenses"), { ...data, order: Date.now(), createdAt: serverTimestamp() }); logEvent("expense_add", { trip: tripId }); }
-      bg.remove();
-    } catch (e) { toast("저장 실패: " + e.message); }
-  });
 }
 
 // ---------- 관리자 (활동 로그) ----------

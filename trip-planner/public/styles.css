@@ -437,3 +437,39 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .share-pick button { padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; background: var(--card); color: var(--muted); }
 .share-pick button.on { border-color: var(--accent); background: #e3f0ee; color: var(--accent-dark); font-weight: 600; }
 .share-pick .share-all { border-style: dashed; color: var(--muted-2); }
+
+/* ---------- 정산: 엑셀형 그리드 ---------- */
+.modal.settle { max-width: min(96vw, 1024px); }
+.grid-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: 12px; }
+.exp-grid { border-collapse: collapse; width: 100%; font-size: 13px; }
+.exp-grid th, .exp-grid td { border-bottom: 1px solid var(--line-soft); border-right: 1px solid var(--line-soft); padding: 3px 5px; text-align: center; white-space: nowrap; }
+.exp-grid thead th { background: var(--surface); font-weight: 600; color: var(--muted-2); font-size: 12px; padding: 8px 6px; }
+.exp-grid tbody tr:last-child td { border-bottom: none; }
+.exp-grid td:last-child, .exp-grid th:last-child { border-right: none; }
+.exp-grid input, .exp-grid select {
+  border: 1px solid transparent; background: transparent; border-radius: 6px;
+  padding: 6px 6px; font-size: 13px; color: var(--text); width: 100%;
+}
+.exp-grid input:focus, .exp-grid select:focus { outline: none; border-color: var(--accent); background: var(--card); }
+.exp-grid .c-date { min-width: 132px; }
+.exp-grid .c-desc { min-width: 120px; text-align: left; }
+.exp-grid .c-amt { min-width: 82px; text-align: right; }
+.exp-grid .c-cat, .exp-grid .c-payer { min-width: 76px; }
+.exp-grid .mcol { min-width: 40px; }
+.exp-grid .mcell { background: #f7f9fd; }
+.exp-grid .mcell input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+.exp-grid .pcol { background: #dbe7fb; color: var(--accent-dark); }
+.exp-grid .c-per { font-family: var(--mono); background: #eef4ff; color: var(--accent-dark); font-weight: 600; min-width: 84px; text-align: right; padding-right: 10px; }
+.exp-grid .grid-empty { padding: 20px; color: var(--muted); text-align: center; white-space: normal; }
+.exp-grid .row-del { color: var(--muted); width: 24px; height: 24px; border-radius: 6px; font-size: 12px; }
+.exp-grid .row-del:hover { background: var(--surface); color: var(--danger); }
+
+/* 정산표 매트릭스 */
+.tally { border-collapse: collapse; width: 100%; font-size: 13px; }
+.tally th, .tally td { border: 1px solid var(--line-soft); padding: 9px 12px; text-align: right; white-space: nowrap; font-family: var(--mono); }
+.tally tr:first-child th { background: var(--accent); color: #fff; font-family: inherit; font-weight: 600; text-align: center; }
+.tally th:first-child { text-align: left; background: var(--surface); font-family: inherit; font-weight: 600; color: var(--muted-2); }
+.tally tr:first-child th:first-child { background: var(--accent); color: #fff; }
+.tally .row-recv td { background: #e6f4ea; color: var(--accent-dark); font-weight: 700; }
+.tally .row-send td { background: #fcecec; color: var(--danger); font-weight: 700; }
+.tally .row-recv th, .tally .row-send th { color: var(--text); }
