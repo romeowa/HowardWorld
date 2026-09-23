@@ -654,3 +654,6 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 
 /* 빠른 추가 폼은 데스크톱 전용 (기본 .stl-quickadd{display:flex} 뒤에 와야 우선 적용) */
 @media (max-width: 820px) { .stl-quickadd { display: none; } }
+
+/* 여행 내보내기/가져오기 */
+.trip-io { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 24px; }
