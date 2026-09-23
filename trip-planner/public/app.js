@@ -222,9 +222,11 @@ async function renderHome() {
   let recent = [];
   try { recent = JSON.parse(localStorage.getItem("recentTrips") || "[]"); } catch {}
   const arr = new Array(recent.length).fill(null);
+  // getDoc이 지연/응답없음이어도 홈이 멈추지 않도록 타임아웃(캐시 정보로 폴백)
+  const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
   await Promise.all(recent.map(async (r, i) => {
     try {
-      const snap = await getDoc(doc(db, "trips", r.id));
+      const snap = await withTimeout(getDoc(doc(db, "trips", r.id)), 5000);
       if (!snap.exists()) return;
       const d = snap.data();
       arr[i] = { id: r.id, title: d.title || "제목 없는 여행", startDate: d.startDate || null, dayCount: d.dayCount || 1, ts: r.ts || 0 };
@@ -385,16 +387,26 @@ function tripRow(t, sub) {
   const row = h(`<a class="trip-row" href="/t/${t.id}">
     <span class="tr-bar" style="background:${t.color}"></span>
     <span class="tr-body"><span class="tr-name">${esc(t.title)}</span><span class="tr-sub">${esc(sub)}</span></span>
-    <button class="tr-del" title="여행 삭제">🗑</button>
+    <button class="tr-del" title="목록에서 제거">✕</button>
     <span class="tr-go">›</span>
   </a>`);
   row.addEventListener("click", (e) => { e.preventDefault(); go(`/t/${t.id}`); });
+  // 홈에서는 '삭제'가 아니라 '이 기기 목록에서 제거'만 (실제 삭제는 여행 안에서)
   row.querySelector(".tr-del").addEventListener("click", (e) => {
     e.preventDefault(); e.stopPropagation();
-    if (!confirm(`‘${t.title || "이 여행"}’을(를) 삭제할까요?\n여행과 모든 일정이 영구 삭제되며, 링크를 가진 모두에게서 사라집니다.`)) return;
-    softDeleteTrip(t.id, t.title);
+    forgetTrip(t.id);
   });
   return row;
+}
+
+// 홈 목록에서만 제거 (여행 데이터는 그대로 — 링크로 다시 열 수 있음)
+function forgetTrip(id) {
+  try {
+    const list = JSON.parse(localStorage.getItem("recentTrips") || "[]").filter((x) => x.id !== id);
+    localStorage.setItem("recentTrips", JSON.stringify(list));
+  } catch {}
+  toast("목록에서 제거했어요");
+  renderHome();
 }
 
 // 실행취소(undo) 기반 소프트 삭제
