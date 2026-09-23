@@ -1345,8 +1345,8 @@ function openExpenseForm(existing) {
       <div class="ef-field"><div class="ef-lbl">언제, 어디서?</div><div class="ef-daycards" id="efDays"></div><div id="efPaidOn"></div><div class="ef-stops" id="efStops"></div></div>
       <div class="ef-amount"><input id="efAmt" inputmode="numeric" placeholder="0" value="${existing ? existing.amount ?? "" : ""}" /><span>원</span></div>
       <div class="ef-per" id="efPer"></div>
-      <div class="ef-field"><div class="ef-lbl">구분</div><div class="ef-cats" id="efCats"></div></div>
-      <input class="ef-desc" id="efDesc" placeholder="무엇에 썼나요? (예: 저녁 한정식)" value="${esc(expForm.desc)}" />
+      <div class="ef-field"><div class="ef-lbl">구분</div><div class="ef-cats" id="efCats"></div>
+        <input class="ef-desc" id="efDesc" placeholder="무엇에 썼나요? (예: 저녁 한정식)" value="${esc(expForm.desc)}" /></div>
       <div class="ef-field"><div class="ef-lbl">결제한 사람</div><div class="ef-payers" id="efPayers"></div></div>
       <div class="ef-field"><div class="ef-lbl2"><span>나눠 낼 사람</span><button class="ef-all" id="efAll" type="button">전체</button></div><div class="ef-who" id="efWho"></div></div>
       <div class="ef-actions">
