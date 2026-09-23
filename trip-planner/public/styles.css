@@ -346,3 +346,15 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .install-steps b { color: var(--text); }
 .ios-share { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid var(--line); border-radius: 5px; font-size: 12px; color: var(--accent); vertical-align: middle; }
 .install-icon { padding: 7px 9px; flex: 0 0 auto; }
+
+/* 전체 일정 + 날짜 섹션 (탭은 스크롤 이동) */
+.days { position: sticky; top: 55px; z-index: 15; background: var(--bg); border-bottom: 1px solid var(--line-soft); }
+.day-sec { scroll-margin-top: 112px; }
+.day-sec-head {
+  display: flex; align-items: baseline; gap: 8px; margin: 14px 0 8px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.day-sec:first-child .day-sec-head { margin-top: 4px; }
+.ds-top { font-size: 15px; font-weight: 700; color: var(--text); }
+.ds-sub { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.ds-cnt { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); }

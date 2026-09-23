@@ -582,15 +582,19 @@ function sortedItems(dayItems) {
   });
 }
 
+let secObserver = null;
+
 function paint() {
   if (!trip) return;
   if (curDay >= trip.dayCount) curDay = trip.dayCount - 1;
 
-  // 이 날 항목 / 지도 핀 (레이아웃 결정에 필요)
-  const dayItems = sortedItems(items.filter((it) => it.day === curDay));
-  const pinned = dayItems.filter((it) => it.lat != null);
+  // 전체 여정 핀 (일자→시간 순) — 지도는 전 일정을 한 번에 표시
+  const orderedAll = items.slice().sort((a, b) =>
+    (a.day - b.day) || ((a.time || "99:99") < (b.time || "99:99") ? -1 : (a.time === b.time ? (a.order || 0) - (b.order || 0) : 1)));
+  const pinned = orderedAll.filter((it) => it.lat != null);
   const hasMap = pinned.length > 0;
 
+  if (secObserver) { secObserver.disconnect(); secObserver = null; }
   APP.innerHTML = "";
   // 상단 바 (지도 있으면 넓은 폭으로)
   const bar = h(`
@@ -630,14 +634,18 @@ function paint() {
   });
   shell.appendChild(meta);
 
-  // Day 탭
+  // Day 탭 — 누르면 해당 날짜 섹션으로 스크롤 (필터 아님)
   const days = h(`<div class="days"></div>`);
+  const dayTabs = [];
   for (let i = 0; i < trip.dayCount; i++) {
     const { top, sub } = dayLabel(trip.startDate, i);
     const cnt = items.filter((it) => it.day === i).length;
     const tab = h(`<button class="day-tab ${i === curDay ? "active" : ""}">${top}${cnt ? ` · ${cnt}` : ""}<span class="dd">${sub}</span></button>`);
-    tab.addEventListener("click", () => { curDay = i; paint(); });
-    days.appendChild(tab);
+    tab.addEventListener("click", () => {
+      curDay = i;
+      document.getElementById(`daysec-${i}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    days.appendChild(tab); dayTabs.push(tab);
   }
   const addDay = h(`<button class="day-tab add" title="날짜 추가">+ 날</button>`);
   addDay.addEventListener("click", () => updateDoc(doc(db, "trips", tripId), { dayCount: trip.dayCount + 1 }));
@@ -648,17 +656,20 @@ function paint() {
   const body = h(`<div class="trip-body ${hasMap ? "has-map" : ""}"></div>`);
   const main = h(`<div class="trip-main"></div>`);
 
-  // 항목 목록 (타임라인)
+  // 전체 일정 타임라인 (날짜 섹션별)
   const list = h(`<div class="timeline"></div>`);
-  if (!dayItems.length) list.appendChild(h(`<div class="empty-day">아직 이 날 일정이 없어요.<br/>아래 버튼으로 장소·식사·액티비티를 추가해 보세요.</div>`));
-  dayItems.forEach((it) => list.appendChild(itemCard(it)));
+  for (let i = 0; i < trip.dayCount; i++) {
+    const { top, sub } = dayLabel(trip.startDate, i);
+    const dayItems = sortedItems(items.filter((it) => it.day === i));
+    const sec = h(`<div class="day-sec" id="daysec-${i}"></div>`);
+    sec.appendChild(h(`<div class="day-sec-head"><span class="ds-top">${top}</span><span class="ds-sub">${esc(sub)}</span><span class="ds-cnt">${dayItems.length ? dayItems.length + "곳" : "비어있음"}</span></div>`));
+    dayItems.forEach((it) => sec.appendChild(itemCard(it)));
+    const add = h(`<button class="tl-add">＋ 이 날에 장소 추가</button>`);
+    add.addEventListener("click", () => openEditor(null, i));
+    sec.appendChild(add);
+    list.appendChild(sec);
+  }
   main.appendChild(list);
-
-  // 추가 버튼 (주요 액션)
-  const addRow = h(`<div class="add-row"><button class="btn block" id="addItem">+ 장소 추가</button></div>`);
-  addRow.querySelector("#addItem").addEventListener("click", () => openEditor(null));
-  main.appendChild(addRow);
-
   body.appendChild(main);
 
   // 지도 (핀이 있으면): 넓으면 오른쪽 스티키, 좁으면 타임라인 아래
@@ -689,6 +700,20 @@ function paint() {
   APP.appendChild(shell);
   APP.appendChild(promoFooter());
   if (pinned.length) renderDayMap(pinned);
+
+  // 스크롤에 따라 현재 보이는 날짜 탭 강조
+  const secs = [...list.querySelectorAll(".day-sec")];
+  if (secs.length) {
+    secObserver = new IntersectionObserver((entries) => {
+      const vis = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (!vis) return;
+      const i = Number(vis.target.id.replace("daysec-", ""));
+      if (Number.isNaN(i)) return;
+      curDay = i;
+      dayTabs.forEach((t, idx) => t.classList.toggle("active", idx === i));
+    }, { rootMargin: "-120px 0px -55% 0px", threshold: 0 });
+    secs.forEach((s) => secObserver.observe(s));
+  }
 }
 
 function itemCard(it) {
@@ -799,10 +824,10 @@ function focusOnMap(it) {
 // ---------- 항목 편집 모달 ----------
 let pickMap = null, pickMarker = null, editState = null;
 
-function openEditor(existing) {
+function openEditor(existing, presetDay) {
   editState = existing
     ? { ...existing }
-    : { day: curDay, type: "place", name: "", address: "", lat: null, lng: null, time: "", memo: "" };
+    : { day: presetDay != null ? presetDay : curDay, type: "place", name: "", address: "", lat: null, lng: null, time: "", memo: "" };
 
   const bg = h(`<div class="modal-bg"></div>`);
   const modal = h(`
