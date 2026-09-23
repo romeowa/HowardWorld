@@ -634,6 +634,7 @@ let tripId = null;
 let dayMap = null;
 let markerById = {};   // 항목 id → 지도 마커 (리스트 클릭 시 지도 이동용)
 let currentPinned = []; // 현재 표시 중인 핀 목록 (모바일 지도 시트용)
+let pinNumById = {};   // 항목 id → 지도 핀 번호 (타임라인 번호 원과 매칭)
 let skipRememberOnce = false;  // admin에서 열람 시 홈 최근목록에 기록 안 함
 
 // ---------- 정산 상태 ----------
@@ -701,6 +702,7 @@ function paint() {
     (a.day - b.day) || ((a.time || "99:99") < (b.time || "99:99") ? -1 : (a.time === b.time ? (a.order || 0) - (b.order || 0) : 1)));
   const pinned = ordered.filter((it) => dayList.includes(it.day) && it.lat != null);
   const hasMap = pinned.length > 0;
+  pinNumById = {}; pinned.forEach((it, i) => { pinNumById[it.id] = i + 1; }); // 지도 핀 번호와 매칭
 
   APP.innerHTML = "";
   // 상단 바 (지도 있으면 넓은 폭으로)
@@ -760,6 +762,19 @@ function paint() {
   }));
   shell.appendChild(tabs);
 
+  // 모바일 하단 탭바 (일정/정산) — 데스크톱은 위 세그먼트 토글 사용
+  const bnav = h(`<div class="bottom-nav">
+    <button class="bn ${tripTab === "plan" ? "on" : ""}" data-tab="plan">일정</button>
+    <button class="bn ${tripTab === "settle" ? "on" : ""}" data-tab="settle">정산</button>
+  </div>`);
+  bnav.querySelectorAll(".bn").forEach((b) => b.addEventListener("click", () => {
+    if (tripTab === b.dataset.tab) return;
+    tripTab = b.dataset.tab;
+    if (tripTab === "settle") logEvent("settle_open", { trip: tripId });
+    paint();
+  }));
+  shell.appendChild(bnav);
+
   // 정산 탭
   if (tripTab === "settle") {
     renderSettleView(shell);
@@ -811,7 +826,8 @@ function paint() {
     const { top, sub } = dayLabel(trip.startDate, i);
     const dayItems = sortedItems(items.filter((it) => it.day === i));
     const sec = h(`<div class="day-sec" id="daysec-${i}"></div>`);
-    sec.appendChild(h(`<div class="day-sec-head"><span class="ds-top">${top}</span><span class="ds-sub">${esc(sub)}</span></div>`));
+    const cnt = dayItems.length ? `<span class="ds-cnt">${dayItems.length}곳</span>` : "";
+    sec.appendChild(h(`<div class="day-sec-head"><span class="ds-top">${top}</span><span class="ds-sub">${esc(sub)}</span>${cnt}</div>`));
     dayItems.forEach((it) => sec.appendChild(itemCard(it)));
     const add = h(`<button class="tl-add">＋ 이 날에 장소 추가</button>`);
     add.addEventListener("click", () => openEditor(null, i));
@@ -829,11 +845,18 @@ function paint() {
   }
   shell.appendChild(body);
 
-  // 모바일 지도 시트 + 지도 FAB (핀 있을 때)
+  // 모바일 FAB 묶음: (지도) + (장소 추가). 지도 시트는 핀 있을 때만.
+  const fabs = h(`<div class="fab-group"></div>`);
   if (hasMap) {
-    const fab = h(`<button class="map-fab" id="mapFab" title="지도 보기">🗺 지도</button>`);
-    fab.addEventListener("click", () => openMapSheet());
-    shell.appendChild(fab);
+    const fabMap = h(`<button class="fab ghost" id="mapFab" title="지도 보기">🗺 지도</button>`);
+    fabMap.addEventListener("click", () => openMapSheet());
+    fabs.appendChild(fabMap);
+  }
+  const fabAdd = h(`<button class="fab dark" title="장소 추가">＋ 장소</button>`);
+  fabAdd.addEventListener("click", () => openEditor(null, viewDay != null ? viewDay : 0));
+  fabs.appendChild(fabAdd);
+  shell.appendChild(fabs);
+  if (hasMap) {
     const sheet = h(`<div class="map-sheet-bg" id="mapSheetBg" hidden>
       <div class="map-sheet">
         <div class="map-sheet-head"><span class="grab"></span><button class="map-sheet-close">닫기</button></div>
@@ -916,13 +939,16 @@ function itemCard(it) {
   const t = TYPES[it.type] || TYPES.note;
   // 주소 클릭 → 구글맵에서 해당 좌표 열기 (정확한 위치, 모바일에선 앱/웹뷰)
   const mapLink = it.lat != null ? `https://www.google.com/maps/search/?api=1&query=${it.lat},${it.lng}` : null;
+  const num = pinNumById[it.id];
+  const dot = num != null
+    ? `<span class="tl-num">${num}</span>`
+    : `<span class="tl-num plain" title="${esc(t.label)}">${t.emoji}</span>`;
   const row = h(`
     <div class="tl-row ${it.lat != null ? "clickable" : ""}" data-id="${it.id}">
       <div class="tl-time ${it.time ? "" : "empty"}">${it.time ? esc(it.time) : ""}</div>
-      <div class="tl-rail"><span class="tl-dot"></span></div>
+      ${dot}
       <div class="tl-content">
         <div class="tl-head">
-          <span class="tl-emoji">${t.emoji}</span>
           <span class="tl-name">${esc(it.name) || t.label}</span>
           <span class="tl-weather"></span>
           <span class="tl-acts">
