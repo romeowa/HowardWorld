@@ -808,6 +808,16 @@ function openEditor(existing, presetDay) {
     ? { ...existing }
     : { day: presetDay != null ? presetDay : curDay, type: "place", name: "", address: "", lat: null, lng: null, time: "", memo: "" };
 
+  // 24시간제 시/분 선택 옵션
+  const [eh = "", em = ""] = (editState.time || "").split(":");
+  const hourOpts = ['<option value="">시간 미지정</option>']
+    .concat([...Array(24).keys()].map((i) => { const v = String(i).padStart(2, "0"); return `<option value="${v}" ${v === eh ? "selected" : ""}>${v}시</option>`; }))
+    .join("");
+  const minSet = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+  if (em && !minSet.includes(Number(em))) minSet.push(Number(em));
+  minSet.sort((a, b) => a - b);
+  const minOpts = minSet.map((i) => { const v = String(i).padStart(2, "0"); return `<option value="${v}" ${v === em ? "selected" : ""}>${v}분</option>`; }).join("");
+
   const bg = h(`<div class="modal-bg"></div>`);
   const modal = h(`
     <div class="modal">
@@ -827,7 +837,9 @@ function openEditor(existing, presetDay) {
       </div>
       <div class="field"><label>이름</label><input id="name" value="${esc(editState.name)}" placeholder="장소/메뉴/활동 이름" /></div>
       <div class="field"><label>주소 · 위치</label><input id="address" value="${esc(editState.address)}" placeholder="주소 또는 위치 설명" /></div>
-      <div class="field"><label>시간</label><input id="time" type="time" value="${esc(editState.time)}" /></div>
+      <div class="field"><label>시간</label>
+        <div class="time-pick"><select id="timeH">${hourOpts}</select><select id="timeM">${minOpts}</select></div>
+      </div>
       <div class="field"><label>메모</label><textarea id="memo" placeholder="예약 정보, 팁, 준비물…">${esc(editState.memo)}</textarea></div>
       <div class="modal-actions">
         <button class="btn ghost" id="cancel">${existing ? "취소" : "닫기"}</button>
@@ -959,7 +971,8 @@ function openEditor(existing, presetDay) {
   async function save() {
     editState.name = nameEl.value.trim();
     editState.address = addrEl.value.trim();
-    editState.time = modal.querySelector("#time").value;
+    const th = modal.querySelector("#timeH").value;
+    editState.time = th ? `${th}:${modal.querySelector("#timeM").value || "00"}` : "";
     editState.memo = modal.querySelector("#memo").value.trim();
     if (!editState.name && !editState.address && !editState.memo) { toast("이름이나 메모를 입력해 주세요"); return; }
     const data = {
@@ -976,7 +989,7 @@ function openEditor(existing, presetDay) {
         // 모달을 닫지 않고 폼만 비워 이어서 입력 (날짜·종류는 유지)
         toast(`추가됨 — 이어서 입력하세요`);
         nameEl.value = ""; addrEl.value = "";
-        modal.querySelector("#time").value = ""; modal.querySelector("#memo").value = "";
+        modal.querySelector("#timeH").value = ""; modal.querySelector("#timeM").value = "00"; modal.querySelector("#memo").value = "";
         editState.name = editState.address = editState.time = editState.memo = "";
         editState.lat = editState.lng = null;
         if (pickMarker) { pickMarker.setMap(null); pickMarker = null; }

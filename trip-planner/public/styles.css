@@ -359,3 +359,8 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .tl-inlinemap { display: none; }
 .tl-inlinemap.open { display: block; height: 180px; margin-top: 8px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
 .mini-loading { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--muted); font-size: 13px; }
+
+/* 24시간제 시/분 선택 */
+.time-pick { display: flex; gap: 8px; }
+.time-pick select { flex: 1; padding: 10px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text); font-size: 16px; }
+.time-pick select:focus { outline: none; border-color: var(--accent); }
