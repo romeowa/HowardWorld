@@ -356,8 +356,13 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .ds-cnt { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); }
 
 /* 항목 인라인 미니 지도 */
-.tl-inlinemap { display: none; }
-.tl-inlinemap.open { display: block; height: 180px; margin-top: 8px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.tl-inline { display: none; }
+.tl-inline.open { display: block; margin-top: 8px; }
+.tl-inline.map.open { height: 180px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.tl-inline.acts.open { display: flex; gap: 6px; flex-wrap: wrap; }
+.tl-inline .ia-btn { flex: 1; min-width: 64px; height: 42px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); font-size: 13px; color: var(--text); display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+.tl-inline .ia-btn:hover { background: var(--surface); }
+.tl-inline .ia-btn.danger { color: var(--danger); }
 .mini-loading { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--muted); font-size: 13px; }
 
 /* 24시간제 시/분 선택 */
@@ -676,4 +681,28 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 @media (hover: hover) {
   .tl-acts { opacity: 0; transition: opacity .12s; }
   .tl-row:hover .tl-acts, .tl-acts:focus-within { opacity: 1; }
+}
+
+/* ---------- 모바일 지도 시트 + 지도 FAB (1d) ---------- */
+.map-fab {
+  position: fixed; right: 16px; bottom: calc(20px + env(safe-area-inset-bottom)); z-index: 40;
+  height: 48px; padding: 0 18px; border-radius: 24px; background: var(--card); border: 1px solid var(--line);
+  box-shadow: 0 10px 24px -12px rgba(40,34,20,.5); font-size: 14px; font-weight: 600; color: var(--text);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.map-fab:hover { background: var(--surface); }
+.map-sheet-bg { position: fixed; inset: 0; background: rgba(27,26,23,.28); z-index: 1000; display: flex; align-items: flex-end; }
+.map-sheet-bg[hidden] { display: none; }
+.map-sheet { width: 100%; height: 72vh; background: var(--card); border-radius: 22px 22px 0 0; display: flex; flex-direction: column; overflow: hidden; }
+.map-sheet-head { position: relative; display: flex; align-items: center; padding: 10px 12px; }
+.map-sheet-head .grab { flex: 1; height: 5px; max-width: 40px; margin: 0 auto; border-radius: 3px; background: var(--line); }
+.map-sheet-head .map-sheet-close { position: absolute; right: 12px; padding: 6px 10px; font-size: 14px; color: var(--muted-2); background: none; }
+.map-sheet-body { flex: 1; min-height: 0; padding: 0 12px 20px; }
+.map-sheet-body #dayMapSheet { width: 100%; height: 100%; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); }
+/* 데스크톱(≥960)은 FAB/시트 숨김, 모바일(<960)은 우측 스티키 지도·헤더 액션 숨김 */
+@media (min-width: 960px) { .map-fab, .map-sheet-bg { display: none !important; } }
+@media (max-width: 959px) {
+  .trip-aside { display: none; }
+  .tl-acts { display: none; }
+  .tl-row { cursor: pointer; }
 }

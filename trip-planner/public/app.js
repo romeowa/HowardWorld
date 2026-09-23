@@ -81,6 +81,7 @@ const h = (html) => { const t = document.createElement("template"); t.innerHTML 
 const esc = (s) => (s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
+const isMobileView = () => window.matchMedia("(max-width: 959px)").matches;
 
 function toast(msg) {
   let el = document.querySelector(".toast");
@@ -613,6 +614,7 @@ let viewDay = null;    // null = 전체 보기, 숫자 = 그 날짜만 보기
 let tripId = null;
 let dayMap = null;
 let markerById = {};   // 항목 id → 지도 마커 (리스트 클릭 시 지도 이동용)
+let currentPinned = []; // 현재 표시 중인 핀 목록 (모바일 지도 시트용)
 let skipRememberOnce = false;  // admin에서 열람 시 홈 최근목록에 기록 안 함
 
 // ---------- 정산 상태 ----------
@@ -800,12 +802,29 @@ function paint() {
   main.appendChild(list);
   body.appendChild(main);
 
-  // 지도 (핀이 있으면): 넓으면 오른쪽 스티키, 좁으면 타임라인 아래
+  // 지도: 데스크톱은 오른쪽 스티키(#dayMap), 모바일은 '지도' 버튼 → 하단 시트(1d)
+  currentPinned = pinned;
   if (hasMap) {
     const aside = h(`<div class="trip-aside"><div id="dayMap"></div></div>`);
     body.appendChild(aside);
   }
   shell.appendChild(body);
+
+  // 모바일 지도 시트 + 지도 FAB (핀 있을 때)
+  if (hasMap) {
+    const fab = h(`<button class="map-fab" id="mapFab" title="지도 보기">🗺 지도</button>`);
+    fab.addEventListener("click", () => openMapSheet());
+    shell.appendChild(fab);
+    const sheet = h(`<div class="map-sheet-bg" id="mapSheetBg" hidden>
+      <div class="map-sheet">
+        <div class="map-sheet-head"><span class="grab"></span><button class="map-sheet-close">닫기</button></div>
+        <div class="map-sheet-body"><div id="dayMapSheet"></div></div>
+      </div>
+    </div>`);
+    sheet.addEventListener("click", (e) => { if (e.target === sheet) closeMapSheet(); });
+    sheet.querySelector(".map-sheet-close").addEventListener("click", closeMapSheet);
+    shell.appendChild(sheet);
+  }
 
   // 마지막 날 삭제 (비어있을 때만) — 본문 아래 전체 폭
   if (trip.dayCount > 1) {
@@ -824,8 +843,25 @@ function paint() {
 
   APP.appendChild(shell);
   APP.appendChild(promoFooter());
-  if (pinned.length) renderDayMap(pinned);
+  // 데스크톱만 우측 지도 즉시 렌더. 모바일은 '지도' 버튼으로 시트에서 렌더.
+  if (pinned.length && !isMobileView()) renderDayMap(pinned, "dayMap");
 }
+
+// 모바일: 하단 지도 시트 열기/닫기
+async function openMapSheet(focus) {
+  const bg = document.getElementById("mapSheetBg");
+  if (!bg) return;
+  bg.hidden = false;
+  const el = document.getElementById("dayMapSheet");
+  if (el) el.innerHTML = "";
+  await renderDayMap(currentPinned, "dayMapSheet");
+  if (focus && focus.lat != null) {
+    panTo(focus);
+    const m = markerById[focus.id];
+    if (m) m.info.open({ map: dayMap, anchor: m.mk });
+  }
+}
+function closeMapSheet() { const bg = document.getElementById("mapSheetBg"); if (bg) bg.hidden = true; }
 
 // ---------- 날씨 (Open-Meteo · API 키 불필요) ----------
 const WMO_EMOJI = (code) => {
@@ -877,7 +913,7 @@ function itemCard(it) {
         </div>
         ${it.address ? `<div class="tl-addr">${mapLink ? `<a href="${mapLink}" target="_blank" rel="noopener">${esc(it.address)}<span class="tl-ext"> ↗</span></a>` : esc(it.address)}</div>` : ""}
         ${it.memo ? `<div class="tl-memo">${esc(it.memo)}</div>` : ""}
-        ${it.lat != null ? `<div class="tl-inlinemap"></div>` : ""}
+        <div class="tl-inline"></div>
       </div>
     </div>`);
   // 날짜(시작일+day)와 위치(핀)가 있으면 그 날/장소의 날씨 표시
@@ -893,31 +929,30 @@ function itemCard(it) {
     e.stopPropagation();
     if (confirm(`"${it.name || TYPES[it.type]?.label}" 삭제할까요?`)) { deleteDoc(doc(db, "trips", tripId, "items", it.id)); logEvent("item_delete", { trip: tripId }); }
   });
-  // 내용 클릭 → 그 자리에서 아래로 펼치며 미니 지도(핀) 표시
-  if (it.lat != null) {
-    row.querySelector(".tl-content").addEventListener("click", (e) => {
-      if (e.target.closest(".tl-acts") || e.target.closest("a") || e.target.closest(".tl-inlinemap")) return;
-      toggleInlineMap(it, row);
-    });
-  }
+  // 내용 클릭 → 모바일: 지도/길찾기/수정/삭제 인라인 버튼, 데스크톱: 미니 지도
+  row.querySelector(".tl-content").addEventListener("click", (e) => {
+    if (e.target.closest(".tl-acts") || e.target.closest("a") || e.target.closest(".tl-inline")) return;
+    if (isMobileView()) toggleActions(it, row);
+    else if (it.lat != null) toggleInlineMap(it, row);
+  });
   return row;
 }
 
-// 항목 인라인 미니 지도 (한 번에 하나만 펼침)
+// 항목 인라인 영역 (한 번에 하나만 펼침) — 데스크톱=미니지도 / 모바일=액션 버튼
 let openInlineId = null;
 function collapseInline() {
   if (!openInlineId) return;
-  const prev = document.querySelector(`.tl-row[data-id="${openInlineId}"] .tl-inlinemap`);
-  if (prev) { prev.classList.remove("open"); prev.innerHTML = ""; }
+  const prev = document.querySelector(`.tl-row[data-id="${openInlineId}"] .tl-inline`);
+  if (prev) { prev.className = "tl-inline"; prev.innerHTML = ""; }
   openInlineId = null;
 }
 async function toggleInlineMap(it, row) {
-  const el = row.querySelector(".tl-inlinemap");
+  const el = row.querySelector(".tl-inline");
   if (!el) return;
   if (openInlineId === it.id) { collapseInline(); return; } // 다시 누르면 접기
   collapseInline();
   openInlineId = it.id;
-  el.classList.add("open");
+  el.className = "tl-inline map open";
   el.innerHTML = `<div class="mini-loading">지도 불러오는 중…</div>`;
   try {
     await google.maps.importLibrary("maps");
@@ -932,11 +967,33 @@ async function toggleInlineMap(it, row) {
     el.innerHTML = `<div class="mini-loading">지도를 불러오지 못했어요</div>`;
   }
 }
+// 모바일: 항목 탭 시 지도/길찾기/수정/삭제 버튼 펼침 (1d)
+function toggleActions(it, row) {
+  const el = row.querySelector(".tl-inline");
+  if (!el) return;
+  if (openInlineId === it.id) { collapseInline(); return; }
+  collapseInline();
+  openInlineId = it.id;
+  el.className = "tl-inline acts open";
+  el.innerHTML = "";
+  if (it.lat != null) {
+    const bMap = h(`<button class="ia-btn">🗺 지도</button>`);
+    bMap.addEventListener("click", (e) => { e.stopPropagation(); openMapSheet(it); });
+    const bDir = h(`<button class="ia-btn">🧭 길찾기</button>`);
+    bDir.addEventListener("click", (e) => { e.stopPropagation(); window.open(`https://www.google.com/maps/dir/?api=1&destination=${it.lat},${it.lng}`, "_blank", "noopener"); });
+    el.appendChild(bMap); el.appendChild(bDir);
+  }
+  const bEdit = h(`<button class="ia-btn">✏️ 수정</button>`);
+  bEdit.addEventListener("click", (e) => { e.stopPropagation(); openEditor(it); });
+  const bDel = h(`<button class="ia-btn danger">🗑 삭제</button>`);
+  bDel.addEventListener("click", (e) => { e.stopPropagation(); if (confirm(`"${it.name || TYPES[it.type]?.label}" 삭제할까요?`)) { deleteDoc(doc(db, "trips", tripId, "items", it.id)); logEvent("item_delete", { trip: tripId }); } });
+  el.appendChild(bEdit); el.appendChild(bDel);
+}
 
 // ---------- 이 날 지도 (구글맵) ----------
 let dayFitAll = null; // "전체 보기" 콜백
-async function renderDayMap(pinned) {
-  const el = document.getElementById("dayMap");
+async function renderDayMap(pinned, elId = "dayMap") {
+  const el = document.getElementById(elId);
   if (!el) return;
   await google.maps.importLibrary("maps");
   const map = new google.maps.Map(el, {
