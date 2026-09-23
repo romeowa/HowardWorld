@@ -342,10 +342,6 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .dev-events { padding: 4px 12px; max-height: 260px; overflow-y: auto; }
 
 /* 홈 화면에 추가 안내 */
-.install-steps { color: var(--muted-2); line-height: 1.8; font-size: 14px; }
-.install-steps b { color: var(--text); }
-.ios-share { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid var(--line); border-radius: 5px; font-size: 12px; color: var(--accent); vertical-align: middle; }
-.install-icon { padding: 7px 9px; flex: 0 0 auto; }
 
 /* 전체 일정 + 날짜 섹션 (탭은 스크롤 이동) */
 .days { position: sticky; top: 55px; z-index: 15; background: var(--bg); border-bottom: 1px solid var(--line-soft); }
