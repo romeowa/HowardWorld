@@ -354,3 +354,8 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .ds-top { font-size: 15px; font-weight: 700; color: var(--text); }
 .ds-sub { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .ds-cnt { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+/* 항목 인라인 미니 지도 */
+.tl-inlinemap { display: none; }
+.tl-inlinemap.open { display: block; height: 180px; margin-top: 8px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.mini-loading { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--muted); font-size: 13px; }

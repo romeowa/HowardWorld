@@ -547,6 +547,7 @@ function sortedItems(dayItems) {
 
 function paint() {
   if (!trip) return;
+  openInlineId = null;
   if (viewDay != null && viewDay >= trip.dayCount) viewDay = null;
   curDay = viewDay != null ? viewDay : 0;
 
@@ -602,8 +603,7 @@ function paint() {
   days.appendChild(allTab);
   for (let i = 0; i < trip.dayCount; i++) {
     const { top, sub } = dayLabel(trip.startDate, i);
-    const cnt = items.filter((it) => it.day === i).length;
-    const tab = h(`<button class="day-tab ${viewDay === i ? "active" : ""}">${top}${cnt ? ` · ${cnt}` : ""}<span class="dd">${sub}</span></button>`);
+    const tab = h(`<button class="day-tab ${viewDay === i ? "active" : ""}">${top}<span class="dd">${sub}</span></button>`);
     tab.addEventListener("click", () => { viewDay = i; paint(); });
     days.appendChild(tab);
   }
@@ -622,7 +622,7 @@ function paint() {
     const { top, sub } = dayLabel(trip.startDate, i);
     const dayItems = sortedItems(items.filter((it) => it.day === i));
     const sec = h(`<div class="day-sec" id="daysec-${i}"></div>`);
-    sec.appendChild(h(`<div class="day-sec-head"><span class="ds-top">${top}</span><span class="ds-sub">${esc(sub)}</span><span class="ds-cnt">${dayItems.length ? dayItems.length + "곳" : "비어있음"}</span></div>`));
+    sec.appendChild(h(`<div class="day-sec-head"><span class="ds-top">${top}</span><span class="ds-sub">${esc(sub)}</span></div>`));
     dayItems.forEach((it) => sec.appendChild(itemCard(it)));
     const add = h(`<button class="tl-add">＋ 이 날에 장소 추가</button>`);
     add.addEventListener("click", () => openEditor(null, i));
@@ -681,6 +681,7 @@ function itemCard(it) {
         </div>
         ${it.address ? `<div class="tl-addr">${mapLink ? `<a href="${mapLink}" target="_blank" rel="noopener">${esc(it.address)}<span class="tl-ext"> ↗</span></a>` : esc(it.address)}</div>` : ""}
         ${it.memo ? `<div class="tl-memo">${esc(it.memo)}</div>` : ""}
+        ${it.lat != null ? `<div class="tl-inlinemap"></div>` : ""}
       </div>
     </div>`);
   row.querySelector(".edit").addEventListener("click", (e) => { e.stopPropagation(); openEditor(it); });
@@ -688,12 +689,44 @@ function itemCard(it) {
     e.stopPropagation();
     if (confirm(`"${it.name || TYPES[it.type]?.label}" 삭제할까요?`)) { deleteDoc(doc(db, "trips", tripId, "items", it.id)); logEvent("item_delete", { trip: tripId }); }
   });
-  // 내용 클릭 → 지도에서 해당 위치로 이동
-  row.querySelector(".tl-content").addEventListener("click", (e) => {
-    if (e.target.closest(".tl-acts") || e.target.closest("a")) return;
-    focusOnMap(it);
-  });
+  // 내용 클릭 → 그 자리에서 아래로 펼치며 미니 지도(핀) 표시
+  if (it.lat != null) {
+    row.querySelector(".tl-content").addEventListener("click", (e) => {
+      if (e.target.closest(".tl-acts") || e.target.closest("a") || e.target.closest(".tl-inlinemap")) return;
+      toggleInlineMap(it, row);
+    });
+  }
   return row;
+}
+
+// 항목 인라인 미니 지도 (한 번에 하나만 펼침)
+let openInlineId = null;
+function collapseInline() {
+  if (!openInlineId) return;
+  const prev = document.querySelector(`.tl-row[data-id="${openInlineId}"] .tl-inlinemap`);
+  if (prev) { prev.classList.remove("open"); prev.innerHTML = ""; }
+  openInlineId = null;
+}
+async function toggleInlineMap(it, row) {
+  const el = row.querySelector(".tl-inlinemap");
+  if (!el) return;
+  if (openInlineId === it.id) { collapseInline(); return; } // 다시 누르면 접기
+  collapseInline();
+  openInlineId = it.id;
+  el.classList.add("open");
+  el.innerHTML = `<div class="mini-loading">지도 불러오는 중…</div>`;
+  try {
+    await google.maps.importLibrary("maps");
+    if (openInlineId !== it.id) return; // 그새 다른 걸 열었으면 취소
+    el.innerHTML = "";
+    const pos = { lat: it.lat, lng: it.lng };
+    const map = new google.maps.Map(el, {
+      center: pos, zoom: 15, disableDefaultUI: true, zoomControl: true, gestureHandling: "cooperative",
+    });
+    new google.maps.Marker({ position: pos, map });
+  } catch {
+    el.innerHTML = `<div class="mini-loading">지도를 불러오지 못했어요</div>`;
+  }
 }
 
 // ---------- 이 날 지도 (구글맵) ----------
