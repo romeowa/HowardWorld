@@ -510,6 +510,7 @@ async function createTrip() {
 let trip = null;       // {title, startDate, dayCount}
 let items = [];        // [{id, ...}]
 let curDay = 0;
+let viewDay = null;    // null = 전체 보기, 숫자 = 그 날짜만 보기
 let tripId = null;
 let dayMap = null;
 let markerById = {};   // 항목 id → 지도 마커 (리스트 클릭 시 지도 이동용)
@@ -517,7 +518,7 @@ let skipRememberOnce = false;  // admin에서 열람 시 홈 최근목록에 기
 
 function renderTrip(id) {
   tripId = id;
-  trip = null; items = []; curDay = 0; dayMap = null;
+  trip = null; items = []; curDay = 0; viewDay = null; dayMap = null;
   const remember = !skipRememberOnce; skipRememberOnce = false;
   APP.innerHTML = `<div class="loading">여행을 불러오는 중…</div>`;
   if (remember) logEvent("trip_open", { trip: id });
@@ -544,19 +545,19 @@ function sortedItems(dayItems) {
   });
 }
 
-let secObserver = null;
-
 function paint() {
   if (!trip) return;
-  if (curDay >= trip.dayCount) curDay = trip.dayCount - 1;
+  if (viewDay != null && viewDay >= trip.dayCount) viewDay = null;
+  curDay = viewDay != null ? viewDay : 0;
 
-  // 전체 여정 핀 (일자→시간 순) — 지도는 전 일정을 한 번에 표시
-  const orderedAll = items.slice().sort((a, b) =>
+  // 표시할 날짜: 전체(null)면 모든 날, 특정 날이면 그 날만
+  const dayList = viewDay != null ? [viewDay] : [...Array(trip.dayCount).keys()];
+  // 지도 핀: 표시 중인 날들의 항목만 (일자→시간 순)
+  const ordered = items.slice().sort((a, b) =>
     (a.day - b.day) || ((a.time || "99:99") < (b.time || "99:99") ? -1 : (a.time === b.time ? (a.order || 0) - (b.order || 0) : 1)));
-  const pinned = orderedAll.filter((it) => it.lat != null);
+  const pinned = ordered.filter((it) => dayList.includes(it.day) && it.lat != null);
   const hasMap = pinned.length > 0;
 
-  if (secObserver) { secObserver.disconnect(); secObserver = null; }
   APP.innerHTML = "";
   // 상단 바 (지도 있으면 넓은 폭으로)
   const bar = h(`
@@ -594,18 +595,17 @@ function paint() {
   });
   shell.appendChild(meta);
 
-  // Day 탭 — 누르면 해당 날짜 섹션으로 스크롤 (필터 아님)
+  // Day 탭 — "전체"(전 일정) + 날짜별(그 날만 필터)
   const days = h(`<div class="days"></div>`);
-  const dayTabs = [];
+  const allTab = h(`<button class="day-tab ${viewDay == null ? "active" : ""}">전체<span class="dd">${trip.dayCount}일</span></button>`);
+  allTab.addEventListener("click", () => { viewDay = null; paint(); });
+  days.appendChild(allTab);
   for (let i = 0; i < trip.dayCount; i++) {
     const { top, sub } = dayLabel(trip.startDate, i);
     const cnt = items.filter((it) => it.day === i).length;
-    const tab = h(`<button class="day-tab ${i === curDay ? "active" : ""}">${top}${cnt ? ` · ${cnt}` : ""}<span class="dd">${sub}</span></button>`);
-    tab.addEventListener("click", () => {
-      curDay = i;
-      document.getElementById(`daysec-${i}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-    days.appendChild(tab); dayTabs.push(tab);
+    const tab = h(`<button class="day-tab ${viewDay === i ? "active" : ""}">${top}${cnt ? ` · ${cnt}` : ""}<span class="dd">${sub}</span></button>`);
+    tab.addEventListener("click", () => { viewDay = i; paint(); });
+    days.appendChild(tab);
   }
   const addDay = h(`<button class="day-tab add" title="날짜 추가">+ 날</button>`);
   addDay.addEventListener("click", () => updateDoc(doc(db, "trips", tripId), { dayCount: trip.dayCount + 1 }));
@@ -616,9 +616,9 @@ function paint() {
   const body = h(`<div class="trip-body ${hasMap ? "has-map" : ""}"></div>`);
   const main = h(`<div class="trip-main"></div>`);
 
-  // 전체 일정 타임라인 (날짜 섹션별)
+  // 타임라인 (전체면 날짜 섹션 전부, 특정 날이면 그 날만)
   const list = h(`<div class="timeline"></div>`);
-  for (let i = 0; i < trip.dayCount; i++) {
+  dayList.forEach((i) => {
     const { top, sub } = dayLabel(trip.startDate, i);
     const dayItems = sortedItems(items.filter((it) => it.day === i));
     const sec = h(`<div class="day-sec" id="daysec-${i}"></div>`);
@@ -628,7 +628,7 @@ function paint() {
     add.addEventListener("click", () => openEditor(null, i));
     sec.appendChild(add);
     list.appendChild(sec);
-  }
+  });
   main.appendChild(list);
   body.appendChild(main);
 
@@ -660,20 +660,6 @@ function paint() {
   APP.appendChild(shell);
   APP.appendChild(promoFooter());
   if (pinned.length) renderDayMap(pinned);
-
-  // 스크롤에 따라 현재 보이는 날짜 탭 강조
-  const secs = [...list.querySelectorAll(".day-sec")];
-  if (secs.length) {
-    secObserver = new IntersectionObserver((entries) => {
-      const vis = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-      if (!vis) return;
-      const i = Number(vis.target.id.replace("daysec-", ""));
-      if (Number.isNaN(i)) return;
-      curDay = i;
-      dayTabs.forEach((t, idx) => t.classList.toggle("active", idx === i));
-    }, { rootMargin: "-120px 0px -55% 0px", threshold: 0 });
-    secs.forEach((s) => secObserver.observe(s));
-  }
 }
 
 function itemCard(it) {
