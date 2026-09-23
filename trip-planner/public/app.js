@@ -189,8 +189,7 @@ function cleanup() {
   if (unsubTrip) unsubTrip(); if (unsubItems) unsubItems();
   if (unsubExpenses) unsubExpenses();
   unsubTrip = unsubItems = unsubExpenses = null;
-  settleRerender = null;
-  document.querySelector(".settle-bg")?.remove();
+  document.querySelector(".modal-bg")?.remove();
 }
 function go(path) { history.pushState({}, "", path); route(); }
 window.addEventListener("popstate", route);
@@ -466,14 +465,23 @@ let skipRememberOnce = false;  // admin에서 열람 시 홈 최근목록에 기
 
 // ---------- 정산 상태 ----------
 const DEFAULT_CATS = ["숙박", "식사", "교통", "간식", "관광", "기타"];
-let expenses = [];             // [{id, date, category, desc, amount, payer, sharedBy:[names]}]
-let unsubExpenses = null;      // 정산 내역 실시간 구독 (정산 창 열려 있을 때만)
-let settleRerender = null;     // 정산 창이 열려 있으면 trip/expenses 변경 시 다시 그림
+let expenses = [];             // [{id, date, category, desc, amount, payer, sharedBy:[names], place, day}]
+let unsubExpenses = null;      // 정산 내역 실시간 구독 (여행 화면 동안 유지)
+let tripTab = "plan";          // "plan"(일정) | "settle"(정산)
 const won = (n) => (Math.round(Number(n) || 0)).toLocaleString("ko-KR");
+
+// 참여자 색상 팔레트 (이름 → 아바타 색)
+const MEMBER_COLORS = ["#0f766e", "#b45309", "#6d5bd0", "#be123c", "#0369a1", "#4d7c0f", "#9d174d", "#0e7490"];
+// 카테고리 색상 (기본 구분 + 커스텀은 해시로 배정)
+const CAT_COLORS = { "숙박": "#6d5bd0", "식사": "#b45309", "교통": "#0369a1", "간식": "#be123c", "관광": "#4d7c0f", "기타": "#6f6a5f" };
+const CAT_PALETTE = ["#0f766e", "#b45309", "#6d5bd0", "#be123c", "#0369a1", "#4d7c0f", "#9d174d", "#0e7490"];
+const memberColor = (name) => MEMBER_COLORS[hashId(String(name || "")) % MEMBER_COLORS.length];
+const catColor = (c) => CAT_COLORS[c] || CAT_PALETTE[hashId(String(c || "기타")) % CAT_PALETTE.length];
+const initOf = (name) => (String(name || "?").trim()[0] || "?").toUpperCase();
 
 function renderTrip(id) {
   tripId = id;
-  trip = null; items = []; curDay = 0; viewDay = null; dayMap = null;
+  trip = null; items = []; expenses = []; curDay = 0; viewDay = null; dayMap = null; tripTab = "plan";
   const remember = !skipRememberOnce; skipRememberOnce = false;
   APP.innerHTML = `<div class="loading">여행을 불러오는 중…</div>`;
   if (remember) logEvent("trip_open", { trip: id });
@@ -483,12 +491,16 @@ function renderTrip(id) {
     trip = snap.data();
     if (remember) rememberTrip(id, { title: trip.title, startDate: trip.startDate ?? null, dayCount: trip.dayCount ?? 1 });
     paint();
-    if (settleRerender) settleRerender();
   }, (err) => { APP.innerHTML = `<div class="loading">불러오기 실패: ${esc(err.message)}</div>`; });
 
   unsubItems = onSnapshot(collection(db, "trips", id, "items"), (snap) => {
     items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     if (trip) paint();
+  });
+
+  unsubExpenses = onSnapshot(collection(db, "trips", id, "expenses"), (snap) => {
+    expenses = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    if (trip && tripTab === "settle") paint();
   });
 }
 
@@ -521,21 +533,40 @@ function paint() {
     <div class="topbar"><div class="topbar-inner ${hasMap ? "wide" : ""}">
       <a class="home-link" href="/" title="홈으로 가기">← 홈</a>
       <input class="trip-title" value="${esc(trip.title)}" placeholder="여행 제목" />
-      <button class="btn ghost sm" id="settle">💰 정산</button>
       <button class="btn ghost sm" id="share">🔗 링크</button>
     </div></div>`);
   APP.appendChild(bar);
   const titleInput = bar.querySelector(".trip-title");
   titleInput.addEventListener("change", () => updateDoc(doc(db, "trips", tripId), { title: titleInput.value.trim() || "새 여행" }));
   bar.querySelector(".home-link").addEventListener("click", (e) => { e.preventDefault(); go("/"); });
-  bar.querySelector("#settle").addEventListener("click", openSettle);
   bar.querySelector("#share").addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(location.href); toast("링크를 복사했어요"); }
     catch { prompt("이 링크를 공유하세요:", location.href); }
   });
 
-  // 여행 전체를 감싸는 셸 (지도 있으면 넓게)
-  const shell = h(`<div class="trip-shell ${hasMap ? "wide" : ""}"></div>`);
+  // 여행 전체를 감싸는 셸 (지도 있으면 넓게, 정산 탭도 넓게)
+  const shell = h(`<div class="trip-shell ${hasMap || tripTab === "settle" ? "wide" : ""}"></div>`);
+
+  // 일정 / 정산 탭
+  const tabs = h(`<div class="trip-tabs">
+    <button class="tt ${tripTab === "plan" ? "on" : ""}" data-tab="plan">일정</button>
+    <button class="tt ${tripTab === "settle" ? "on" : ""}" data-tab="settle">정산</button>
+  </div>`);
+  tabs.querySelectorAll(".tt").forEach((b) => b.addEventListener("click", () => {
+    if (tripTab === b.dataset.tab) return;
+    tripTab = b.dataset.tab;
+    if (tripTab === "settle") logEvent("settle_open", { trip: tripId });
+    paint();
+  }));
+  shell.appendChild(tabs);
+
+  // 정산 탭
+  if (tripTab === "settle") {
+    renderSettleView(shell);
+    APP.appendChild(shell);
+    APP.appendChild(promoFooter());
+    return;
+  }
 
   // 시작일 · 종료일 (종료일은 시작일+일수에서 파생; 종료일을 바꾸면 일수가 재계산됨)
   const endVal = trip.startDate ? ymd(addDays(parseDate(trip.startDate), trip.dayCount - 1)) : "";
@@ -965,232 +996,164 @@ const tripCats = () => { const c = trip?.expenseCategories; return Array.isArray
 const saveMembers = (list) => updateDoc(doc(db, "trips", tripId), { members: list });
 const saveCats = (list) => updateDoc(doc(db, "trips", tripId), { expenseCategories: list });
 
-function openSettle() {
-  if (document.querySelector(".settle-bg")) return;
-  const bg = h(`<div class="settle-bg"></div>`);
-  const panel = h(`
-    <div class="modal settle">
-      <div class="settle-head">
-        <h3>💰 여행 정산</h3>
-        <button class="settle-x" id="settleClose" title="닫기">✕</button>
-      </div>
-      <div id="settleBody"></div>
-    </div>`);
-  bg.appendChild(panel);
-  document.body.appendChild(bg);
-  bg.addEventListener("click", (e) => { if (e.target === bg) closeSettle(); });
-  panel.querySelector("#settleClose").addEventListener("click", closeSettle);
-
-  unsubExpenses = onSnapshot(collection(db, "trips", tripId, "expenses"), (snap) => {
-    expenses = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    renderSettleBody();
-  });
-  settleRerender = renderSettleBody;
-  logEvent("settle_open", { trip: tripId });
-  renderSettleBody();
+// 정산 탭 뷰 (엑셀 정산표를 여행 안으로 — 3a 디자인)
+const dateForDay = (i) => (trip?.startDate ? ymd(addDays(parseDate(trip.startDate), i)) : "");
+function expDay(e) {
+  if (Number.isInteger(e.day)) return e.day;
+  if (e.date && trip?.startDate) { const d = dayDiff(parseDate(trip.startDate), parseDate(e.date)); if (d >= 0 && d < (trip.dayCount || 1)) return d; }
+  return null;
 }
 
-function closeSettle() {
-  if (unsubExpenses) unsubExpenses();
-  unsubExpenses = null; settleRerender = null;
-  document.querySelector(".settle-bg")?.remove();
-}
-
-function renderSettleBody() {
-  const body = document.getElementById("settleBody");
-  if (!body) return;
-  // 표 편집 중이면 포커스를 유지하기 위해 계산 값·요약만 갱신
-  if (isGridEditing()) { refreshGridComputed(); renderSummaries(); return; }
+function renderSettleView(shell) {
   const members = tripMembers();
-  const cats = tripCats();
-  body.innerHTML = "";
+  const view = h(`<div class="settle-view"></div>`);
 
-  // 참여자
-  const memSec = h(`<div class="settle-sec">
-    <div class="settle-sec-h">참여자</div>
-    <div class="mem-chips" id="memChips"></div>
-    <form class="mem-add" id="memAdd"><input id="memName" placeholder="참여자 이름" maxlength="20" autocomplete="off" /><button class="btn sm" type="submit">+ 추가</button></form>
+  // 참여자 (아바타 칩)
+  const memSec = h(`<div class="stl-members">
+    <div class="stl-mhead"><span>참여자</span><span class="mcount">${members.length}명</span></div>
+    <div class="stl-mchips"></div>
+    <form class="stl-madd"><input placeholder="참여자 추가" maxlength="20" autocomplete="off" /><button class="btn sm" type="submit">추가</button></form>
   </div>`);
-  const chips = memSec.querySelector("#memChips");
-  if (!members.length) chips.appendChild(h(`<span class="mem-empty">참여자를 추가하면 아래 표에 열이 생겨요</span>`));
-  members.forEach((name) => {
-    const chip = h(`<span class="mem-chip">${esc(name)}<button title="삭제">✕</button></span>`);
+  const chips = memSec.querySelector(".stl-mchips");
+  if (!members.length) chips.appendChild(h(`<span class="stl-mempty">함께 정산할 사람을 추가하세요</span>`));
+  members.forEach((m) => {
+    const chip = h(`<span class="stl-mchip"><span class="av" style="background:${memberColor(m)}">${esc(initOf(m))}</span><span class="nm">${esc(m)}</span><button title="삭제">✕</button></span>`);
     chip.querySelector("button").addEventListener("click", async () => {
-      const used = expenses.some((e) => e.payer === name || (e.sharedBy || []).includes(name));
-      if (used && !confirm(`'${name}'님은 정산 내역에 포함돼 있어요. 빼도 기존 내역엔 남습니다. 계속할까요?`)) return;
-      await saveMembers(members.filter((m) => m !== name));
+      const used = expenses.some((e) => e.payer === m || (e.sharedBy || []).includes(m));
+      if (used && !confirm(`'${m}'님은 정산 내역에 포함돼 있어요. 빼도 기존 내역엔 남습니다. 계속할까요?`)) return;
+      await saveMembers(members.filter((x) => x !== m));
     });
     chips.appendChild(chip);
   });
-  memSec.querySelector("#memAdd").addEventListener("submit", async (e) => {
+  memSec.querySelector(".stl-madd").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const inp = memSec.querySelector("#memName");
+    const inp = memSec.querySelector(".stl-madd input");
     const v = inp.value.trim();
     if (!v) return;
     if (members.includes(v)) { toast("이미 있는 참여자예요"); return; }
     inp.value = "";
     await saveMembers([...members, v]);
   });
-  body.appendChild(memSec);
+  view.appendChild(memSec);
 
-  // 정산 내역 표 (엑셀형 그리드)
-  const gridSec = h(`<div class="settle-sec">
-    <div class="settle-sec-h">정산 내역 <span class="cnt">${expenses.length}건</span></div>
-    <div class="grid-scroll"><table class="exp-grid"><thead></thead><tbody></tbody></table></div>
-    <button class="btn block" id="addRow">＋ 행 추가</button>
+  const { names, share, paid, transfers, total } = computeSettlement();
+  const avg = members.length ? total / members.length : (names.length ? total / names.length : 0);
+
+  // 카테고리 집계
+  const byCat = {};
+  expenses.forEach((e) => { const c = e.category || "기타"; byCat[c] = (byCat[c] || 0) + (Number(e.amount) || 0); });
+  const catArr = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+
+  const body = h(`<div class="stl-body"></div>`);
+  const main = h(`<div class="stl-main"></div>`);
+  const side = h(`<div class="stl-side"></div>`);
+
+  // --- 요약 (총 지출 + 카테고리 바) ---
+  const sum = h(`<div class="stl-card stl-summary">
+    <div class="stl-sumtop">
+      <div class="stl-total"><div class="lbl">총 지출</div><div class="val">${won(total)}<span>원</span></div></div>
+      <div class="stl-avg"><div class="lbl">1인 평균</div><div class="val">${won(avg)}원</div></div>
+    </div>
+    <div class="stl-bar"></div>
+    <div class="stl-legend"></div>
   </div>`);
-  const trh = h(`<tr></tr>`);
-  ["날짜", "구분", "내역", "금액"].forEach((t) => trh.appendChild(h(`<th>${t}</th>`)));
-  members.forEach((m) => trh.appendChild(h(`<th class="mcol">${esc(m)}</th>`)));
-  trh.appendChild(h(`<th>결제</th>`));
-  trh.appendChild(h(`<th class="pcol">1인 비용</th>`));
-  trh.appendChild(h(`<th></th>`));
-  gridSec.querySelector("thead").appendChild(trh);
-  const tbody = gridSec.querySelector("tbody");
-  const sorted = expenses.slice().sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.order || 0) - (b.order || 0));
-  if (!sorted.length) tbody.appendChild(h(`<tr><td class="grid-empty" colspan="${members.length + 7}">아직 정산 내역이 없어요. 아래 ‘행 추가’로 시작하세요.</td></tr>`));
-  sorted.forEach((ex) => tbody.appendChild(buildRow(ex, members, cats)));
-  gridSec.querySelector("#addRow").addEventListener("click", addRow);
-  body.appendChild(gridSec);
-
-  // 정산표 · 카테고리별 (요약)
-  body.appendChild(h(`<div id="sumWrap"></div>`));
-  renderSummaries();
-}
-
-function isGridEditing() {
-  const a = document.activeElement;
-  return !!(a && a.closest && a.closest(".exp-grid"));
-}
-const getExp = (id) => expenses.find((e) => e.id === id);
-const localSet = (id, partial) => { const e = getExp(id); if (e) Object.assign(e, partial); };
-const perOf = (e) => { const n = (e.sharedBy || []).length; return n ? (Number(e.amount) || 0) / n : 0; };
-function updateRowPer(tr, id) { const e = getExp(id); const cell = tr.querySelector(".c-per"); if (e && cell) cell.textContent = won(perOf(e)) + "원"; }
-function refreshGridComputed() {
-  document.querySelectorAll(".exp-grid tbody tr[data-id]").forEach((tr) => updateRowPer(tr, tr.dataset.id));
-}
-const commitExp = (id, partial) => updateDoc(doc(db, "trips", tripId, "expenses", id), partial).catch((e) => toast("저장 실패: " + e.message));
-
-function buildRow(ex, members, cats) {
-  const tr = h(`<tr data-id="${ex.id}"></tr>`);
-  // 날짜
-  const dTd = h(`<td></td>`); const dIn = h(`<input type="date" class="c-date" value="${ex.date || ""}" />`);
-  dIn.addEventListener("change", () => { localSet(ex.id, { date: dIn.value || "" }); commitExp(ex.id, { date: dIn.value || "" }); });
-  dTd.appendChild(dIn); tr.appendChild(dTd);
-  // 구분
-  const cTd = h(`<td></td>`);
-  const catOpts = cats.map((c) => `<option ${c === ex.category ? "selected" : ""}>${esc(c)}</option>`).join("")
-    + (ex.category && !cats.includes(ex.category) ? `<option selected>${esc(ex.category)}</option>` : "")
-    + `<option value="__new__">+ 새 구분</option>`;
-  const cSel = h(`<select class="c-cat">${catOpts}</select>`);
-  cSel.addEventListener("change", async () => {
-    if (cSel.value === "__new__") {
-      const name = (prompt("새 구분 이름") || "").trim();
-      if (name && !cats.includes(name)) {
-        const o = document.createElement("option"); o.textContent = name; o.selected = true;
-        cSel.insertBefore(o, cSel.lastElementChild); localSet(ex.id, { category: name });
-        await saveCats([...cats, name]); commitExp(ex.id, { category: name });
-      } else { cSel.value = ex.category || cats[0]; }
-    } else { localSet(ex.id, { category: cSel.value }); commitExp(ex.id, { category: cSel.value }); }
-  });
-  cTd.appendChild(cSel); tr.appendChild(cTd);
-  // 내역
-  const nTd = h(`<td></td>`); const nIn = h(`<input class="c-desc" value="${esc(ex.desc || "")}" placeholder="내역" />`);
-  nIn.addEventListener("input", () => localSet(ex.id, { desc: nIn.value }));
-  nIn.addEventListener("change", () => commitExp(ex.id, { desc: nIn.value.trim() }));
-  nTd.appendChild(nIn); tr.appendChild(nTd);
-  // 금액
-  const aTd = h(`<td></td>`); const aIn = h(`<input type="number" min="0" inputmode="numeric" class="c-amt" value="${ex.amount ?? ""}" placeholder="0" />`);
-  aIn.addEventListener("input", () => { localSet(ex.id, { amount: Number(aIn.value) || 0 }); updateRowPer(tr, ex.id); renderSummaries(); });
-  aIn.addEventListener("change", () => commitExp(ex.id, { amount: Number(aIn.value) || 0 }));
-  aTd.appendChild(aIn); tr.appendChild(aTd);
-  // 참여자 체크박스
-  members.forEach((m) => {
-    const td = h(`<td class="mcell"></td>`);
-    const cb = h(`<input type="checkbox" ${(ex.sharedBy || []).includes(m) ? "checked" : ""} />`);
-    cb.addEventListener("change", () => {
-      let sb = [...((getExp(ex.id) || {}).sharedBy || [])];
-      if (cb.checked) { if (!sb.includes(m)) sb.push(m); } else sb = sb.filter((x) => x !== m);
-      localSet(ex.id, { sharedBy: sb }); updateRowPer(tr, ex.id); renderSummaries(); commitExp(ex.id, { sharedBy: sb });
+  const bar = sum.querySelector(".stl-bar");
+  const legend = sum.querySelector(".stl-legend");
+  if (total > 0) {
+    catArr.forEach(([c, a]) => {
+      const w = (a / total) * 100;
+      bar.appendChild(h(`<div style="width:${w}%;background:${catColor(c)}"></div>`));
+      legend.appendChild(h(`<div class="lg"><span class="dot" style="background:${catColor(c)}"></span>${esc(c)} <span class="amt">${won(a)}</span></div>`));
     });
-    td.appendChild(cb); tr.appendChild(td);
-  });
-  // 결제한 사람
-  const pTd = h(`<td></td>`);
-  const payerList = (members.includes(ex.payer) || !ex.payer) ? members : [...members, ex.payer];
-  const pSel = h(`<select class="c-payer">${payerList.map((m) => `<option ${m === ex.payer ? "selected" : ""}>${esc(m)}</option>`).join("")}</select>`);
-  pSel.addEventListener("change", () => { localSet(ex.id, { payer: pSel.value }); renderSummaries(); commitExp(ex.id, { payer: pSel.value }); });
-  pTd.appendChild(pSel); tr.appendChild(pTd);
-  // 1인 비용 (자동)
-  tr.appendChild(h(`<td class="c-per"></td>`));
-  // 행 삭제
-  const xTd = h(`<td></td>`); const xb = h(`<button class="row-del" title="행 삭제">✕</button>`);
-  xb.addEventListener("click", async () => { if (!confirm("이 행을 삭제할까요?")) return; try { await deleteDoc(doc(db, "trips", tripId, "expenses", ex.id)); } catch (e) { toast("삭제 실패: " + e.message); } });
-  xTd.appendChild(xb); tr.appendChild(xTd);
-  updateRowPer(tr, ex.id);
-  return tr;
-}
+  } else {
+    bar.appendChild(h(`<div style="width:100%;background:var(--line)"></div>`));
+    legend.appendChild(h(`<div class="lg" style="color:var(--muted)">아직 지출이 없어요</div>`));
+  }
+  side.appendChild(sum);
 
-async function addRow() {
-  const members = tripMembers();
-  if (!members.length) { toast("먼저 참여자를 추가해 주세요"); return; }
-  const cats = tripCats();
-  try {
-    await addDoc(collection(db, "trips", tripId, "expenses"), {
-      date: trip.startDate || "", category: cats[0], desc: "", amount: 0,
-      payer: members[0], sharedBy: [...members], order: Date.now(), createdAt: serverTimestamp(),
-    });
-    logEvent("expense_add", { trip: tripId });
-  } catch (e) { toast("추가 실패: " + e.message); }
-}
-
-function renderSummaries() {
-  const wrap = document.getElementById("sumWrap");
-  if (!wrap) return;
-  wrap.innerHTML = "";
-  const { names, share, paid, transfers } = computeSettlement();
-
-  // 정산표 (이름을 열로 — 엑셀형 매트릭스)
+  // --- 정산표 (데스크톱) ---
   if (names.length) {
-    const sec = h(`<div class="settle-sec"><div class="settle-sec-h">정산표</div></div>`);
-    const scroll = h(`<div class="grid-scroll"></div>`);
-    const t = h(`<table class="tally"></table>`);
-    const head = h(`<tr><th>이름</th></tr>`);
-    names.forEach((n) => head.appendChild(h(`<th>${esc(n)}</th>`)));
-    t.appendChild(head);
-    const rShare = h(`<tr><th>개인별 비용 합계</th></tr>`);
-    names.forEach((n) => rShare.appendChild(h(`<td>${won(share[n] || 0)}</td>`)));
-    t.appendChild(rShare);
-    const rPaid = h(`<tr><th>개인별 결제 합계</th></tr>`);
-    names.forEach((n) => rPaid.appendChild(h(`<td>${won(paid[n] || 0)}</td>`)));
-    t.appendChild(rPaid);
-    const rRecv = h(`<tr class="row-recv"><th>정산 받을 금액</th></tr>`);
-    names.forEach((n) => { const net = (paid[n] || 0) - (share[n] || 0); rRecv.appendChild(h(`<td>${net > 0 ? won(net) : ""}</td>`)); });
-    t.appendChild(rRecv);
-    const rSend = h(`<tr class="row-send"><th>정산 보낼 금액</th></tr>`);
-    names.forEach((n) => { const net = (paid[n] || 0) - (share[n] || 0); rSend.appendChild(h(`<td>${net < 0 ? won(-net) : ""}</td>`)); });
-    t.appendChild(rSend);
-    scroll.appendChild(t); sec.appendChild(scroll);
-    if (transfers.length) {
-      const ts = h(`<div class="transfer"><div class="settle-sec-h">💸 송금 제안</div></div>`);
-      transfers.forEach((x) => ts.appendChild(h(`<div class="tr-row"><span><b>${esc(x.from)}</b> → <b>${esc(x.to)}</b></span><span class="tr-amt">${won(x.amount)}원</span></div>`)));
-      sec.appendChild(ts);
-    } else if (expenses.length) {
-      sec.appendChild(h(`<div class="tr-done">정산 완료! 주고받을 금액이 없어요.</div>`));
-    }
-    wrap.appendChild(sec);
+    const tally = h(`<div class="stl-card stl-tally">
+      <div class="stl-ctitle">정산표</div>
+      <div class="tl-head"><span>이름</span><span>쓴 돈</span><span>낸 돈</span><span>차액</span></div>
+    </div>`);
+    names.forEach((n) => {
+      const net = (paid[n] || 0) - (share[n] || 0);
+      const col = net > 0 ? "var(--accent-dark)" : net < 0 ? "var(--danger)" : "var(--muted)";
+      const label = net > 0 ? `+${won(net)}` : net < 0 ? `${won(net)}` : "0";
+      tally.appendChild(h(`<div class="tl-row"><span class="tl-nm"><span class="av sm" style="background:${memberColor(n)}">${esc(initOf(n))}</span>${esc(n)}</span><span>${won(share[n] || 0)}</span><span>${won(paid[n] || 0)}</span><span class="tl-net" style="color:${col}">${label}</span></div>`));
+    });
+    side.appendChild(tally);
   }
 
-  // 카테고리별 비용
-  if (expenses.length) {
-    const byCat = {}; let total = 0;
-    expenses.forEach((e) => { const a = Number(e.amount) || 0; const c = e.category || "기타"; byCat[c] = (byCat[c] || 0) + a; total += a; });
-    const sec = h(`<div class="settle-sec"><div class="settle-sec-h">카테고리별 비용</div></div>`);
-    const ct = h(`<div class="cat-table"></div>`);
-    Object.entries(byCat).sort((a, b) => b[1] - a[1]).forEach(([c, a]) => ct.appendChild(h(`<div class="cat-row"><span>${esc(c)}</span><span>${won(a)}원</span></div>`)));
-    ct.appendChild(h(`<div class="cat-row cat-total"><span>총계</span><span>${won(total)}원</span></div>`));
-    sec.appendChild(ct); wrap.appendChild(sec);
+  // --- 송금 제안 ---
+  const trf = h(`<div class="stl-card stl-transfer"><div class="stl-ctitle">이렇게 보내면 끝</div></div>`);
+  if (transfers.length) {
+    transfers.forEach((t) => trf.appendChild(h(`<div class="trf-row">
+      <span class="av sm" style="background:${memberColor(t.from)}">${esc(initOf(t.from))}</span><span class="nm">${esc(t.from)}</span>
+      <span class="arr">→</span>
+      <span class="av sm" style="background:${memberColor(t.to)}">${esc(initOf(t.to))}</span><span class="nm">${esc(t.to)}</span>
+      <span class="sp"></span><span class="amt">${won(t.amount)}원</span>
+    </div>`)));
+  } else {
+    trf.appendChild(h(`<div class="trf-done">${expenses.length ? "모두 정산됐어요." : "지출을 추가하면 정산 결과가 여기 표시돼요."}</div>`));
   }
+  side.appendChild(trf);
+
+  // --- 내역(일자별) ---
+  const addBtn = h(`<button class="btn block stl-add">＋ 지출 추가</button>`);
+  addBtn.addEventListener("click", () => { if (!tripMembers().length) { toast("먼저 참여자를 추가해 주세요"); return; } openExpenseForm(null); });
+  main.appendChild(addBtn);
+
+  // 그룹핑: day별
+  const groups = new Map();
+  expenses.forEach((e) => { const d = expDay(e); const k = d == null ? "x" : d; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(e); });
+  const keys = [...groups.keys()].sort((a, b) => (a === "x" ? 1 : b === "x" ? -1 : a - b));
+  if (!expenses.length) {
+    main.appendChild(h(`<div class="stl-empty">아직 지출 내역이 없어요.<br/>‘＋ 지출 추가’로 시작하세요.</div>`));
+  }
+  keys.forEach((k) => {
+    const arr = groups.get(k).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+    const dtotal = arr.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    const label = k === "x" ? "날짜 미정" : (() => { const { top, sub } = dayLabel(trip.startDate, k); return sub ? `${top} · ${sub}` : top; })();
+    const sec = h(`<div class="stl-day"><div class="stl-dhead"><span>${esc(label)}</span><span class="dt">${won(dtotal)}원</span></div></div>`);
+    arr.forEach((e) => sec.appendChild(expenseRow(e, members)));
+    main.appendChild(sec);
+  });
+
+  body.appendChild(main);
+  body.appendChild(side);
+  view.appendChild(body);
+  shell.appendChild(view);
+}
+
+function expenseRow(e, members) {
+  const n = (e.sharedBy || []).length || 1;
+  const per = (Number(e.amount) || 0) / n;
+  const sub = [e.payer ? `${e.payer} 결제` : "", e.place || ""].filter(Boolean).join(" · ") || `${n}명 나눔`;
+  const row = h(`<div class="exp-item">
+    <div class="exp-head">
+      <span class="exp-cat" style="color:${catColor(e.category)};background:${catColor(e.category)}1a">${esc(e.category || "기타")}</span>
+      <div class="exp-info"><div class="exp-desc">${esc(e.desc || "(내역 없음)")}</div><div class="exp-sub">${esc(sub)}</div></div>
+      <div class="exp-nums"><div class="exp-amt">${won(e.amount)}</div><div class="exp-per">1인 ${won(per)}</div></div>
+    </div>
+    <div class="exp-avs"></div>
+  </div>`);
+  row.querySelector(".exp-head").addEventListener("click", () => openExpenseForm(e));
+  const avs = row.querySelector(".exp-avs");
+  members.forEach((m) => {
+    const on = (e.sharedBy || []).includes(m);
+    const b = h(`<button class="exp-av ${on ? "on" : ""}" title="${esc(m)}" style="${on ? `background:${memberColor(m)};border-color:${memberColor(m)};color:#fff` : ""}">${esc(initOf(m))}</button>`);
+    b.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      let sb = [...(e.sharedBy || [])];
+      if (sb.includes(m)) sb = sb.filter((x) => x !== m); else sb.push(m);
+      if (!sb.length) { toast("최소 한 명은 포함해야 해요"); return; }
+      updateDoc(doc(db, "trips", tripId, "expenses", e.id), { sharedBy: sb }).catch((err) => toast("저장 실패: " + err.message));
+    });
+    avs.appendChild(b);
+  });
+  return row;
 }
 
 function computeSettlement() {
@@ -1198,14 +1161,14 @@ function computeSettlement() {
   expenses.forEach((e) => { if (e.payer) set.add(e.payer); (e.sharedBy || []).forEach((n) => set.add(n)); });
   const names = [...set];
   const share = {}, paid = {};
+  let total = 0;
   names.forEach((n) => { share[n] = 0; paid[n] = 0; });
   expenses.forEach((e) => {
-    const amt = Number(e.amount) || 0;
+    const amt = Number(e.amount) || 0; total += amt;
     const sb = e.sharedBy || [];
     if (sb.length) { const per = amt / sb.length; sb.forEach((n) => { share[n] = (share[n] || 0) + per; }); }
     if (e.payer) paid[e.payer] = (paid[e.payer] || 0) + amt;
   });
-  // 최소 송금 제안 (그리디)
   const bal = names.map((n) => ({ n, v: Math.round((paid[n] || 0) - (share[n] || 0)) }));
   const cred = bal.filter((b) => b.v > 0).sort((a, b) => b.v - a.v);
   const debt = bal.filter((b) => b.v < 0).map((b) => ({ n: b.n, v: -b.v })).sort((a, b) => b.v - a.v);
@@ -1218,8 +1181,161 @@ function computeSettlement() {
     if (debt[i].v === 0) i++;
     if (cred[j].v === 0) j++;
   }
-  return { names, share, paid, transfers };
+  return { names, share, paid, transfers, total };
 }
+
+// 지출 추가/수정 화면 (3b 디자인 — 금액을 크게, 아바타로 결제자·나눌 사람 선택)
+let expForm = null;
+function openExpenseForm(existing) {
+  const members = tripMembers();
+  const cats = tripCats();
+  const editMembers = existing ? [...new Set([...members, ...(existing.sharedBy || []), existing.payer].filter(Boolean))] : members;
+  expForm = existing
+    ? { amount: existing.amount ?? "", desc: existing.desc || "", category: existing.category || cats[0], day: (expDay(existing) ?? 0), date: existing.date || "", place: existing.place || "", payer: existing.payer || members[0] || "", sharedBy: [...(existing.sharedBy || [])] }
+    : { amount: "", desc: "", category: cats[0], day: 0, date: dateForDay(0), place: "", payer: members[0] || "", sharedBy: [...members] };
+
+  const bg = h(`<div class="modal-bg"></div>`);
+  const modal = h(`
+    <div class="modal exp-form">
+      <div class="ef-head"><h3>${existing ? "지출 수정" : "지출 추가"}</h3><button class="ef-x" title="닫기">✕</button></div>
+      <div class="ef-amount"><input id="efAmt" inputmode="numeric" placeholder="0" value="${existing ? existing.amount ?? "" : ""}" /><span>원</span></div>
+      <div class="ef-per" id="efPer"></div>
+      <input class="ef-desc" id="efDesc" placeholder="무엇에 썼나요? (예: 저녁 한정식)" value="${esc(expForm.desc)}" />
+      <div class="ef-field"><div class="ef-lbl">구분</div><div class="ef-cats" id="efCats"></div></div>
+      <div class="ef-field"><div class="ef-lbl">날짜 · 장소</div><div class="ef-days" id="efDays"></div><div class="ef-stops" id="efStops"></div></div>
+      <div class="ef-field"><div class="ef-lbl">결제한 사람</div><div class="ef-payers" id="efPayers"></div></div>
+      <div class="ef-field"><div class="ef-lbl2"><span>누구 몫인가요?</span><button class="ef-all" id="efAll" type="button">전체</button></div><div class="ef-who" id="efWho"></div></div>
+      <div class="ef-actions">
+        ${existing ? `<button class="btn danger" id="efDel">삭제</button>` : ""}
+        <button class="btn" id="efSave"></button>
+      </div>
+    </div>`);
+  bg.appendChild(modal);
+  document.body.appendChild(bg);
+  bg.addEventListener("click", (ev) => { if (ev.target === bg) bg.remove(); });
+  modal.querySelector(".ef-x").addEventListener("click", () => bg.remove());
+
+  const amtEl = modal.querySelector("#efAmt");
+  const descEl = modal.querySelector("#efDesc");
+  const perEl = modal.querySelector("#efPer");
+  const saveBtn = modal.querySelector("#efSave");
+
+  const updateCalc = () => {
+    const amt = Number(amtEl.value) || 0;
+    const n = expForm.sharedBy.length;
+    perEl.textContent = `${n}명 · 1인 ${n ? won(amt / n) : 0}원`;
+    saveBtn.textContent = amt > 0 ? `${won(amt)}원 추가${existing ? " · 저장" : ""}` : (existing ? "저장" : "지출 추가");
+  };
+  amtEl.addEventListener("input", () => { expForm.amount = amtEl.value; updateCalc(); });
+  descEl.addEventListener("input", () => { expForm.desc = descEl.value; });
+
+  // 구분
+  const catsWrap = modal.querySelector("#efCats");
+  const renderCats = () => {
+    catsWrap.innerHTML = "";
+    cats.forEach((c) => {
+      const on = expForm.category === c;
+      const b = h(`<button type="button" class="ef-chip ${on ? "on" : ""}" style="${on ? `background:${catColor(c)};border-color:${catColor(c)};color:#fff` : ""}">${esc(c)}</button>`);
+      b.addEventListener("click", () => { expForm.category = c; renderCats(); });
+      catsWrap.appendChild(b);
+    });
+    const addb = h(`<button type="button" class="ef-chip ghost">+ 새 구분</button>`);
+    addb.addEventListener("click", async () => {
+      const name = (prompt("새 구분 이름") || "").trim();
+      if (!name || cats.includes(name)) return;
+      cats.push(name); expForm.category = name; renderCats();
+      await saveCats([...cats]);
+    });
+    catsWrap.appendChild(addb);
+  };
+  renderCats();
+
+  // 날짜
+  const daysWrap = modal.querySelector("#efDays");
+  const stopsWrap = modal.querySelector("#efStops");
+  const renderStops = () => {
+    stopsWrap.innerHTML = "";
+    const stops = items.filter((it) => it.day === expForm.day && (it.name || it.address));
+    if (!stops.length) { stopsWrap.appendChild(h(`<div class="ef-nostop">이 날은 아직 일정에 장소가 없어요.</div>`)); return; }
+    stops.forEach((it) => {
+      const nm = it.name || it.address;
+      const on = expForm.place === nm;
+      const b = h(`<button type="button" class="ef-stop ${on ? "on" : ""}">${esc(nm)}</button>`);
+      b.addEventListener("click", () => { expForm.place = on ? "" : nm; renderStops(); });
+      stopsWrap.appendChild(b);
+    });
+  };
+  const renderDays = () => {
+    daysWrap.innerHTML = "";
+    for (let i = 0; i < (trip.dayCount || 1); i++) {
+      const { top } = dayLabel(trip.startDate, i);
+      const on = expForm.day === i;
+      const b = h(`<button type="button" class="ef-chip ${on ? "on" : ""}">${top}</button>`);
+      b.addEventListener("click", () => { expForm.day = i; expForm.date = dateForDay(i); expForm.place = ""; renderDays(); renderStops(); });
+      daysWrap.appendChild(b);
+    }
+  };
+  renderDays(); renderStops();
+
+  // 결제한 사람
+  const payWrap = modal.querySelector("#efPayers");
+  const renderPayers = () => {
+    payWrap.innerHTML = "";
+    editMembers.forEach((m) => {
+      const on = expForm.payer === m;
+      const card = h(`<button type="button" class="ef-payer ${on ? "on" : ""}"><span class="av" style="background:${memberColor(m)}">${esc(initOf(m))}</span><span class="nm">${esc(m)}</span></button>`);
+      card.addEventListener("click", () => { expForm.payer = m; renderPayers(); });
+      payWrap.appendChild(card);
+    });
+  };
+  renderPayers();
+
+  // 누구 몫
+  const whoWrap = modal.querySelector("#efWho");
+  const renderWho = () => {
+    whoWrap.innerHTML = "";
+    editMembers.forEach((m) => {
+      const on = expForm.sharedBy.includes(m);
+      const b = h(`<button type="button" class="ef-whoav ${on ? "on" : ""}" style="${on ? `background:${memberColor(m)};border-color:${memberColor(m)};color:#fff` : ""}"><span>${esc(initOf(m))}</span><span class="nm">${esc(m)}</span></button>`);
+      b.addEventListener("click", () => {
+        if (expForm.sharedBy.includes(m)) expForm.sharedBy = expForm.sharedBy.filter((x) => x !== m);
+        else expForm.sharedBy.push(m);
+        renderWho(); updateCalc();
+      });
+      whoWrap.appendChild(b);
+    });
+  };
+  renderWho();
+  modal.querySelector("#efAll").addEventListener("click", () => {
+    expForm.sharedBy = expForm.sharedBy.length === editMembers.length ? [] : [...editMembers];
+    renderWho(); updateCalc();
+  });
+
+  updateCalc();
+
+  if (existing) modal.querySelector("#efDel").addEventListener("click", async () => {
+    if (!confirm("이 지출을 삭제할까요?")) return;
+    try { await deleteDoc(doc(db, "trips", tripId, "expenses", existing.id)); bg.remove(); }
+    catch (e) { toast("삭제 실패: " + e.message); }
+  });
+  saveBtn.addEventListener("click", async () => {
+    const amt = Number(amtEl.value) || 0;
+    if (!amt) { toast("금액을 입력해 주세요"); amtEl.focus(); return; }
+    if (!expForm.sharedBy.length) { toast("나눌 사람을 한 명 이상 선택해 주세요"); return; }
+    const data = {
+      amount: amt, desc: descEl.value.trim(), category: expForm.category || "기타",
+      day: expForm.day, date: expForm.date || dateForDay(expForm.day) || "",
+      place: expForm.place || "", payer: expForm.payer || "", sharedBy: expForm.sharedBy,
+    };
+    try {
+      if (existing) await updateDoc(doc(db, "trips", tripId, "expenses", existing.id), data);
+      else { await addDoc(collection(db, "trips", tripId, "expenses"), { ...data, order: Date.now(), createdAt: serverTimestamp() }); logEvent("expense_add", { trip: tripId }); }
+      bg.remove();
+    } catch (e) { toast("저장 실패: " + e.message); }
+  });
+  amtEl.focus();
+}
+
 
 // ---------- 관리자 (활동 로그) ----------
 // romeowa@gmail.com 구글 로그인일 때만 events 조회 가능(Firestore 규칙이 서버에서 강제).
