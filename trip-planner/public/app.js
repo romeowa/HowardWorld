@@ -537,17 +537,7 @@ async function createTripFromBundle(b) {
   ]);
   return ref.id;
 }
-async function overwriteTripFromBundle(id, b) {
-  const t = cleanTrip(b.trip || {});
-  const [is, es] = await Promise.all([getDocs(collection(db, "trips", id, "items")), getDocs(collection(db, "trips", id, "expenses"))]);
-  await Promise.all([...is.docs.map((d) => deleteDoc(d.ref)), ...es.docs.map((d) => deleteDoc(d.ref))]);
-  await updateDoc(doc(db, "trips", id), { title: t.title, startDate: t.startDate, dayCount: t.dayCount, members: t.members, memberColors: t.memberColors, expenseCategories: t.expenseCategories || [] });
-  await Promise.all([
-    ...((b.items || []).map((it) => addDoc(collection(db, "trips", id, "items"), { ...stripId(it), createdAt: serverTimestamp() }))),
-    ...((b.expenses || []).map((ex) => addDoc(collection(db, "trips", id, "expenses"), { ...stripId(ex), createdAt: serverTimestamp() }))),
-  ]);
-}
-// 홈: 파일에서 새 여행으로 추가
+// 파일에서 새 여행으로 추가 (홈·여행 화면 공용)
 function importTripsFromHome() {
   pickJSONFile(async (text) => {
     const bundles = parseBundles(text);
@@ -557,19 +547,7 @@ function importTripsFromHome() {
     for (const b of bundles) { try { lastId = await createTripFromBundle(b); const ct = cleanTrip(b.trip || {}); rememberTrip(lastId, { title: ct.title, startDate: ct.startDate, dayCount: ct.dayCount }); ok++; } catch {} }
     if (!ok) { toast("가져오기 실패"); return; }
     if (ok === 1 && lastId) { toast("여행을 가져왔어요"); go(`/t/${lastId}`); }
-    else { toast(`${ok}개 여행을 가져왔어요`); renderHome(); }
-  });
-}
-// 여행 화면: 파일로 이 여행 덮어쓰기
-function importOverwriteCurrentTrip() {
-  pickJSONFile(async (text) => {
-    const bundles = parseBundles(text);
-    if (!bundles || !bundles.length) { toast("올바른 여행 파일이 아니에요"); return; }
-    const b = bundles[0];
-    const extra = bundles.length > 1 ? `\n(파일에 여행 ${bundles.length}개가 있어요. 첫 번째만 적용됩니다.)` : "";
-    if (!confirm(`이 여행의 현재 내용(일정·정산 포함)을 파일 내용으로 덮어씁니다. 되돌릴 수 없어요.${extra}\n계속할까요?`)) return;
-    try { await overwriteTripFromBundle(tripId, b); toast("이 여행을 파일로 덮어썼어요"); }
-    catch (e) { toast("가져오기 실패: " + e.message); }
+    else { toast(`${ok}개 여행을 가져왔어요`); if (location.pathname === "/") renderHome(); else go("/"); }
   });
 }
 
@@ -763,10 +741,10 @@ function paint() {
     }
   }
 
-  // 내보내기 / 가져오기(이 여행 덮어쓰기)
-  const io = h(`<div class="trip-io"><button class="btn ghost sm" id="expTrip">⬇ 이 여행 내보내기</button><button class="btn ghost sm" id="impTrip">⬆ 파일로 덮어쓰기</button></div>`);
+  // 내보내기 / 가져오기(새 여행으로 복제)
+  const io = h(`<div class="trip-io"><button class="btn ghost sm" id="expTrip">⬇ 이 여행 내보내기</button><button class="btn ghost sm" id="impTrip">⬆ 가져오기(새 여행)</button></div>`);
   io.querySelector("#expTrip").addEventListener("click", exportCurrentTrip);
-  io.querySelector("#impTrip").addEventListener("click", importOverwriteCurrentTrip);
+  io.querySelector("#impTrip").addEventListener("click", importTripsFromHome);
   shell.appendChild(io);
 
   // 여행 전체 삭제
