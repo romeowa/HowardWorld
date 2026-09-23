@@ -18,7 +18,9 @@ trip-planner: 링크 하나로 함께 짜는 여행 일정 공유 웹앱. 공용
 - UI: 홈은 월별 달력 뷰(여행을 색 바로 표시) + 이 기기 localStorage 최근 목록만. 여행 화면은 전체 일정 리스트(Day별 섹션) + 상단 '전체'/날짜 탭(전체=다 보기, 날짜=그 날만 필터). 항목(장소/식사/액티비티/메모) 시간순 자동 정렬, 시간 입력은 24시간 시/분 드롭다운. 항목 클릭 시 아래로 확장되며 인라인 미니지도(핀 1개). 항목 "저장 후 계속" 연속 입력. 주소 클릭 시 구글맵 열기.
 - 광고: 피그맵/니니구(만든 사람의 다른 앱), 리스트 맨 끝에 붙임(화면 하단 고정 아님).
 - 디자인: Claude Design 시안 기반 웜 라이트 타임라인(1a) + 월별 달력 홈(2a). IBM Plex Sans KR + JetBrains Mono. 여행 화면은 넓으면 타임라인|지도 2단, 좁으면 세로 1단(반응형).
-- 오프라인(PWA): sw.js(앱 셸 stale-while-revalidate, 전체 URL로 캐시) + Firestore persistentLocalCache. 오프라인 배너. SW 버전 올릴 때 sw.js의 VERSION 상수 갱신.
+- 오프라인(PWA): sw.js(앱 셸 stale-while-revalidate, 전체 URL로 캐시) + Firestore persistentLocalCache(onSnapshot/오프라인 열람용, `db`). 오프라인 배너. SW 버전 올릴 때 sw.js의 VERSION 상수 갱신.
+- 성능/로딩: Firebase SDK는 **정적 import 안 함 → 지연 로드**(firebaseReady 프라미스). app.js는 firebase 심볼을 `let`로 두고 firebaseReady에서 채움. 홈은 localStorage 캐시로 즉시 렌더(renderHome→paintHome) 후 refreshHomeTrips가 백그라운드 갱신. route()는 홈이면 즉시, 그 외는 firebaseReady 후 렌더. auth는 /admin에서만 ensureAuth()로 로드. index.html에 firebase-app/firestore modulepreload + www.gstatic.com preconnect.
+- **중요(1회성 읽기 함정)**: 영구캐시(persistentLocalCache) db로 **getDoc/getDocs(1회성)**를 하면 환경에 따라 응답이 지연/멈추는 문제가 있음(onSnapshot은 정상). → 내보내기(fetchTripBundle)·홈 새로고침(refreshHomeTrips)은 **메모리캐시 전용 인스턴스 `dbRead`**(getFirestore(initializeApp(cfg,"reader")))로 읽어 네트워크 직행(수십ms). 여러 여행은 병렬. 쓰기/실시간은 기존 `db` 사용.
 - 시도했다 뺀 것: 장소 간 이동시간(구글 Routes API) — 국내는 지도반출 규제로 자동차/도보 경로 안 나오고 대중교통만, 품질 별로라 제거. 비용/예산 기능도 제거. (Routes API는 키에 활성화돼 있음)
 - 사용 로그: 공용 Firestore `events` 컬렉션(공개 create). trip-planner가 trip_open/create·item_add/delete·trip_delete 기록, flight-watch 크롤러가 check_run 기록.
 - 관리자 페이지 `/admin`: 구글 로그인(romeowa@gmail.com만) 후 events 대시보드(앱별·유형별·날짜별·최근). 규칙: events read는 `request.auth.token.email == 'romeowa@gmail.com'`만. **주의**: Firestore SDK가 인증 토큰을 요청에 안 붙이는 문제로 SDK 쿼리는 permission-denied → admin 조회는 `auth.currentUser.getIdToken()`을 Authorization 헤더에 실어 **REST runQuery로 직접 호출**함. Auth는 firebase-auth 정적 import + 시작 시 getAuth(app). 구글 로그인 provider + howard-trips.web.app 승인 도메인은 콘솔에서 활성화 완료.
