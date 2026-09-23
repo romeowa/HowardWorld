@@ -14,6 +14,9 @@ service cloud.firestore {
       match /items/{itemId} {
         allow read, write: if true; // tripId(비밀 링크)를 아는 사람만 도달
       }
+      match /expenses/{expenseId} {
+        allow read, write: if true; // 정산 내역 — tripId(비밀 링크)를 아는 사람만 도달
+      }
     }
 
     // --- 공용 사용 로그 ---
