@@ -1000,10 +1000,17 @@ const saveCats = (list) => updateDoc(doc(db, "trips", tripId), { expenseCategori
 // 정산 탭 뷰 (엑셀 정산표를 여행 안으로 — 3a 디자인)
 const dateForDay = (i) => (trip?.startDate ? ymd(addDays(parseDate(trip.startDate), i)) : "");
 function expDay(e) {
+  if (e.offTrip) return "off";
   if (Number.isInteger(e.day)) return e.day;
   if (e.date && trip?.startDate) { const d = dayDiff(parseDate(trip.startDate), parseDate(e.date)); if (d >= 0 && d < (trip.dayCount || 1)) return d; }
-  return null;
+  return "off";
 }
+function dayGroupLabel(k) {
+  if (k === "off") return "여행 외";
+  const { top, sub } = dayLabel(trip.startDate, k);
+  return sub ? `${top} · ${sub}` : top;
+}
+const stopsForDay = (day) => (Number.isInteger(day) ? items.filter((it) => it.day === day && (it.name || it.address)).map((it) => it.name || it.address) : []);
 
 function renderSettleView(shell) {
   const members = tripMembers();
@@ -1040,7 +1047,6 @@ function renderSettleView(shell) {
   const { names, share, paid, transfers, total } = computeSettlement();
   const avg = members.length ? total / members.length : (names.length ? total / names.length : 0);
 
-  // 카테고리 집계
   const byCat = {};
   expenses.forEach((e) => { const c = e.category || "기타"; byCat[c] = (byCat[c] || 0) + (Number(e.amount) || 0); });
   const catArr = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
@@ -1049,7 +1055,7 @@ function renderSettleView(shell) {
   const main = h(`<div class="stl-main"></div>`);
   const side = h(`<div class="stl-side"></div>`);
 
-  // --- 요약 (총 지출 + 카테고리 바) ---
+  // --- 요약 ---
   const sum = h(`<div class="stl-card stl-summary">
     <div class="stl-sumtop">
       <div class="stl-total"><div class="lbl">총 지출</div><div class="val">${won(total)}<span>원</span></div></div>
@@ -1062,8 +1068,7 @@ function renderSettleView(shell) {
   const legend = sum.querySelector(".stl-legend");
   if (total > 0) {
     catArr.forEach(([c, a]) => {
-      const w = (a / total) * 100;
-      bar.appendChild(h(`<div style="width:${w}%;background:${catColor(c)}"></div>`));
+      bar.appendChild(h(`<div style="width:${(a / total) * 100}%;background:${catColor(c)}"></div>`));
       legend.appendChild(h(`<div class="lg"><span class="dot" style="background:${catColor(c)}"></span>${esc(c)} <span class="amt">${won(a)}</span></div>`));
     });
   } else {
@@ -1071,21 +1076,6 @@ function renderSettleView(shell) {
     legend.appendChild(h(`<div class="lg" style="color:var(--muted)">아직 지출이 없어요</div>`));
   }
   side.appendChild(sum);
-
-  // --- 정산표 (데스크톱) ---
-  if (names.length) {
-    const tally = h(`<div class="stl-card stl-tally">
-      <div class="stl-ctitle">정산표</div>
-      <div class="tl-head"><span>이름</span><span>쓴 돈</span><span>낸 돈</span><span>차액</span></div>
-    </div>`);
-    names.forEach((n) => {
-      const net = (paid[n] || 0) - (share[n] || 0);
-      const col = net > 0 ? "var(--accent-dark)" : net < 0 ? "var(--danger)" : "var(--muted)";
-      const label = net > 0 ? `+${won(net)}` : net < 0 ? `${won(net)}` : "0";
-      tally.appendChild(h(`<div class="tl-row"><span class="tl-nm"><span class="av sm" style="background:${memberColor(n)}">${esc(initOf(n))}</span>${esc(n)}</span><span>${won(share[n] || 0)}</span><span>${won(paid[n] || 0)}</span><span class="tl-net" style="color:${col}">${label}</span></div>`));
-    });
-    side.appendChild(tally);
-  }
 
   // --- 송금 제안 ---
   const trf = h(`<div class="stl-card stl-transfer"><div class="stl-ctitle">이렇게 보내면 끝</div></div>`);
@@ -1101,25 +1091,36 @@ function renderSettleView(shell) {
   }
   side.appendChild(trf);
 
-  // --- 내역(일자별) ---
-  // 데스크톱: 상단 인라인 빠른 추가 폼 / 모바일: 큰 버튼 → 3b 모달
-  if (members.length) main.appendChild(buildInlineAdd(members, tripCats()));
+  // --- 정산표 (모바일에도 표시) ---
+  if (names.length) {
+    const tally = h(`<div class="stl-card stl-tally">
+      <div class="stl-ctitle">정산표</div>
+      <div class="tl-head"><span>이름</span><span>쓴 돈</span><span>낸 돈</span><span>차액</span></div>
+    </div>`);
+    names.forEach((n) => {
+      const net = (paid[n] || 0) - (share[n] || 0);
+      const col = net > 0 ? "var(--accent-dark)" : net < 0 ? "var(--danger)" : "var(--muted)";
+      const label = net > 0 ? `+${won(net)}` : net < 0 ? `${won(net)}` : "0";
+      tally.appendChild(h(`<div class="tl-row"><span class="tl-nm"><span class="av sm" style="background:${memberColor(n)}">${esc(initOf(n))}</span>${esc(n)}</span><span>${won(share[n] || 0)}</span><span>${won(paid[n] || 0)}</span><span class="tl-net" style="color:${col}">${label}</span></div>`));
+    });
+    side.appendChild(tally);
+  }
+
+  // --- 내역 ---
+  if (members.length) main.appendChild(buildInlineAdd(members, tripCats())); // 데스크톱 빠른 추가
+  main.appendChild(h(`<div class="stl-listlabel">지출 내역</div>`));
   const addBtn = h(`<button class="btn block stl-add">＋ 지출 추가</button>`);
   addBtn.addEventListener("click", () => { if (!tripMembers().length) { toast("먼저 참여자를 추가해 주세요"); return; } openExpenseForm(null); });
   main.appendChild(addBtn);
 
-  // 그룹핑: day별
   const groups = new Map();
-  expenses.forEach((e) => { const d = expDay(e); const k = d == null ? "x" : d; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(e); });
-  const keys = [...groups.keys()].sort((a, b) => (a === "x" ? 1 : b === "x" ? -1 : a - b));
-  if (!expenses.length) {
-    main.appendChild(h(`<div class="stl-empty">아직 지출 내역이 없어요.<br/>‘＋ 지출 추가’로 시작하세요.</div>`));
-  }
+  expenses.forEach((e) => { const k = expDay(e); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(e); });
+  const keys = [...groups.keys()].sort((a, b) => (a === "off" ? 1 : b === "off" ? -1 : a - b));
+  if (!expenses.length) main.appendChild(h(`<div class="stl-empty">아직 지출 내역이 없어요.<br/>‘＋ 지출 추가’로 시작하세요.</div>`));
   keys.forEach((k) => {
     const arr = groups.get(k).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
     const dtotal = arr.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-    const label = k === "x" ? "날짜 미정" : (() => { const { top, sub } = dayLabel(trip.startDate, k); return sub ? `${top} · ${sub}` : top; })();
-    const sec = h(`<div class="stl-day"><div class="stl-dhead"><span>${esc(label)}</span><span class="dt">${won(dtotal)}원</span></div></div>`);
+    const sec = h(`<div class="stl-day"><div class="stl-dhead"><span>${esc(dayGroupLabel(k))}</span><span class="dt">${won(dtotal)}원</span></div></div>`);
     arr.forEach((e) => sec.appendChild(expenseRow(e, members)));
     main.appendChild(sec);
   });
@@ -1130,83 +1131,11 @@ function renderSettleView(shell) {
   shell.appendChild(view);
 }
 
-// 데스크톱 상단 인라인 빠른 추가 폼 (3a desktop) — 전원 나눔 기준, 세부 조정은 행 클릭(3b 모달)
-function buildInlineAdd(members, cats) {
-  if (!inlineAdd) inlineAdd = { day: 0, date: dateForDay(0), category: cats[0], payer: members[0] };
-  if (!cats.includes(inlineAdd.category)) inlineAdd.category = cats[0];
-  if (!members.includes(inlineAdd.payer)) inlineAdd.payer = members[0];
-  if (inlineAdd.day >= (trip.dayCount || 1)) { inlineAdd.day = 0; inlineAdd.date = dateForDay(0); }
-
-  const box = h(`<div class="stl-inline-add">
-    <div class="ia-days"></div>
-    <span class="ia-sep"></span>
-    <div class="ia-cats"></div>
-    <input class="ia-desc" placeholder="내역" />
-    <input class="ia-amt" inputmode="numeric" placeholder="금액" />
-    <span class="ia-lbl">결제</span>
-    <div class="ia-payers"></div>
-    <button class="btn sm ia-submit">추가</button>
-  </div>`);
-  const daysW = box.querySelector(".ia-days");
-  const catsW = box.querySelector(".ia-cats");
-  const payW = box.querySelector(".ia-payers");
-  const descEl = box.querySelector(".ia-desc");
-  const amtEl = box.querySelector(".ia-amt");
-
-  const renderDays = () => {
-    daysW.innerHTML = "";
-    for (let i = 0; i < (trip.dayCount || 1); i++) {
-      const { top } = dayLabel(trip.startDate, i);
-      const on = inlineAdd.day === i;
-      const b = h(`<button type="button" class="ia-chip ${on ? "on" : ""}">${top}</button>`);
-      b.addEventListener("click", () => { inlineAdd.day = i; inlineAdd.date = dateForDay(i); renderDays(); });
-      daysW.appendChild(b);
-    }
-  };
-  const renderCats = () => {
-    catsW.innerHTML = "";
-    cats.forEach((c) => {
-      const on = inlineAdd.category === c;
-      const b = h(`<button type="button" class="ia-chip ${on ? "on" : ""}" style="${on ? `background:${catColor(c)};border-color:${catColor(c)};color:#fff` : ""}">${esc(c)}</button>`);
-      b.addEventListener("click", () => { inlineAdd.category = c; renderCats(); });
-      catsW.appendChild(b);
-    });
-  };
-  const renderPay = () => {
-    payW.innerHTML = "";
-    members.forEach((m) => {
-      const on = inlineAdd.payer === m;
-      const b = h(`<button type="button" class="ia-av ${on ? "on" : ""}" title="결제: ${esc(m)}" style="${on ? `background:${memberColor(m)};border-color:${memberColor(m)};color:#fff` : ""}">${esc(initOf(m))}</button>`);
-      b.addEventListener("click", () => { inlineAdd.payer = m; renderPay(); });
-      payW.appendChild(b);
-    });
-  };
-  renderDays(); renderCats(); renderPay();
-
-  const submit = async () => {
-    const amt = Number(amtEl.value) || 0;
-    if (!amt) { toast("금액을 입력해 주세요"); amtEl.focus(); return; }
-    const data = {
-      amount: amt, desc: descEl.value.trim(), category: inlineAdd.category || "기타",
-      day: inlineAdd.day, date: inlineAdd.date || dateForDay(inlineAdd.day) || "",
-      place: "", payer: inlineAdd.payer || "", sharedBy: [...members],
-    };
-    try {
-      await addDoc(collection(db, "trips", tripId, "expenses"), { ...data, order: Date.now(), createdAt: serverTimestamp() });
-      logEvent("expense_add", { trip: tripId });
-      toast("추가됨 — 전원 나눔");
-    } catch (e) { toast("저장 실패: " + e.message); }
-  };
-  box.querySelector(".ia-submit").addEventListener("click", submit);
-  descEl.addEventListener("keydown", (e) => { if (e.key === "Enter") amtEl.focus(); });
-  amtEl.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
-  return box;
-}
-
 function expenseRow(e, members) {
   const n = (e.sharedBy || []).length || 1;
   const per = (Number(e.amount) || 0) / n;
-  const sub = [e.payer ? `${e.payer} 결제` : "", e.place || ""].filter(Boolean).join(" · ") || `${n}명 나눔`;
+  const dateStr = e.offTrip && e.date ? e.date : "";
+  const sub = [e.payer ? `${e.payer} 결제` : "", e.place || "", dateStr].filter(Boolean).join(" · ") || `${n}명 나눔`;
   const row = h(`<div class="exp-item">
     <div class="exp-head">
       <span class="exp-cat" style="color:${catColor(e.category)};background:${catColor(e.category)}1a">${esc(e.category || "기타")}</span>
@@ -1260,27 +1189,153 @@ function computeSettlement() {
   return { names, share, paid, transfers, total };
 }
 
-// 지출 추가/수정 화면 (3b 디자인 — 금액을 크게, 아바타로 결제자·나눌 사람 선택)
+// 데스크톱 상단 빠른 추가 폼 (3a desktop v2) — 언제·어디서·구분·결제자·나눠 낼 사람까지 한 줄에
+function buildInlineAdd(members, cats) {
+  if (!inlineAdd) inlineAdd = { day: 0, date: dateForDay(0), place: "", category: cats[0], payer: members[0], sharedBy: [...members], known: [...members] };
+  if (!cats.includes(inlineAdd.category)) inlineAdd.category = cats[0];
+  if (!members.includes(inlineAdd.payer)) inlineAdd.payer = members[0];
+  // 새로 추가된 참여자는 자동으로 '나눠 낼 사람'에 포함
+  members.forEach((m) => { if (!(inlineAdd.known || []).includes(m) && !inlineAdd.sharedBy.includes(m)) inlineAdd.sharedBy.push(m); });
+  inlineAdd.known = [...members];
+  inlineAdd.sharedBy = inlineAdd.sharedBy.filter((m) => members.includes(m));
+  if (!inlineAdd.sharedBy.length) inlineAdd.sharedBy = [...members];
+  if (inlineAdd.day !== "off" && inlineAdd.day >= (trip.dayCount || 1)) { inlineAdd.day = 0; inlineAdd.date = dateForDay(0); }
+
+  const box = h(`<div class="stl-quickadd">
+    <div class="qa-label">빠른 추가</div>
+    <div class="qa-card">
+      <div class="qa-r1"></div>
+      <div class="qa-r2">
+        <input class="qa-desc" placeholder="무엇에 썼나요?" />
+        <div class="qa-amtbox"><input class="qa-amt" inputmode="numeric" placeholder="0" /><span>원</span></div>
+        <button class="btn qa-submit">추가</button>
+      </div>
+      <div class="qa-r3">
+        <span class="qa-r3lbl">나눠 낼 사람</span>
+        <button type="button" class="qa-all">전체</button>
+        <div class="qa-who"></div>
+        <span class="qa-sp"></span>
+        <span class="qa-per"></span>
+      </div>
+    </div>
+  </div>`);
+  const r1 = box.querySelector(".qa-r1");
+  const whoW = box.querySelector(".qa-who");
+  const descEl = box.querySelector(".qa-desc");
+  const amtEl = box.querySelector(".qa-amt");
+  const perEl = box.querySelector(".qa-per");
+
+  const updatePer = () => {
+    const amt = Number(amtEl.value) || 0; const n = inlineAdd.sharedBy.length;
+    perEl.textContent = `${n}명 · 1인 ${n ? won(amt / n) : 0}원`;
+  };
+  const renderR1 = () => {
+    r1.innerHTML = "";
+    // 날짜 select
+    const daySel = h(`<select class="qa-sel"></select>`);
+    for (let i = 0; i < (trip.dayCount || 1); i++) { const { top, sub } = dayLabel(trip.startDate, i); const o = document.createElement("option"); o.value = String(i); o.textContent = `${top}${sub ? " · " + sub : ""}`; if (inlineAdd.day === i) o.selected = true; daySel.appendChild(o); }
+    const offo = document.createElement("option"); offo.value = "off"; offo.textContent = "여행 외"; if (inlineAdd.day === "off") offo.selected = true; daySel.appendChild(offo);
+    daySel.addEventListener("change", () => {
+      inlineAdd.day = daySel.value === "off" ? "off" : Number(daySel.value);
+      if (inlineAdd.day === "off") { inlineAdd.place = ""; inlineAdd.date = inlineAdd.date || ""; }
+      else { inlineAdd.date = dateForDay(inlineAdd.day); if (!stopsForDay(inlineAdd.day).includes(inlineAdd.place)) inlineAdd.place = ""; }
+      renderR1();
+    });
+    r1.appendChild(daySel);
+    // 여행 외 결제일
+    if (inlineAdd.day === "off") {
+      const pd = h(`<input type="date" class="qa-date" value="${inlineAdd.date || ""}" title="결제일" />`);
+      pd.addEventListener("change", () => { inlineAdd.date = pd.value || ""; });
+      r1.appendChild(pd);
+    } else {
+      // 장소 select
+      const stops = stopsForDay(inlineAdd.day);
+      const stopSel = h(`<select class="qa-sel"></select>`);
+      const none = document.createElement("option"); none.value = ""; none.textContent = stops.length ? "장소 없음" : "장소 없음(일정에 장소 추가)"; stopSel.appendChild(none);
+      stops.forEach((s) => { const o = document.createElement("option"); o.value = s; o.textContent = s; if (inlineAdd.place === s) o.selected = true; stopSel.appendChild(o); });
+      stopSel.addEventListener("change", () => { inlineAdd.place = stopSel.value; });
+      r1.appendChild(stopSel);
+    }
+    r1.appendChild(h(`<span class="qa-sep"></span>`));
+    // 구분 pill (색)
+    const cc = catColor(inlineAdd.category);
+    const catPill = h(`<span class="qa-catpill" style="background:${cc}1a"><span class="qa-catdot" style="background:${cc}"></span></span>`);
+    const catSel = h(`<select class="qa-catsel" style="color:${cc}"></select>`);
+    cats.forEach((c) => { const o = document.createElement("option"); o.value = c; o.textContent = c; if (inlineAdd.category === c) o.selected = true; catSel.appendChild(o); });
+    catSel.addEventListener("change", () => { inlineAdd.category = catSel.value; renderR1(); });
+    catPill.appendChild(catSel); r1.appendChild(catPill);
+    // 결제자 pill (아바타)
+    const payPill = h(`<span class="qa-paypill"><span class="qa-av" style="background:${memberColor(inlineAdd.payer)}">${esc(initOf(inlineAdd.payer))}</span></span>`);
+    const paySel = h(`<select class="qa-paysel"></select>`);
+    members.forEach((m) => { const o = document.createElement("option"); o.value = m; o.textContent = m; if (inlineAdd.payer === m) o.selected = true; paySel.appendChild(o); });
+    paySel.addEventListener("change", () => { inlineAdd.payer = paySel.value; renderR1(); });
+    payPill.appendChild(paySel); r1.appendChild(payPill);
+  };
+  const renderWho = () => {
+    whoW.innerHTML = "";
+    members.forEach((m) => {
+      const on = inlineAdd.sharedBy.includes(m);
+      const b = h(`<button type="button" class="qa-whopill ${on ? "on" : ""}" style="${on ? `border-color:${memberColor(m)}` : ""}"><span class="qa-av" style="background:${on ? memberColor(m) : "var(--surface-2)"};color:${on ? "#fff" : "var(--muted)"}">${esc(initOf(m))}</span><span class="nm">${esc(m)}</span></button>`);
+      b.addEventListener("click", () => {
+        if (inlineAdd.sharedBy.includes(m)) inlineAdd.sharedBy = inlineAdd.sharedBy.filter((x) => x !== m);
+        else inlineAdd.sharedBy.push(m);
+        renderWho(); updatePer();
+      });
+      whoW.appendChild(b);
+    });
+  };
+  renderR1(); renderWho(); updatePer();
+  amtEl.addEventListener("input", updatePer);
+  box.querySelector(".qa-all").addEventListener("click", () => {
+    inlineAdd.sharedBy = inlineAdd.sharedBy.length === members.length ? [] : [...members];
+    renderWho(); updatePer();
+  });
+
+  const submit = async () => {
+    const amt = Number(amtEl.value) || 0;
+    if (!amt) { toast("금액을 입력해 주세요"); amtEl.focus(); return; }
+    if (!inlineAdd.sharedBy.length) { toast("나눠 낼 사람을 선택해 주세요"); return; }
+    const off = inlineAdd.day === "off";
+    const data = {
+      amount: amt, desc: descEl.value.trim(), category: inlineAdd.category || "기타",
+      offTrip: off, day: off ? null : inlineAdd.day,
+      date: off ? (inlineAdd.date || "") : (dateForDay(inlineAdd.day) || ""),
+      place: off ? "" : (inlineAdd.place || ""), payer: inlineAdd.payer || "", sharedBy: [...inlineAdd.sharedBy],
+    };
+    try {
+      await addDoc(collection(db, "trips", tripId, "expenses"), { ...data, order: Date.now(), createdAt: serverTimestamp() });
+      logEvent("expense_add", { trip: tripId });
+      toast("추가됨");
+    } catch (e) { toast("저장 실패: " + e.message); }
+  };
+  box.querySelector(".qa-submit").addEventListener("click", submit);
+  descEl.addEventListener("keydown", (e) => { if (e.key === "Enter") amtEl.focus(); });
+  amtEl.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  return box;
+}
+
+// 지출 추가/수정 (3b v2) — 날짜·장소를 먼저, 금액을 크게, 나눠 낼 사람으로 1인 비용
 let expForm = null;
 function openExpenseForm(existing) {
   const members = tripMembers();
   const cats = tripCats();
   const editMembers = existing ? [...new Set([...members, ...(existing.sharedBy || []), existing.payer].filter(Boolean))] : members;
+  const exDay = existing ? (existing.offTrip ? "off" : (Number.isInteger(existing.day) ? existing.day : 0)) : 0;
   expForm = existing
-    ? { amount: existing.amount ?? "", desc: existing.desc || "", category: existing.category || cats[0], day: (expDay(existing) ?? 0), date: existing.date || "", place: existing.place || "", payer: existing.payer || members[0] || "", sharedBy: [...(existing.sharedBy || [])] }
+    ? { amount: existing.amount ?? "", desc: existing.desc || "", category: existing.category || cats[0], day: exDay, date: existing.date || dateForDay(exDay), place: existing.place || "", payer: existing.payer || members[0] || "", sharedBy: [...(existing.sharedBy || [])] }
     : { amount: "", desc: "", category: cats[0], day: 0, date: dateForDay(0), place: "", payer: members[0] || "", sharedBy: [...members] };
 
   const bg = h(`<div class="modal-bg"></div>`);
   const modal = h(`
     <div class="modal exp-form">
       <div class="ef-head"><h3>${existing ? "지출 수정" : "지출 추가"}</h3><button class="ef-x" title="닫기">✕</button></div>
+      <div class="ef-field"><div class="ef-lbl">언제, 어디서?</div><div class="ef-daycards" id="efDays"></div><div id="efPaidOn"></div><div class="ef-stops" id="efStops"></div></div>
       <div class="ef-amount"><input id="efAmt" inputmode="numeric" placeholder="0" value="${existing ? existing.amount ?? "" : ""}" /><span>원</span></div>
       <div class="ef-per" id="efPer"></div>
-      <input class="ef-desc" id="efDesc" placeholder="무엇에 썼나요? (예: 저녁 한정식)" value="${esc(expForm.desc)}" />
       <div class="ef-field"><div class="ef-lbl">구분</div><div class="ef-cats" id="efCats"></div></div>
-      <div class="ef-field"><div class="ef-lbl">날짜 · 장소</div><div class="ef-days" id="efDays"></div><div class="ef-stops" id="efStops"></div></div>
+      <input class="ef-desc" id="efDesc" placeholder="무엇에 썼나요? (예: 저녁 한정식)" value="${esc(expForm.desc)}" />
       <div class="ef-field"><div class="ef-lbl">결제한 사람</div><div class="ef-payers" id="efPayers"></div></div>
-      <div class="ef-field"><div class="ef-lbl2"><span>누구 몫인가요?</span><button class="ef-all" id="efAll" type="button">전체</button></div><div class="ef-who" id="efWho"></div></div>
+      <div class="ef-field"><div class="ef-lbl2"><span>나눠 낼 사람</span><button class="ef-all" id="efAll" type="button">전체</button></div><div class="ef-who" id="efWho"></div></div>
       <div class="ef-actions">
         ${existing ? `<button class="btn danger" id="efDel">삭제</button>` : ""}
         <button class="btn" id="efSave"></button>
@@ -1295,17 +1350,53 @@ function openExpenseForm(existing) {
   const descEl = modal.querySelector("#efDesc");
   const perEl = modal.querySelector("#efPer");
   const saveBtn = modal.querySelector("#efSave");
+  const daysW = modal.querySelector("#efDays");
+  const paidW = modal.querySelector("#efPaidOn");
+  const stopsW = modal.querySelector("#efStops");
 
   const updateCalc = () => {
-    const amt = Number(amtEl.value) || 0;
-    const n = expForm.sharedBy.length;
+    const amt = Number(amtEl.value) || 0; const n = expForm.sharedBy.length;
     perEl.textContent = `${n}명 · 1인 ${n ? won(amt / n) : 0}원`;
-    saveBtn.textContent = amt > 0 ? `${won(amt)}원 추가${existing ? " · 저장" : ""}` : (existing ? "저장" : "지출 추가");
+    saveBtn.textContent = amt > 0 ? `${won(amt)}원 ${existing ? "저장" : "추가"}` : (existing ? "저장" : "지출 추가");
   };
-  amtEl.addEventListener("input", () => { expForm.amount = amtEl.value; updateCalc(); });
+  amtEl.addEventListener("input", updateCalc);
   descEl.addEventListener("input", () => { expForm.desc = descEl.value; });
 
-  // 구분
+  const renderStops = () => {
+    stopsW.innerHTML = "";
+    if (expForm.day === "off") return;
+    const stops = stopsForDay(expForm.day);
+    if (!stops.length) { stopsW.appendChild(h(`<div class="ef-nostop">이 날은 아직 일정에 장소가 없어요.</div>`)); return; }
+    stops.forEach((s) => {
+      const on = expForm.place === s;
+      const b = h(`<button type="button" class="ef-stop ${on ? "on" : ""}">${esc(s)}</button>`);
+      b.addEventListener("click", () => { expForm.place = on ? "" : s; renderStops(); });
+      stopsW.appendChild(b);
+    });
+  };
+  const renderPaidOn = () => {
+    paidW.innerHTML = "";
+    if (expForm.day !== "off") return;
+    const box = h(`<div class="ef-paidon"><span>결제일</span><input type="date" value="${expForm.date && !expForm.date.includes("Day") ? expForm.date : ""}" /></div>`);
+    box.querySelector("input").addEventListener("change", (e) => { expForm.date = e.target.value || ""; });
+    paidW.appendChild(box);
+  };
+  const renderDays = () => {
+    daysW.innerHTML = "";
+    for (let i = 0; i < (trip.dayCount || 1); i++) {
+      const { top, sub } = dayLabel(trip.startDate, i);
+      const on = expForm.day === i;
+      const c = h(`<button type="button" class="ef-daycard ${on ? "on" : ""}"><span class="dc-top">${top}</span><span class="dc-bot">${esc(sub || "")}</span></button>`);
+      c.addEventListener("click", () => { expForm.day = i; expForm.date = dateForDay(i); if (!stopsForDay(i).includes(expForm.place)) expForm.place = ""; renderDays(); renderPaidOn(); renderStops(); });
+      daysW.appendChild(c);
+    }
+    const off = expForm.day === "off";
+    const co = h(`<button type="button" class="ef-daycard ${off ? "on" : ""}"><span class="dc-top">여행 외</span><span class="dc-bot">직접 입력</span></button>`);
+    co.addEventListener("click", () => { expForm.day = "off"; expForm.place = ""; expForm.date = ""; renderDays(); renderPaidOn(); renderStops(); });
+    daysW.appendChild(co);
+  };
+  renderDays(); renderPaidOn(); renderStops();
+
   const catsWrap = modal.querySelector("#efCats");
   const renderCats = () => {
     catsWrap.innerHTML = "";
@@ -1326,34 +1417,6 @@ function openExpenseForm(existing) {
   };
   renderCats();
 
-  // 날짜
-  const daysWrap = modal.querySelector("#efDays");
-  const stopsWrap = modal.querySelector("#efStops");
-  const renderStops = () => {
-    stopsWrap.innerHTML = "";
-    const stops = items.filter((it) => it.day === expForm.day && (it.name || it.address));
-    if (!stops.length) { stopsWrap.appendChild(h(`<div class="ef-nostop">이 날은 아직 일정에 장소가 없어요.</div>`)); return; }
-    stops.forEach((it) => {
-      const nm = it.name || it.address;
-      const on = expForm.place === nm;
-      const b = h(`<button type="button" class="ef-stop ${on ? "on" : ""}">${esc(nm)}</button>`);
-      b.addEventListener("click", () => { expForm.place = on ? "" : nm; renderStops(); });
-      stopsWrap.appendChild(b);
-    });
-  };
-  const renderDays = () => {
-    daysWrap.innerHTML = "";
-    for (let i = 0; i < (trip.dayCount || 1); i++) {
-      const { top } = dayLabel(trip.startDate, i);
-      const on = expForm.day === i;
-      const b = h(`<button type="button" class="ef-chip ${on ? "on" : ""}">${top}</button>`);
-      b.addEventListener("click", () => { expForm.day = i; expForm.date = dateForDay(i); expForm.place = ""; renderDays(); renderStops(); });
-      daysWrap.appendChild(b);
-    }
-  };
-  renderDays(); renderStops();
-
-  // 결제한 사람
   const payWrap = modal.querySelector("#efPayers");
   const renderPayers = () => {
     payWrap.innerHTML = "";
@@ -1366,7 +1429,6 @@ function openExpenseForm(existing) {
   };
   renderPayers();
 
-  // 누구 몫
   const whoWrap = modal.querySelector("#efWho");
   const renderWho = () => {
     whoWrap.innerHTML = "";
@@ -1386,7 +1448,6 @@ function openExpenseForm(existing) {
     expForm.sharedBy = expForm.sharedBy.length === editMembers.length ? [] : [...editMembers];
     renderWho(); updateCalc();
   });
-
   updateCalc();
 
   if (existing) modal.querySelector("#efDel").addEventListener("click", async () => {
@@ -1397,11 +1458,13 @@ function openExpenseForm(existing) {
   saveBtn.addEventListener("click", async () => {
     const amt = Number(amtEl.value) || 0;
     if (!amt) { toast("금액을 입력해 주세요"); amtEl.focus(); return; }
-    if (!expForm.sharedBy.length) { toast("나눌 사람을 한 명 이상 선택해 주세요"); return; }
+    if (!expForm.sharedBy.length) { toast("나눠 낼 사람을 한 명 이상 선택해 주세요"); return; }
+    const off = expForm.day === "off";
     const data = {
       amount: amt, desc: descEl.value.trim(), category: expForm.category || "기타",
-      day: expForm.day, date: expForm.date || dateForDay(expForm.day) || "",
-      place: expForm.place || "", payer: expForm.payer || "", sharedBy: expForm.sharedBy,
+      offTrip: off, day: off ? null : expForm.day,
+      date: off ? (expForm.date || "") : (dateForDay(expForm.day) || ""),
+      place: off ? "" : (expForm.place || ""), payer: expForm.payer || "", sharedBy: expForm.sharedBy,
     };
     try {
       if (existing) await updateDoc(doc(db, "trips", tripId, "expenses", existing.id), data);
