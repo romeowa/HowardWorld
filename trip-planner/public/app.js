@@ -291,6 +291,7 @@ function paintHome() {
         </span>
       </div>
       <div class="cal-actions">
+        <button class="btn ghost sm" id="calImport">📅 캘린더</button>
         <button class="btn ghost sm" id="importAll">가져오기</button>
         <button class="btn ghost sm" id="exportAll">내보내기</button>
         <button class="btn sm" id="newTrip">+ 새 여행</button>
@@ -298,6 +299,7 @@ function paintHome() {
     </div>`);
   shell.appendChild(header);
   header.querySelector("#newTrip").addEventListener("click", createTrip);
+  header.querySelector("#calImport").addEventListener("click", importCalendarFromHome);
   header.querySelector("#importAll").addEventListener("click", importTripsFromHome);
   header.querySelector("#exportAll").addEventListener("click", (e) => exportAllTrips(e.currentTarget));
   header.querySelector("#prevM").addEventListener("click", () => { homeMonth = new Date(y, m - 1, 1); paintHome(); });
@@ -623,6 +625,140 @@ function importTripsFromHome() {
     if (ok === 1 && lastId) { toast("여행을 가져왔어요"); go(`/t/${lastId}`); }
     else { toast(`${ok}개 여행을 가져왔어요`); if (location.pathname === "/") renderHome(); else go("/"); }
   });
+}
+
+// ---------- 캘린더(.ics) 가져오기 ----------
+function pickICSFile(cb) {
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = ".ics,text/calendar";
+  inp.addEventListener("change", () => {
+    const f = inp.files && inp.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => cb(String(r.result || ""));
+    r.onerror = () => toast("파일을 읽지 못했어요");
+    r.readAsText(f);
+  });
+  inp.click();
+}
+const unescapeICS = (s) => (s || "").replace(/\\n/gi, "\n").replace(/\\,/g, ",").replace(/\\;/g, ";").replace(/\\\\/g, "\\");
+function parseICSDate(val, key) {
+  const isDateOnly = /VALUE=DATE(?!-TIME)/i.test(key) || /^\d{8}$/.test(val);
+  const m = val.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2}))?/);
+  if (!m) return null;
+  const [, Y, Mo, D, h, mi] = m;
+  if (isDateOnly || h === undefined) return { date: `${Y}-${Mo}-${D}`, time: "", allDay: true };
+  if (val.endsWith("Z")) { // UTC → 로컬
+    const d = new Date(Date.UTC(+Y, +Mo - 1, +D, +h, +mi, 0));
+    const p = (n) => String(n).padStart(2, "0");
+    return { date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, time: `${p(d.getHours())}:${p(d.getMinutes())}`, allDay: false };
+  }
+  return { date: `${Y}-${Mo}-${D}`, time: `${h}:${mi}`, allDay: false }; // 로컬/미지정
+}
+function parseICS(text) {
+  const lines = String(text).replace(/\r\n/g, "\n").replace(/\n[ \t]/g, "").split("\n");
+  const events = [];
+  let cur = null;
+  for (const line of lines) {
+    if (line === "BEGIN:VEVENT") cur = {};
+    else if (line === "END:VEVENT") { if (cur && cur.start) events.push(cur); cur = null; }
+    else if (cur) {
+      const i = line.indexOf(":");
+      if (i < 0) continue;
+      const key = line.slice(0, i), val = line.slice(i + 1);
+      const name = key.split(";")[0].toUpperCase();
+      if (name === "SUMMARY") cur.summary = unescapeICS(val);
+      else if (name === "LOCATION") cur.location = unescapeICS(val);
+      else if (name === "DESCRIPTION") cur.description = unescapeICS(val);
+      else if (name === "DTSTART") cur.start = parseICSDate(val, key);
+      else if (name === "GEO") { const [la, ln] = val.split(";").map(Number); if (!isNaN(la) && !isNaN(ln)) { cur.lat = la; cur.lng = ln; } }
+    }
+  }
+  return events.sort((a, b) => (a.start.date + (a.start.time || "99:99")).localeCompare(b.start.date + (b.start.time || "99:99")));
+}
+
+function importCalendarFromHome() {
+  pickICSFile((text) => {
+    const events = parseICS(text);
+    if (!events.length) { toast("캘린더에서 일정을 찾지 못했어요"); return; }
+    openCalendarPicker(events);
+  });
+}
+
+function openCalendarPicker(events) {
+  const sel = new Set(events.map((_, i) => i)); // 기본 전체 선택
+  const defTitle = events[0]?.summary?.slice(0, 20) || "가져온 여행";
+  const bg = h(`<div class="modal-bg"></div>`);
+  const modal = h(`
+    <div class="modal cal-import">
+      <div class="ef-head"><h3>캘린더에서 가져오기</h3><button class="ef-x" title="닫기">✕</button></div>
+      <div class="field"><label>여행 이름</label><input id="calTitle" value="${esc(defTitle)}" /></div>
+      <div class="cal-tools"><span id="calCount"></span><button class="btn ghost sm" id="calAll">전체 해제</button></div>
+      <div class="cal-list" id="calList"></div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="calCancel">취소</button>
+        <button class="btn" id="calGo"></button>
+      </div>
+    </div>`);
+  bg.appendChild(modal); document.body.appendChild(bg);
+  bg.addEventListener("click", (e) => { if (e.target === bg) bg.remove(); });
+  modal.querySelector(".ef-x").addEventListener("click", () => bg.remove());
+  modal.querySelector("#calCancel").addEventListener("click", () => bg.remove());
+
+  const listEl = modal.querySelector("#calList");
+  const countEl = modal.querySelector("#calCount");
+  const goBtn = modal.querySelector("#calGo");
+  const allBtn = modal.querySelector("#calAll");
+  const wk = ["일", "월", "화", "수", "목", "금", "토"];
+  const update = () => {
+    countEl.textContent = `${sel.size} / ${events.length}개 선택`;
+    goBtn.textContent = sel.size ? `${sel.size}개로 새 여행 만들기` : "일정을 선택하세요";
+    goBtn.disabled = !sel.size;
+    allBtn.textContent = sel.size === events.length ? "전체 해제" : "전체 선택";
+  };
+  events.forEach((e, i) => {
+    const d = parseDate(e.start.date);
+    const dstr = `${d.getMonth() + 1}/${d.getDate()}(${wk[d.getDay()]})`;
+    const row = h(`<label class="cal-item">
+      <input type="checkbox" ${sel.has(i) ? "checked" : ""} />
+      <span class="ci-when">${dstr}${e.start.time ? " " + e.start.time : " 종일"}</span>
+      <span class="ci-body"><span class="ci-title">${esc(e.summary || "(제목 없음)")}</span>${e.location ? `<span class="ci-loc">${esc(e.location)}</span>` : ""}</span>
+    </label>`);
+    row.querySelector("input").addEventListener("change", (ev) => { if (ev.target.checked) sel.add(i); else sel.delete(i); update(); });
+    listEl.appendChild(row);
+  });
+  allBtn.addEventListener("click", () => {
+    if (sel.size === events.length) sel.clear();
+    else events.forEach((_, i) => sel.add(i));
+    listEl.querySelectorAll("input").forEach((c, i) => { c.checked = sel.has(i); });
+    update();
+  });
+  goBtn.addEventListener("click", async () => {
+    const chosen = events.filter((_, i) => sel.has(i));
+    if (!chosen.length) return;
+    const title = modal.querySelector("#calTitle").value.trim() || "가져온 여행";
+    goBtn.disabled = true; goBtn.textContent = "만드는 중…";
+    try {
+      const id = await createTripFromEvents(chosen, title);
+      rememberTrip(id, { title, startDate: chosen[0].start.date, dayCount: 1 });
+      bg.remove(); toast("캘린더에서 여행을 만들었어요"); go(`/t/${id}`);
+    } catch (err) { toast("만들기 실패: " + err.message); goBtn.disabled = false; update(); }
+  });
+  update();
+}
+
+async function createTripFromEvents(chosen, title) {
+  const dates = chosen.map((e) => e.start.date).sort();
+  const startDate = dates[0];
+  const dayCount = dayDiff(parseDate(startDate), parseDate(dates[dates.length - 1])) + 1;
+  const items = chosen.map((e, i) => ({
+    day: Math.max(0, dayDiff(parseDate(startDate), parseDate(e.start.date))),
+    type: e.location || e.lat != null ? "place" : "activity",
+    name: e.summary || "일정", address: e.location || "",
+    lat: e.lat ?? null, lng: e.lng ?? null,
+    time: e.start.time || "", memo: e.description || "", order: i,
+  }));
+  return createTripFromBundle({ trip: { title, startDate, dayCount, members: [], memberColors: {} }, items, expenses: [] });
 }
 
 // ---------- 여행 화면 ----------
