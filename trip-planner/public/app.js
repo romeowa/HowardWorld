@@ -689,6 +689,14 @@ function sortedItems(dayItems) {
   });
 }
 
+// 지나간 일정 판별 — '당일'에 한해, 시각이 현재보다 이전인 항목만
+function isPastItem(it) {
+  if (!trip || !trip.startDate || !Number.isInteger(it.day) || !it.time) return false;
+  if (!sameDay(addDays(parseDate(trip.startDate), it.day), new Date())) return false;
+  const now = new Date();
+  return (Number(it.time.slice(0, 2)) * 60 + Number(it.time.slice(3, 5))) < (now.getHours() * 60 + now.getMinutes());
+}
+
 // 현재 시각 빨간 라인 (맥 캘린더 스타일)
 function nowLineEl() {
   const n = new Date();
@@ -982,7 +990,7 @@ function itemCard(it) {
     ? `<span class="tl-num">${num}</span>`
     : `<span class="tl-num plain" title="${esc(t.label)}">${t.emoji}</span>`;
   const row = h(`
-    <div class="tl-row ${it.lat != null ? "clickable" : ""}" data-id="${it.id}">
+    <div class="tl-row ${it.lat != null ? "clickable" : ""} ${isPastItem(it) ? "past" : ""}" data-id="${it.id}">
       <div class="tl-time ${it.time ? "" : "empty"}">${it.time ? esc(it.time) : ""}</div>
       ${dot}
       <div class="tl-content">

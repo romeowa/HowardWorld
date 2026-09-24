@@ -743,3 +743,7 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .tl-now-time { flex: 0 0 auto; font-family: var(--mono); font-size: 11px; font-weight: 700; color: #fff; background: #ef4444; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .tl-now-line { flex: 1; height: 2px; background: #ef4444; border-radius: 2px; position: relative; }
 .tl-now-line::before { content: ""; position: absolute; left: -2px; top: 50%; transform: translateY(-50%); width: 9px; height: 9px; border-radius: 50%; background: #ef4444; }
+
+/* 지나간 일정(당일, 현재 시각 이전) 흐리게 */
+.tl-row.past { opacity: .5; }
+.tl-row.past:hover { opacity: 1; }
