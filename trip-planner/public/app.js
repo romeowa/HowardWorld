@@ -574,11 +574,25 @@ function exportTripICS() {
   downloadBlob(`${sanitizeName(trip.title)}.ics`, wrapICS(vevents, trip.title), "text/calendar");
   toast("캘린더 파일(.ics)을 내려받았어요");
 }
-function exportItemICS(it) {
-  const v = itemVEVENT(it, icsStamp());
-  if (!v) { toast("먼저 여행 시작일을 정해 주세요"); return; }
-  downloadBlob(`${sanitizeName(it.name || "일정")}.ics`, wrapICS([v], it.name || trip.title), "text/calendar");
-  toast("이 일정 캘린더 파일(.ics)을 내려받았어요");
+// 구글 캘린더 등록 화면을 바로 여는 URL (파일 없이)
+function gcalUrl(it) {
+  const p = (n) => String(n).padStart(2, "0");
+  const dateStr = ymd(addDays(parseDate(trip.startDate), it.day));
+  let dates;
+  if (it.time) {
+    const s = new Date(`${dateStr}T${it.time}:00`);
+    const e = new Date(s.getTime() + 60 * 60 * 1000);
+    const fmt = (d) => `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}T${p(d.getUTCHours())}${p(d.getUTCMinutes())}00Z`;
+    dates = `${fmt(s)}/${fmt(e)}`;
+  } else {
+    dates = `${dateStr.replace(/-/g, "")}/${ymd(addDays(parseDate(dateStr), 1)).replace(/-/g, "")}`;
+  }
+  const q = new URLSearchParams({ action: "TEMPLATE", text: it.name || "일정", dates, location: it.address || "", details: it.memo || "" });
+  return `https://calendar.google.com/calendar/render?${q.toString()}`;
+}
+function addItemToCalendar(it) {
+  if (!trip.startDate || !Number.isInteger(it.day)) { toast("먼저 여행 시작일을 정해 주세요"); return; }
+  window.open(gcalUrl(it), "_blank", "noopener");
 }
 function pickJSONFile(cb) {
   const inp = document.createElement("input");
@@ -1061,7 +1075,7 @@ function itemCard(it) {
       if (w) { wEl.textContent = `${WMO_EMOJI(w.code)} ${w.tmax}°/${w.tmin}°`; wEl.title = `${wdate} 예보 · 최고 ${w.tmax}° / 최저 ${w.tmin}°`; }
     });
   }
-  row.querySelector(".cal").addEventListener("click", (e) => { e.stopPropagation(); exportItemICS(it); });
+  row.querySelector(".cal").addEventListener("click", (e) => { e.stopPropagation(); addItemToCalendar(it); });
   row.querySelector(".edit").addEventListener("click", (e) => { e.stopPropagation(); openEditor(it); });
   row.querySelector(".del").addEventListener("click", (e) => {
     e.stopPropagation();
@@ -1122,7 +1136,7 @@ function toggleActions(it, row) {
     el.appendChild(bMap); el.appendChild(bDir);
   }
   const bCal = h(`<button class="ia-btn">📅 캘린더</button>`);
-  bCal.addEventListener("click", (e) => { e.stopPropagation(); exportItemICS(it); });
+  bCal.addEventListener("click", (e) => { e.stopPropagation(); addItemToCalendar(it); });
   const bEdit = h(`<button class="ia-btn">✏️ 수정</button>`);
   bEdit.addEventListener("click", (e) => { e.stopPropagation(); openEditor(it); });
   const bDel = h(`<button class="ia-btn danger">🗑 삭제</button>`);
