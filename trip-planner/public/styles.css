@@ -747,3 +747,12 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 /* 지나간 일정(당일, 현재 시각 이전) 흐리게 */
 .tl-row.past { opacity: .5; }
 .tl-row.past:hover { opacity: 1; }
+
+/* admin 활동 로그(시간순 나열) */
+.log-list { display: flex; flex-direction: column; }
+.log-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 7px 2px; border-bottom: 1px solid var(--line-soft); font-size: 13px; }
+.log-row:last-child { border-bottom: none; }
+.lg-when { font-family: var(--mono); font-size: 11.5px; color: var(--muted); width: 92px; flex: 0 0 auto; }
+.lg-type { font-weight: 600; flex: 0 0 auto; }
+.lg-meta { color: var(--muted); font-size: 12px; flex: 1 1 140px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-dev { font-family: var(--mono); font-size: 11px; color: var(--muted); flex: 0 0 auto; margin-left: auto; }
