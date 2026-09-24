@@ -737,3 +737,9 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
   .tb-share, #tripMenuBtn { border: none; background: none; padding: 7px 8px; }
   .tb-share:hover, #tripMenuBtn:hover { background: var(--surface); }
 }
+
+/* 현재 시각 빨간 라인 (오늘 날짜 섹션, 맥 캘린더 스타일) */
+.tl-now { display: flex; align-items: center; gap: 14px; margin: 8px 0; }
+.tl-now-time { width: 52px; flex: 0 0 auto; text-align: right; font-family: var(--mono); font-size: 12px; font-weight: 700; color: #ef4444; }
+.tl-now-line { flex: 1; height: 2px; background: #ef4444; border-radius: 2px; position: relative; }
+.tl-now-line::before { content: ""; position: absolute; left: -2px; top: 50%; transform: translateY(-50%); width: 9px; height: 9px; border-radius: 50%; background: #ef4444; }

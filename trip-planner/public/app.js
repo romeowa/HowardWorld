@@ -689,6 +689,13 @@ function sortedItems(dayItems) {
   });
 }
 
+// 현재 시각 빨간 라인 (맥 캘린더 스타일)
+function nowLineEl() {
+  const n = new Date();
+  const hm = `${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
+  return h(`<div class="tl-now"><span class="tl-now-time">${hm}</span><span class="tl-now-line"></span></div>`);
+}
+
 function paint() {
   if (!trip) return;
   openInlineId = null;
@@ -838,7 +845,18 @@ function paint() {
     const sec = h(`<div class="day-sec" id="daysec-${i}"></div>`);
     const cnt = dayItems.length ? `<span class="ds-cnt">${dayItems.length}곳</span>` : "";
     sec.appendChild(h(`<div class="day-sec-head"><span class="ds-top">${top}</span><span class="ds-sub">${esc(sub)}</span>${cnt}</div>`));
-    dayItems.forEach((it) => sec.appendChild(itemCard(it)));
+    // 오늘 날짜면 현재 시각 빨간 라인(맥 캘린더 느낌)
+    const isToday = trip.startDate && sameDay(addDays(parseDate(trip.startDate), i), new Date());
+    const nowMin = isToday ? (new Date().getHours() * 60 + new Date().getMinutes()) : -1;
+    let nowShown = !isToday;
+    dayItems.forEach((it) => {
+      if (!nowShown) {
+        const tmin = it.time ? (Number(it.time.slice(0, 2)) * 60 + Number(it.time.slice(3, 5))) : Infinity;
+        if (tmin > nowMin) { sec.appendChild(nowLineEl()); nowShown = true; }
+      }
+      sec.appendChild(itemCard(it));
+    });
+    if (!nowShown) { sec.appendChild(nowLineEl()); nowShown = true; }
     const add = h(`<button class="tl-add">+ 장소 추가</button>`);
     add.addEventListener("click", () => openEditor(null, i));
     sec.appendChild(add);
