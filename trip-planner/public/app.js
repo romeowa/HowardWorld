@@ -2077,38 +2077,62 @@ async function loadEvents(container, days) {
   const maxDay = Math.max(1, ...Object.values(byDay));
   const rows = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="stat-row"><span>${esc(k)}</span><b>${v}</b></div>`).join("") || `<div class="stat-row muted">없음</div>`;
   const dayBars = Object.keys(byDay).sort().map((k) => `<div class="day-bar"><span class="db-date">${k.slice(5)}</span><span class="db-track"><span class="db-fill" style="width:${(byDay[k] / maxDay) * 100}%"></span></span><b>${byDay[k]}</b></div>`).join("") || `<div class="stat-row muted">없음</div>`;
-  // 한 이벤트 = 한 줄 (시간순 나열). 기기·환경·위치를 각 줄에 함께 표시.
-  const evRow = (e) => {
+  // 여행 ID → 제목 맵 (이벤트에 여행 이름 표시)
+  const tripTitles = {};
+  try {
+    const tids = [...new Set(docs.map((e) => e.trip).filter(Boolean))];
+    if (tids.length) {
+      const tok = await auth.currentUser.getIdToken();
+      const r2 = await fetch("https://firestore.googleapis.com/v1/projects/howardworld/databases/(default)/documents:runQuery", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}` },
+        body: JSON.stringify({ structuredQuery: { from: [{ collectionId: "trips" }], select: { fields: [{ fieldPath: "title" }] }, limit: 1000 } }),
+      });
+      if (r2.ok) (await r2.json()).forEach((row) => { if (row.document) { const id = row.document.name.split("/").pop(); tripTitles[id] = fsVal((row.document.fields || {}).title) || ""; } });
+    }
+  } catch {}
+
+  // 한 이벤트의 줄 (기기 헤더에 환경/위치가 있으니 여기선 유형·여행·시각만)
+  const evInner = (e) => {
     const t = e.ts && e.ts.toDate ? e.ts.toDate() : null;
     const when = t ? t.toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "?";
     let extra = "";
     if (e.type === "check_run") extra = ` <span class="muted">감시 ${e.watches ?? "?"}·알림 ${e.notified ?? 0}·에러 ${e.errors ?? 0}</span>`;
     else if (e.type === "promo_click") extra = ` <span class="ev-promo">${esc(e.promo || "?")}</span>`;
-    else if (e.trip) extra = ` <span class="muted">${esc(String(e.trip)).slice(0, 8)}</span>`;
-    const env = esc([e.os, e.br].filter(Boolean).join("·"));
-    const loc = (e.country || e.city) ? `📍${esc([e.country, e.city].filter(Boolean).join(" "))}` : "";
-    const meta = [env, loc].filter(Boolean).join(" · ");
-    return `<div class="log-row">
-      <span class="lg-when">${when}</span>
-      <span class="lg-type">${esc(e.type || "?")}${extra}</span>
-      <span class="lg-meta">${meta}</span>
-      <span class="lg-dev">#${esc(e.dev || "?")}</span>
-    </div>`;
+    else if (e.trip) { const nm = tripTitles[e.trip]; extra = ` <span class="muted">${esc(String(e.trip).slice(0, 8))}${nm ? ` (${esc(nm)})` : ""}</span>`; }
+    return `<div class="ev-row"><span class="ev-type">${esc(e.type || "?")}</span>${extra}<span class="ev-when">${when}</span></div>`;
   };
-  const CAP = 500;
-  const listHtml = docs.slice(0, CAP).map(evRow).join("") || '<div class="stat-row muted">없음</div>';
-  const more = docs.length > CAP ? `<div class="stat-row muted">…외 ${docs.length - CAP}건</div>` : "";
-  const uniqDev = new Set(docs.map((e) => e.dev || "?")).size;
+
+  // 같은 기기(deviceId)끼리 묶기 (최근 활동 순)
+  const groups = {};
+  docs.forEach((e) => { (groups[e.dev || "?"] ||= []).push(e); });
+  const groupArr = Object.entries(groups).map(([dev, evs]) => {
+    evs.sort((a, b) => ((b.ts && b.ts.toDate && b.ts.toDate()) || 0) - ((a.ts && a.ts.toDate && a.ts.toDate()) || 0));
+    const top = evs[0] || {};
+    const lastMs = top.ts && top.ts.toDate ? top.ts.toDate().getTime() : 0;
+    return { dev, evs, top, lastMs };
+  }).sort((a, b) => b.lastMs - a.lastMs);
+  const groupsHtml = groupArr.map((g) => {
+    const e = g.top;
+    const env = esc([e.form, e.os, e.br].filter(Boolean).join(" · ")) || "환경 미상";
+    const loc = (e.country || e.city) ? `<span class="dg-loc">📍${esc([e.country, e.city].filter(Boolean).join(" "))}</span>` : "";
+    const last = g.lastMs ? new Date(g.lastMs).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "?";
+    const shown = g.evs.slice(0, 40).map(evInner).join("");
+    const more = g.evs.length > 40 ? `<div class="stat-row muted">…외 ${g.evs.length - 40}건</div>` : "";
+    return `<div class="dev-group">
+      <div class="dev-head"><span class="dg-env">📱 ${env}</span>${loc}<span class="dg-id">#${esc(g.dev)}</span><span class="dg-meta">${g.evs.length}건 · 최근 ${last}</span></div>
+      <div class="dev-events">${shown}${more}</div>
+    </div>`;
+  }).join("");
 
   container.innerHTML = `
-    <div class="admin-total">최근 ${days}일 · 총 <b>${docs.length}</b>건 · 기기 ${uniqDev}대</div>
+    <div class="admin-total">최근 ${days}일 · 총 <b>${docs.length}</b>건 · 기기 ${groupArr.length}대</div>
     <div class="stat-grid">
       <div class="stat-box"><h3>유형별</h3>${rows(byType)}</div>
       <div class="stat-box"><h3>디바이스 (OS · 브라우저)</h3>${rows(byPlat)}</div>
       <div class="stat-box"><h3>지역 (국가 · 도시)</h3>${rows(byLoc)}</div>
       <div class="stat-box"><h3>날짜별</h3>${dayBars}</div>
     </div>
-    <div class="stat-box"><h3>활동 (시간순)</h3><div class="log-list">${listHtml}${more}</div></div>
+    <div class="stat-box"><h3>기기별 활동</h3>${groupsHtml || '<div class="stat-row muted">없음</div>'}</div>
   `;
 }
 
