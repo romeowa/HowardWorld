@@ -693,7 +693,7 @@ function sortedItems(dayItems) {
 function nowLineEl() {
   const n = new Date();
   const hm = `${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
-  return h(`<div class="tl-now"><span class="tl-now-time">${hm}</span><span class="tl-now-line"></span></div>`);
+  return h(`<div class="tl-now"><span class="tl-now-time">현재 ${hm}</span><span class="tl-now-line"></span></div>`);
 }
 
 function paint() {
