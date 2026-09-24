@@ -539,45 +539,46 @@ function downloadBlob(filename, content, type) {
 }
 function downloadJSON(filename, obj) { downloadBlob(filename, JSON.stringify(obj, null, 2), "application/json"); }
 
-// 이 여행을 캘린더(.ics)로 — 맥/아이폰/구글 등 어디서든 열어 일정 추가
-function tripToICS() {
+// 캘린더(.ics) — 맥/아이폰/구글 등 어디서든 열어 일정 추가
+const icsEsc = (s) => (s || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/;/g, "\\;").replace(/,/g, "\\,");
+function icsStamp() { const d = new Date(); const p = (n) => String(n).padStart(2, "0"); return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}T${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}Z`; }
+// 한 항목 → VEVENT 문자열 (날짜 없으면 null)
+function itemVEVENT(it, stamp) {
+  if (!trip.startDate || !Number.isInteger(it.day)) return null;
   const p = (n) => String(n).padStart(2, "0");
-  const stamp = (() => { const d = new Date(); return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}T${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}Z`; })();
-  const esc = (s) => (s || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/;/g, "\\;").replace(/,/g, "\\,");
-  const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//howard-trips//trip//KO", "CALSCALE:GREGORIAN", `X-WR-CALNAME:${esc(trip.title || "여행 일정")}`];
-  const ordered = items.slice().sort((a, b) => (a.day - b.day) || ((a.time || "99:99") < (b.time || "99:99") ? -1 : 1));
-  ordered.forEach((it) => {
-    if (!trip.startDate || !Number.isInteger(it.day)) return;
-    const dateStr = ymd(addDays(parseDate(trip.startDate), it.day));
-    L.push("BEGIN:VEVENT");
-    L.push(`UID:${it.id}@howard-trips`);
-    L.push(`DTSTAMP:${stamp}`);
-    if (it.time) {
-      const s = new Date(`${dateStr}T${it.time}:00`);
-      const e = new Date(s.getTime() + 60 * 60 * 1000); // 기본 1시간
-      const fmt = (d) => `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`;
-      L.push(`DTSTART:${fmt(s)}`);
-      L.push(`DTEND:${fmt(e)}`);
-    } else {
-      const ymdNum = dateStr.replace(/-/g, "");
-      L.push(`DTSTART;VALUE=DATE:${ymdNum}`);
-      L.push(`DTEND;VALUE=DATE:${ymd(addDays(parseDate(dateStr), 1)).replace(/-/g, "")}`);
-    }
-    L.push(`SUMMARY:${esc(it.name || (TYPES[it.type] || TYPES.note).label)}`);
-    if (it.address) L.push(`LOCATION:${esc(it.address)}`);
-    if (it.memo) L.push(`DESCRIPTION:${esc(it.memo)}`);
-    if (it.lat != null) L.push(`GEO:${it.lat};${it.lng}`);
-    L.push("END:VEVENT");
-  });
-  L.push("END:VCALENDAR");
+  const dateStr = ymd(addDays(parseDate(trip.startDate), it.day));
+  const L = ["BEGIN:VEVENT", `UID:${it.id}@howard-trips`, `DTSTAMP:${stamp}`];
+  if (it.time) {
+    const s = new Date(`${dateStr}T${it.time}:00`);
+    const e = new Date(s.getTime() + 60 * 60 * 1000); // 기본 1시간
+    const fmt = (d) => `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`;
+    L.push(`DTSTART:${fmt(s)}`, `DTEND:${fmt(e)}`);
+  } else {
+    L.push(`DTSTART;VALUE=DATE:${dateStr.replace(/-/g, "")}`, `DTEND;VALUE=DATE:${ymd(addDays(parseDate(dateStr), 1)).replace(/-/g, "")}`);
+  }
+  L.push(`SUMMARY:${icsEsc(it.name || (TYPES[it.type] || TYPES.note).label)}`);
+  if (it.address) L.push(`LOCATION:${icsEsc(it.address)}`);
+  if (it.memo) L.push(`DESCRIPTION:${icsEsc(it.memo)}`);
+  if (it.lat != null) L.push(`GEO:${it.lat};${it.lng}`);
+  L.push("END:VEVENT");
   return L.join("\r\n");
 }
+const wrapICS = (vevents, calname) => ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//howard-trips//trip//KO", "CALSCALE:GREGORIAN", `X-WR-CALNAME:${icsEsc(calname || "여행 일정")}`, ...vevents, "END:VCALENDAR"].join("\r\n");
+
 function exportTripICS() {
   if (!trip) return;
-  const hasDated = trip.startDate && items.some((it) => Number.isInteger(it.day));
-  if (!hasDated) { toast("먼저 여행 시작일을 정해 주세요"); return; }
-  downloadBlob(`${sanitizeName(trip.title)}.ics`, tripToICS(), "text/calendar");
+  const stamp = icsStamp();
+  const ordered = items.slice().sort((a, b) => (a.day - b.day) || ((a.time || "99:99") < (b.time || "99:99") ? -1 : 1));
+  const vevents = ordered.map((it) => itemVEVENT(it, stamp)).filter(Boolean);
+  if (!vevents.length) { toast("먼저 여행 시작일을 정해 주세요"); return; }
+  downloadBlob(`${sanitizeName(trip.title)}.ics`, wrapICS(vevents, trip.title), "text/calendar");
   toast("캘린더 파일(.ics)을 내려받았어요");
+}
+function exportItemICS(it) {
+  const v = itemVEVENT(it, icsStamp());
+  if (!v) { toast("먼저 여행 시작일을 정해 주세요"); return; }
+  downloadBlob(`${sanitizeName(it.name || "일정")}.ics`, wrapICS([v], it.name || trip.title), "text/calendar");
+  toast("이 일정 캘린더 파일(.ics)을 내려받았어요");
 }
 function pickJSONFile(cb) {
   const inp = document.createElement("input");
@@ -1042,6 +1043,7 @@ function itemCard(it) {
           <span class="tl-name">${esc(it.name) || t.label}</span>
           <span class="tl-weather"></span>
           <span class="tl-acts">
+            <button class="cal" title="이 일정 캘린더에 추가">📅</button>
             <button class="edit" title="수정">✏️</button>
             <button class="del" title="삭제">🗑️</button>
           </span>
@@ -1059,6 +1061,7 @@ function itemCard(it) {
       if (w) { wEl.textContent = `${WMO_EMOJI(w.code)} ${w.tmax}°/${w.tmin}°`; wEl.title = `${wdate} 예보 · 최고 ${w.tmax}° / 최저 ${w.tmin}°`; }
     });
   }
+  row.querySelector(".cal").addEventListener("click", (e) => { e.stopPropagation(); exportItemICS(it); });
   row.querySelector(".edit").addEventListener("click", (e) => { e.stopPropagation(); openEditor(it); });
   row.querySelector(".del").addEventListener("click", (e) => {
     e.stopPropagation();
@@ -1118,11 +1121,13 @@ function toggleActions(it, row) {
     bDir.addEventListener("click", (e) => { e.stopPropagation(); window.open(`https://www.google.com/maps/dir/?api=1&destination=${it.lat},${it.lng}`, "_blank", "noopener"); });
     el.appendChild(bMap); el.appendChild(bDir);
   }
+  const bCal = h(`<button class="ia-btn">📅 캘린더</button>`);
+  bCal.addEventListener("click", (e) => { e.stopPropagation(); exportItemICS(it); });
   const bEdit = h(`<button class="ia-btn">✏️ 수정</button>`);
   bEdit.addEventListener("click", (e) => { e.stopPropagation(); openEditor(it); });
   const bDel = h(`<button class="ia-btn danger">🗑 삭제</button>`);
   bDel.addEventListener("click", (e) => { e.stopPropagation(); if (confirm(`"${it.name || TYPES[it.type]?.label}" 삭제할까요?`)) { deleteDoc(doc(db, "trips", tripId, "items", it.id)); logEvent("item_delete", { trip: tripId }); } });
-  el.appendChild(bEdit); el.appendChild(bDel);
+  el.appendChild(bCal); el.appendChild(bEdit); el.appendChild(bDel);
 }
 
 // ---------- 이 날 지도 (구글맵) ----------
