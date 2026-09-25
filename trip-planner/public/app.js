@@ -871,9 +871,8 @@ function paint() {
       <div class="tb-menu">
         <button class="btn ghost sm" id="tripMenuBtn" title="더보기">⋯</button>
         <div class="tb-dropdown" id="tripMenu" hidden>
-          <button data-act="export">⬇ 이 여행 내보내기</button>
-          <button data-act="ics">📅 캘린더에 추가(.ics)</button>
-          <button data-act="import">⬆ 가져오기 (새 여행)</button>
+          <button data-act="ics">📅 캘린더에 추가</button>
+          <button data-act="export">⬇ 백업 파일 내보내기</button>
           <div class="sep"></div>
           <button data-act="delete" class="danger">🗑 이 여행 삭제…</button>
         </div>
@@ -923,7 +922,6 @@ function paint() {
     const a = b.dataset.act;
     if (a === "export") exportCurrentTrip();
     else if (a === "ics") exportTripICS();
-    else if (a === "import") importTripsFromHome();
     else if (a === "delete") softDeleteTrip(tripId, trip.title);
   }));
 
