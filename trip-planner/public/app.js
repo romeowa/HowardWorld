@@ -2091,10 +2091,10 @@ async function loadEvents(container, days) {
     }
   } catch {}
 
-  // 한 이벤트의 줄 (기기 헤더에 환경/위치가 있으니 여기선 유형·여행·시각만)
+  // 한 이벤트의 줄 (날짜는 일별 구분선에 있으니 여기선 시각만)
   const evInner = (e) => {
     const t = e.ts && e.ts.toDate ? e.ts.toDate() : null;
-    const when = t ? t.toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "?";
+    const when = t ? t.toLocaleString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : "?";
     let extra = "";
     if (e.type === "check_run") extra = ` <span class="muted">감시 ${e.watches ?? "?"}·알림 ${e.notified ?? 0}·에러 ${e.errors ?? 0}</span>`;
     else if (e.type === "promo_click") extra = ` <span class="ev-promo">${esc(e.promo || "?")}</span>`;
@@ -2116,7 +2116,16 @@ async function loadEvents(container, days) {
     const env = esc([e.form, e.os, e.br].filter(Boolean).join(" · ")) || "환경 미상";
     const loc = (e.country || e.city) ? `<span class="dg-loc">📍${esc([e.country, e.city].filter(Boolean).join(" "))}</span>` : "";
     const last = g.lastMs ? new Date(g.lastMs).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "?";
-    const shown = g.evs.slice(0, 40).map(evInner).join("");
+    // 날짜가 바뀌면 일별 구분선 삽입
+    let lastDay = null;
+    const parts = [];
+    g.evs.slice(0, 40).forEach((e) => {
+      const t = e.ts && e.ts.toDate ? e.ts.toDate() : null;
+      const dk = t ? ymd(t) : "?";
+      if (dk !== lastDay) { lastDay = dk; parts.push(`<div class="ev-daysep">${t ? `${t.getMonth() + 1}/${t.getDate()} (${WEEK[t.getDay()]})` : "날짜 미상"}</div>`); }
+      parts.push(evInner(e));
+    });
+    const shown = parts.join("");
     const more = g.evs.length > 40 ? `<div class="stat-row muted">…외 ${g.evs.length - 40}건</div>` : "";
     return `<div class="dev-group">
       <div class="dev-head"><span class="dg-env">📱 ${env}</span>${loc}<span class="dg-id">#${esc(g.dev)}</span><span class="dg-meta">${g.evs.length}건 · 최근 ${last}</span></div>
