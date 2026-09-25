@@ -736,6 +736,80 @@ async function tryClipboardImport(interactive) {
   return false;
 }
 
+// ---------- 다음 일정 웹푸시 알림 (여행별) ----------
+const VAPID_PUBLIC = "BIBsuq3D6y7XipMrjc7MDmzoD3eHwk502_n7gYBH9G63YLCPm2Jfc0fL_sQSFJ7D6e5yWxEjYCUWHlhjtIM-H6Y";
+function urlB64ToU8(b64) {
+  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+  const s = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(s); const u = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) u[i] = raw.charCodeAt(i);
+  return u;
+}
+const tripPushLead = (tripId) => { try { const v = localStorage.getItem(`push_${tripId}`); return v == null ? null : Number(v); } catch { return null; } };
+async function enableTripPush(tripId, lead) {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) { toast("이 브라우저는 알림을 지원하지 않아요"); return false; }
+  let perm = Notification.permission;
+  if (perm === "default") perm = await Notification.requestPermission();
+  if (perm !== "granted") { toast("알림 권한이 필요해요"); return false; }
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToU8(VAPID_PUBLIC) });
+  const j = sub.toJSON();
+  await firebaseReady;
+  await setDoc(doc(db, "pushSubs", `${deviceId()}_${tripId}`), {
+    endpoint: j.endpoint, keys: j.keys, trip: tripId, lead, dev: deviceId(),
+    tzOffset: new Date().getTimezoneOffset(), createdAt: serverTimestamp(),
+  });
+  try { localStorage.setItem(`push_${tripId}`, String(lead)); } catch {}
+  return true;
+}
+async function disableTripPush(tripId) {
+  await firebaseReady;
+  try { await deleteDoc(doc(db, "pushSubs", `${deviceId()}_${tripId}`)); } catch {}
+  try { localStorage.removeItem(`push_${tripId}`); } catch {}
+}
+function openAlarmModal(tripId) {
+  const cur = tripPushLead(tripId); // null=꺼짐, 숫자=분
+  let lead = cur != null ? cur : 30;
+  const leads = [5, 15, 30, 60];
+  const bg = h(`<div class="modal-bg"></div>`);
+  const modal = h(`
+    <div class="modal">
+      <div class="ef-head"><h3>🔔 다음 일정 알림</h3><button class="ef-x" title="닫기">✕</button></div>
+      <p class="sync-help">이 여행에서 <b>시간이 지정된 일정</b> 시작 전에 알림을 보냅니다. 아이폰은 <b>홈 화면에 추가한 앱</b>에서 알림을 허용해야 동작해요.</p>
+      <label class="al-toggle"><input type="checkbox" id="alOn" ${cur != null ? "checked" : ""}/> <span>알림 켜기</span></label>
+      <div class="ef-field" id="alLeadWrap"><div class="ef-lbl">몇 분 전</div><div class="al-leads" id="alLeads"></div></div>
+      <div class="modal-actions"><button class="btn ghost" id="alCancel">취소</button><button class="btn" id="alSave">저장</button></div>
+    </div>`);
+  bg.appendChild(modal); document.body.appendChild(bg);
+  bg.addEventListener("click", (e) => { if (e.target === bg) bg.remove(); });
+  modal.querySelector(".ef-x").addEventListener("click", () => bg.remove());
+  modal.querySelector("#alCancel").addEventListener("click", () => bg.remove());
+  const leadsEl = modal.querySelector("#alLeads");
+  const onEl = modal.querySelector("#alOn");
+  const renderLeads = () => {
+    leadsEl.innerHTML = "";
+    leads.forEach((m) => {
+      const b = h(`<button type="button" class="ef-chip ${m === lead ? "on" : ""}" style="${m === lead ? "background:var(--accent);border-color:var(--accent);color:#fff" : ""}">${m}분 전</button>`);
+      b.addEventListener("click", () => { lead = m; renderLeads(); });
+      leadsEl.appendChild(b);
+    });
+    modal.querySelector("#alLeadWrap").style.opacity = onEl.checked ? "1" : ".4";
+  };
+  onEl.addEventListener("change", renderLeads);
+  renderLeads();
+  modal.querySelector("#alSave").addEventListener("click", async () => {
+    const btn = modal.querySelector("#alSave"); btn.disabled = true; btn.textContent = "저장 중…";
+    if (onEl.checked) {
+      const ok = await enableTripPush(tripId, lead);
+      if (ok) { toast(`알림 켜짐 · ${lead}분 전`); bg.remove(); }
+      else { btn.disabled = false; btn.textContent = "저장"; }
+    } else {
+      await disableTripPush(tripId); toast("알림을 껐어요"); bg.remove();
+    }
+  });
+}
+
 function importTripsFromHome() {
   pickJSONFile(async (text) => {
     const bundles = parseBundles(text);
@@ -871,6 +945,7 @@ function paint() {
       <div class="tb-menu">
         <button class="btn ghost sm" id="tripMenuBtn" title="더보기">⋯</button>
         <div class="tb-dropdown" id="tripMenu" hidden>
+          <button data-act="alarm">🔔 다음 일정 알림</button>
           <button data-act="ics">📅 캘린더에 추가</button>
           <button data-act="export">⬇ 백업 파일 내보내기</button>
           <div class="sep"></div>
@@ -921,6 +996,7 @@ function paint() {
     closeMenu();
     const a = b.dataset.act;
     if (a === "export") exportCurrentTrip();
+    else if (a === "alarm") openAlarmModal(tripId);
     else if (a === "ics") exportTripICS();
     else if (a === "delete") softDeleteTrip(tripId, trip.title);
   }));

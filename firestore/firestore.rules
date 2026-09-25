@@ -19,6 +19,12 @@ service cloud.firestore {
       }
     }
 
+    // --- 웹푸시 구독(다음 일정 알림) ---
+    // 기기별 구독 저장/삭제(링크=편집권한과 동일한 개방 수준). 발송은 서버(admin).
+    match /pushSubs/{subId} {
+      allow read, write: if true;
+    }
+
     // --- 공용 사용 로그 ---
     // 누구나 남길 수 있으나 조회는 관리자 구글 계정으로 로그인했을 때만(웹 /admin).
     match /events/{eventId} {

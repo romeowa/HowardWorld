@@ -1,6 +1,6 @@
 // 여행 일정 서비스워커 — 앱 셸 오프라인 캐시
 // 버전을 올리면 activate에서 옛 캐시를 비우고 새 셸을 받는다.
-const VERSION = "v41";
+const VERSION = "v42";
 const CACHE = `trip-shell-${VERSION}`;
 
 // 버전 없는 셸만 미리 캐시. 버전 붙는 app.js/styles.css는 실행 중 전체 URL로 캐시돼
@@ -13,6 +13,23 @@ self.addEventListener("install", (e) => {
 });
 
 self.addEventListener("message", (e) => { if (e.data === "skipWaiting") self.skipWaiting(); });
+
+// 웹푸시: 다음 일정 알림
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch {}
+  e.waitUntil(self.registration.showNotification(d.title || "여행 알림", {
+    body: d.body || "", data: { url: d.url || "/" }, icon: "/icon-192.png", badge: "/icon-192.png", tag: d.url || "trip",
+  }));
+});
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || "/";
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((ws) => {
+    for (const w of ws) { if (w.url.includes(url) && "focus" in w) return w.focus(); }
+    return self.clients.openWindow(url);
+  }));
+});
 
 self.addEventListener("activate", (e) => {
   e.waitUntil(

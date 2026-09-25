@@ -769,3 +769,8 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 /* 기기 간 목록 이동 모달 */
 .sync-help { font-size: 13px; line-height: 1.6; color: var(--muted-2); background: var(--surface); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
 .modal textarea#syncOut, .modal textarea#syncIn { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px 11px; font-family: var(--mono); font-size: 12px; background: var(--card); color: var(--text); resize: vertical; word-break: break-all; }
+
+/* 알림 설정 모달 */
+.al-toggle { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; margin: 4px 0 10px; cursor: pointer; }
+.al-toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
+.al-leads { display: flex; gap: 6px; flex-wrap: wrap; }

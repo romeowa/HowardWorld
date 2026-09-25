@@ -2,9 +2,14 @@
 // (링크 미리보기 크롤러는 JS를 실행하지 않으므로 서버에서 메타를 렌더링)
 // 일반 사용자에게도 이 HTML이 그대로 SPA를 부팅하므로 앱은 정상 동작한다.
 const { onRequest } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const admin = require("firebase-admin");
+const webpush = require("web-push");
 
 const PROJECT = "howardworld";
 const BASE = "https://howard-trips.web.app";
+
+admin.initializeApp();
 
 const esc = (s) => (s || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -75,3 +80,77 @@ exports.share = onRequest(
     res.status(200).send(html);
   }
 );
+
+// ---------- 다음 일정 웹푸시 알림 (여행별 옵트인, 기본 30분 전) ----------
+// 클라이언트가 pushSubs/{dev_trip}에 구독을 저장하면, 매분 스케줄러가 다가오는
+// 일정을 찾아 web-push로 알림을 보낸다(중복 방지: notified 맵).
+webpush.setVapidDetails(
+  process.env.VAPID_SUBJECT || "mailto:romeowa@gmail.com",
+  process.env.VAPID_PUBLIC || "",
+  process.env.VAPID_PRIVATE || ""
+);
+const pad2 = (n) => String(n).padStart(2, "0");
+
+exports.pushNotify = onSchedule(
+  { schedule: "every 1 minutes", region: "asia-northeast3", timeoutSeconds: 120, memory: "256MiB" },
+  async () => {
+    const db = admin.firestore();
+    const now = Date.now();
+    const subsSnap = await db.collection("pushSubs").get();
+    if (subsSnap.empty) return;
+    // 여행별로 구독 묶기 (여행/일정은 한 번만 읽기)
+    const byTrip = {};
+    subsSnap.forEach((d) => { const s = d.data(); if (s.trip) (byTrip[s.trip] ||= []).push({ id: d.id, ...s }); });
+
+    for (const tripId of Object.keys(byTrip)) {
+      let trip, items;
+      try {
+        const ts = await db.doc(`trips/${tripId}`).get();
+        if (!ts.exists) { continue; }
+        trip = ts.data();
+        if (!trip.startDate) continue;
+        const is = await db.collection(`trips/${tripId}/items`).get();
+        items = is.docs.map((x) => ({ id: x.id, ...x.data() })).filter((it) => it.time && Number.isInteger(it.day));
+      } catch (e) { console.error("trip load 실패", tripId, e); continue; }
+      if (!items.length) continue;
+
+      for (const sub of byTrip[tripId]) {
+        const lead = Number(sub.lead) || 30;
+        const tzOff = Number.isFinite(sub.tzOffset) ? sub.tzOffset : -540; // 기본 KST
+        const notified = sub.notified || {};
+        let changed = false;
+        for (const it of items) {
+          // 일정 시각(로컬 벽시계) → UTC ms
+          const [Y, Mo, D] = addDaysStr(trip.startDate, it.day);
+          const [h, mi] = it.time.split(":").map(Number);
+          const dueMs = Date.UTC(Y, Mo - 1, D, h, mi) + tzOff * 60000;
+          const fireMs = dueMs - lead * 60000;
+          // 지난 5분 이내에 발송 시점이 지났고 아직 시작 전이며, 아직 안 보냈으면 발송
+          if (now >= fireMs && now < dueMs && !notified[it.id]) {
+            const title = `${lead}분 뒤 · ${it.name || "일정"}`;
+            const body = [it.time, it.address].filter(Boolean).join(" · ");
+            const ok = await sendPush(db, sub, { title, body, url: `/t/${tripId}` });
+            if (ok) { notified[it.id] = true; changed = true; }
+          }
+        }
+        if (changed) await db.doc(`pushSubs/${sub.id}`).set({ notified }, { merge: true }).catch(() => {});
+      }
+    }
+  }
+);
+
+function addDaysStr(startDate, day) {
+  const d = new Date(startDate + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + (day || 0));
+  return [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()];
+}
+async function sendPush(db, sub, payload) {
+  try {
+    await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, JSON.stringify(payload));
+    return true;
+  } catch (e) {
+    if (e.statusCode === 404 || e.statusCode === 410) { await db.doc(`pushSubs/${sub.id}`).delete().catch(() => {}); }
+    else console.error("push 실패", e.statusCode || e.message);
+    return false;
+  }
+}
