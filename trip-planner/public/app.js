@@ -768,7 +768,28 @@ async function disableTripPush(tripId) {
   try { await deleteDoc(doc(db, "pushSubs", `${deviceId()}_${tripId}`)); } catch {}
   try { localStorage.removeItem(`push_${tripId}`); } catch {}
 }
+const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+function openAlarmGuide() {
+  const bg = h(`<div class="modal-bg"></div>`);
+  const modal = h(`
+    <div class="modal">
+      <div class="ef-head"><h3>🔔 다음 일정 알림</h3><button class="ef-x" title="닫기">✕</button></div>
+      <p class="sync-help">아이폰·아이패드에서는 <b>홈 화면에 추가한 앱</b>에서만 알림을 받을 수 있어요(iOS 정책). 아래처럼 설치한 뒤 앱에서 다시 열어 알림을 켜주세요.</p>
+      <ol class="al-guide">
+        <li>사파리 하단(또는 상단) <b>공유</b> 버튼 <span class="al-ic">􀈂</span> 탭</li>
+        <li><b>홈 화면에 추가</b> 선택</li>
+        <li>홈 화면의 앱 아이콘으로 이 여행을 열기</li>
+        <li>⋯ → <b>🔔 다음 일정 알림</b>에서 켜기</li>
+      </ol>
+      <div class="modal-actions"><button class="btn" id="alGuideOk">알겠어요</button></div>
+    </div>`);
+  bg.appendChild(modal); document.body.appendChild(bg);
+  bg.addEventListener("click", (e) => { if (e.target === bg) bg.remove(); });
+  modal.querySelector(".ef-x").addEventListener("click", () => bg.remove());
+  modal.querySelector("#alGuideOk").addEventListener("click", () => bg.remove());
+}
 function openAlarmModal(tripId) {
+  if (isIOS() && !isStandalone()) { openAlarmGuide(); return; }
   const cur = tripPushLead(tripId); // null=꺼짐, 숫자=분
   let lead = cur != null ? cur : 30;
   const leads = [5, 15, 30, 60];
