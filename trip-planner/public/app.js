@@ -291,6 +291,7 @@ function paintHome() {
         </span>
       </div>
       <div class="cal-actions">
+        <button class="btn ghost sm" id="syncBtn" title="다른 기기로 목록 옮기기">📲 기기이동</button>
         <button class="btn ghost sm" id="importAll">가져오기</button>
         <button class="btn ghost sm" id="exportAll">내보내기</button>
         <button class="btn sm" id="newTrip">+ 새 여행</button>
@@ -298,6 +299,7 @@ function paintHome() {
     </div>`);
   shell.appendChild(header);
   header.querySelector("#newTrip").addEventListener("click", createTrip);
+  header.querySelector("#syncBtn").addEventListener("click", openSyncModal);
   header.querySelector("#importAll").addEventListener("click", importTripsFromHome);
   header.querySelector("#exportAll").addEventListener("click", (e) => exportAllTrips(e.currentTarget));
   header.querySelector("#prevM").addEventListener("click", () => { homeMonth = new Date(y, m - 1, 1); paintHome(); });
@@ -669,6 +671,51 @@ async function createTripFromBundle(b) {
   return ref.id;
 }
 // 파일에서 새 여행으로 추가 (홈·여행 화면 공용)
+// ---------- 기기 간 목록 이동 (코드로) ----------
+// iOS 홈화면 PWA는 사파리와 localStorage가 분리 → 최근 목록을 코드로 복사/붙여넣기해 옮김
+const _recents = () => { try { return JSON.parse(localStorage.getItem("recentTrips") || "[]"); } catch { return []; } };
+function encodeRecents() {
+  const r = _recents().map((t) => ({ id: t.id, title: t.title, startDate: t.startDate, dayCount: t.dayCount, ts: t.ts }));
+  return btoa(unescape(encodeURIComponent(JSON.stringify(r))));
+}
+function importRecentsCode(code) {
+  let arr;
+  try { arr = JSON.parse(decodeURIComponent(escape(atob((code || "").trim())))); } catch { return -1; }
+  if (!Array.isArray(arr)) return -1;
+  const map = new Map(_recents().map((t) => [t.id, t]));
+  let n = 0;
+  arr.forEach((t) => { if (t && t.id) { map.set(t.id, { ...map.get(t.id), ...t }); n++; } });
+  try { localStorage.setItem("recentTrips", JSON.stringify([...map.values()])); } catch {}
+  return n;
+}
+function openSyncModal() {
+  const code = encodeRecents();
+  const cnt = _recents().length;
+  const bg = h(`<div class="modal-bg"></div>`);
+  const modal = h(`
+    <div class="modal">
+      <div class="ef-head"><h3>기기 간 목록 옮기기</h3><button class="ef-x" title="닫기">✕</button></div>
+      <p class="sync-help">아이폰 홈화면 앱은 사파리와 저장공간이 분리돼요. 사파리에서 <b>코드 복사</b> → 홈화면 앱에서 <b>붙여넣기 → 불러오기</b> 하면 목록이 옮겨집니다.</p>
+      <div class="field"><label>이 기기 목록 코드 (${cnt}개)</label><textarea id="syncOut" readonly rows="3">${esc(code)}</textarea></div>
+      <button class="btn block" id="syncCopy">📋 코드 복사</button>
+      <div class="field" style="margin-top:16px"><label>다른 기기 코드 붙여넣기</label><textarea id="syncIn" rows="3" placeholder="여기에 코드를 붙여넣으세요"></textarea></div>
+      <div class="modal-actions"><button class="btn ghost" id="syncClose">닫기</button><button class="btn" id="syncGo">불러오기</button></div>
+    </div>`);
+  bg.appendChild(modal); document.body.appendChild(bg);
+  bg.addEventListener("click", (e) => { if (e.target === bg) bg.remove(); });
+  modal.querySelector(".ef-x").addEventListener("click", () => bg.remove());
+  modal.querySelector("#syncClose").addEventListener("click", () => bg.remove());
+  modal.querySelector("#syncCopy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(code); toast("코드를 복사했어요"); }
+    catch { const ta = modal.querySelector("#syncOut"); ta.focus(); ta.select(); toast("길게 눌러 복사하세요"); }
+  });
+  modal.querySelector("#syncGo").addEventListener("click", () => {
+    const n = importRecentsCode(modal.querySelector("#syncIn").value);
+    if (n < 0) { toast("코드가 올바르지 않아요"); return; }
+    bg.remove(); toast(`${n}개 여행을 불러왔어요`); renderHome();
+  });
+}
+
 function importTripsFromHome() {
   pickJSONFile(async (text) => {
     const bundles = parseBundles(text);
