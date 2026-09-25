@@ -260,6 +260,8 @@ const fmtMD = (d) => `${d.getMonth() + 1}.${d.getDate()}`;
 let homeMonth = null;          // 현재 보는 달 (해당 월 1일 Date)
 let homeView = "month";        // "month" | "list"
 let homeTrips = [];            // 홈에 표시 중인 여행 (메모리 캐시)
+let _clipAutoTried = false;    // 설치 앱 첫 실행 시 클립보드 자동 불러오기 1회
+const isStandalone = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 
 // 홈: localStorage 캐시로 즉시 렌더 → 백그라운드로 Firestore 최신화
 function renderHome() {
@@ -270,6 +272,8 @@ function renderHome() {
     .filter((t) => !pendingDeletes.has(t.id));
   paintHome();
   refreshHomeTrips(recent);
+  // 설치 앱(PWA)에서 목록이 비어 있으면 클립보드 자동 불러오기 1회 시도(권한 되는 기기만)
+  if (!homeTrips.length && !_clipAutoTried && isStandalone()) { _clipAutoTried = true; tryClipboardImport(false); }
 }
 
 // 순수 렌더 (네트워크 대기 없음) — 달 이동도 이걸로 즉시 다시 그림
@@ -422,6 +426,10 @@ function buildCalendar(month, trips) {
     });
   } else {
     foot.appendChild(h(`<div class="cal-foot-empty">아직 잡힌 여행이 없어요. “+ 새 여행”으로 시작해 보세요.</div>`));
+    // 다른 기기에서 '기기이동' 코드를 복사해 왔다면 한 번 탭으로 불러오기
+    const clip = h(`<button class="btn ghost sm" id="clipLoad" style="margin:2px auto 0;display:block">📋 클립보드에서 여행 목록 불러오기</button>`);
+    clip.addEventListener("click", () => tryClipboardImport(true));
+    foot.appendChild(clip);
   }
   cal.appendChild(foot);
   return cal;
@@ -714,6 +722,18 @@ function openSyncModal() {
     if (n < 0) { toast("코드가 올바르지 않아요"); return; }
     bg.remove(); toast(`${n}개 여행을 불러왔어요`); renderHome();
   });
+  // 모달을 열 때(사용자 제스처) 코드 자동 복사 → 다른 기기에서 바로 붙여넣기
+  if (cnt) navigator.clipboard.writeText(code).then(() => toast("이 기기 목록 코드를 복사했어요")).catch(() => {});
+}
+// 클립보드에서 목록 코드 읽어 불러오기 (탭 시 = 사용자 제스처)
+async function tryClipboardImport(interactive) {
+  try {
+    const text = await navigator.clipboard.readText();
+    const n = importRecentsCode(text);
+    if (n > 0) { toast(`${n}개 여행을 불러왔어요`); renderHome(); return true; }
+    if (interactive) toast("클립보드에 목록 코드가 없어요");
+  } catch { if (interactive) toast("클립보드 읽기를 허용해 주세요"); }
+  return false;
 }
 
 function importTripsFromHome() {
