@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: f2a2b738-2280-4be0-a63c-ca09b5c4f9ff
-  modified: 2026-09-23T00:00:00.000Z
+  modified: 2026-09-25T06:27:30.707Z
 ---
 
 trip-planner: 링크 하나로 함께 짜는 여행 일정 공유 웹앱. 공용 [[howardworld-firebase-setup]] 위에 올림.
@@ -42,4 +42,5 @@ trip-planner: 링크 하나로 함께 짜는 여행 일정 공유 웹앱. 공용
 - iOS 홈화면 PWA는 사파리와 localStorage가 분리 → 최근 여행 목록(recentTrips)이 안 보임. 해결: 홈 '📲 기기이동' 모달(openSyncModal)에서 목록을 base64 코드로 복사→다른 기기에 붙여넣기(importRecentsCode 병합). 로그인 불필요, 클립보드 공유 이용. 없는 여행 id는 refreshHomeTrips가 자동 정리.
 - 참여자 색: 추가 시 addMember()가 기존 참여자와 안 겹치는 팔레트 색을 랜덤 배정해 trip.memberColors 맵에 저장. memberColor(name)=저장색 우선, 없으면 이름 해시 폴백.
 - **배포 캐시 주의**: (1) 루트 '/'는 firebase.json의 `**/*.html` 규칙에 안 걸려 기본 max-age=3600으로 캐시됐었음 → '/'·'/admin'에 no-cache 헤더 추가함. (2) 트립 페이지 `/t/**`는 index.html이 아니라 **share 클라우드 함수**(functions/index.js, asia-northeast3)가 HTML 생성 → 예전엔 버전없는 /app.js를 하드코딩해 배포해도 옛 셸이 떴음. 지금은 함수가 배포된 index.html을 fetch해 제목/OG만 주입(버전 붙은 최신 셸 유지). 함수 수정 시 `cd trip-planner && firebase deploy --only functions`(최초 `cd functions && npm install` 필요). (3) app.js가 controllerchange 시 자동 새로고침, sw.js install에서 skipWaiting.
+- 웹푸시 알림(다음 일정, 여행별 옵트인): 여행 ⋯ 메뉴 '🔔 다음 일정 알림'(openAlarmModal) → 알림 켜기 토글 + 5/15/30/60분 전 칩(기본 30분). enableTripPush가 Notification.requestPermission→pushManager.subscribe→Firestore `pushSubs/{deviceId}_{tripId}`에 {endpoint,keys,trip,lead,tzOffset,...} 저장. sw.js에 push/notificationclick 핸들러(알림 클릭 시 해당 여행 열기). 서버는 **pushNotify** 스케줄 함수(functions/index.js, onSchedule every 1 minutes, asia-northeast3)가 pushSubs를 훑어 시간지정 일정 시작 lead분 전이면 web-push로 발송, notified 맵으로 중복 방지(tzOffset로 KST 등 시각 보정). **VAPID** 키: 공개키는 app.js VAPID_PUBLIC 상수, 비밀키는 **functions/.env(gitignore, VAPID_PRIVATE/PUBLIC/SUBJECT)**. 규칙 pushSubs read/write 공개. 의존성: web-push, firebase-admin(**^13** — ^14는 firebase-functions@6 peer 충돌로 배포 실패), firebase-functions ^6. **iOS는 홈화면 설치 PWA + 알림 권한 허용해야 동작(16.4+).**
 - 구조: public/app.js 단일 SPA + styles.css + config.js(키) + sw.js. 캐시: firebase.json에 js/css/html no-cache 헤더, 에셋 ?v 버전.
