@@ -622,6 +622,7 @@ const cleanTrip = (t) => ({
   title: t.title || "새 여행", startDate: t.startDate ?? null, dayCount: t.dayCount || 1,
   members: t.members || [], memberColors: t.memberColors || {},
   expenseCategories: t.expenseCategories || null,
+  rates: t.rates || null,
 });
 const stripId = (d) => { const { id, createdAt, ...rest } = d; return rest; };
 async function fetchTripBundle(id) {
@@ -671,6 +672,7 @@ async function createTripFromBundle(b) {
   const t = cleanTrip(b.trip || {});
   const base = { title: t.title, startDate: t.startDate, dayCount: t.dayCount, members: t.members, memberColors: t.memberColors, createdAt: serverTimestamp() };
   if (t.expenseCategories) base.expenseCategories = t.expenseCategories;
+  if (t.rates) base.rates = t.rates;
   const ref = await addDoc(collection(db, "trips"), base);
   await Promise.all([
     ...((b.items || []).map((it) => addDoc(collection(db, "trips", ref.id, "items"), { ...stripId(it), createdAt: serverTimestamp() }))),
@@ -858,11 +860,30 @@ let skipRememberOnce = false;  // admin에서 열람 시 홈 최근목록에 기
 
 // ---------- 정산 상태 ----------
 const DEFAULT_CATS = ["숙박", "식사", "교통", "간식", "관광", "기타"];
-let expenses = [];             // [{id, date, category, desc, amount, payer, sharedBy:[names], place, day}]
+let expenses = [];             // [{id, date, category, desc, amount, currency, payer, sharedBy:[names], place, day}]
 let unsubExpenses = null;      // 정산 내역 실시간 구독 (여행 화면 동안 유지)
 let tripTab = "plan";          // "plan"(일정) | "settle"(정산)
 let inlineAdd = null;          // 데스크톱 상단 인라인 추가 폼 상태 {day, date, category, payer}
 const won = (n) => (Math.round(Number(n) || 0)).toLocaleString("ko-KR");
+
+// 통화(외화 입력) — 원화 기준으로 환산해 정산. def=기본 환율(원/1단위), 사용자가 정산탭에서 고정 가능.
+const CURRENCIES = {
+  KRW: { sym: "₩", unit: "원", label: "원 KRW", dec: 0 },
+  JPY: { sym: "¥", unit: "엔", label: "엔 JPY", dec: 0, def: 9 },
+  USD: { sym: "$", unit: "달러", label: "달러 USD", dec: 2, def: 1350 },
+};
+const CURRENCY_ORDER = ["KRW", "JPY", "USD"];
+// 원/1단위 환율. trip.rates에 저장된 값 우선, 없으면 통화 기본값.
+const fxRate = (cur) => { if (!cur || cur === "KRW") return 1; const r = trip?.rates?.[cur]; return (r != null && Number(r) > 0) ? Number(r) : (CURRENCIES[cur]?.def || 0); };
+// 환율 표기 — 소수(8.5, 9.1 등)를 반올림하지 않고 그대로
+const fmtRate = (cur) => fxRate(cur).toLocaleString("ko-KR", { maximumFractionDigits: 4 });
+const hasRate = (cur) => !cur || cur === "KRW" || !!(trip?.rates && Number(trip.rates[cur]) > 0);
+// 지출을 원화로 환산 (입력은 외화지만 계산·표시는 원화)
+const toKRW = (e) => (Number(e.amount) || 0) * fxRate(e.currency || "KRW");
+// 외화 원금 표기: ¥5,000 / $12.50
+const fmtCur = (amt, cur) => { const c = CURRENCIES[cur] || CURRENCIES.KRW; return c.sym + (Number(amt) || 0).toLocaleString("ko-KR", { maximumFractionDigits: c.dec }); };
+// 지출들에서 실제로 쓰인 외화 목록(KRW 제외)
+const usedForeign = () => CURRENCY_ORDER.filter((c) => c !== "KRW" && expenses.some((e) => (e.currency || "KRW") === c));
 
 // 참여자 색상 팔레트 (이름 → 아바타 색)
 const MEMBER_COLORS = ["#0f766e", "#b45309", "#6d5bd0", "#be123c", "#0369a1", "#4d7c0f", "#9d174d", "#0e7490"];
@@ -1611,6 +1632,37 @@ function dayGroupLabel(k) {
 }
 const stopsForDay = (day) => (Number.isInteger(day) ? items.filter((it) => it.day === day && (it.name || it.address)).map((it) => it.name || it.address) : []);
 
+// 환율 고정 카드 — 실제로 쓰인 외화마다 '1단위 = ? 원'을 직접 입력해 고정
+function buildRatesCard() {
+  const used = usedForeign();
+  if (!used.length) return null;
+  const card = h(`<div class="stl-card stl-fx">
+    <div class="stl-ctitle">환율 <span class="fx-hint">원화 기준 · 외화는 이 환율로 환산돼 정산돼요</span></div>
+  </div>`);
+  used.forEach((cur) => {
+    const c = CURRENCIES[cur];
+    const set = !!(trip?.rates && Number(trip.rates[cur]) > 0);
+    const cnt = expenses.filter((e) => (e.currency || "KRW") === cur).length;
+    const row = h(`<div class="fx-row">
+      <span class="fx-cur"><b>1${c.sym}</b> <span class="fx-unit">${c.unit}</span></span>
+      <span class="fx-eq">=</span>
+      <span class="fx-in"><input inputmode="decimal" value="${fxRate(cur)}" /><span>원</span></span>
+      <span class="fx-note ${set ? "" : "def"}">${set ? `${cnt}건 적용` : "기본값 · 고정 필요"}</span>
+    </div>`);
+    const inp = row.querySelector("input");
+    const save = async () => {
+      const v = Number(String(inp.value).replace(/,/g, ""));
+      if (!(v > 0)) { toast("올바른 환율을 입력해 주세요"); inp.value = fxRate(cur); return; }
+      try { await updateDoc(doc(db, "trips", tripId), { [`rates.${cur}`]: v }); toast(`${c.unit} 환율 고정: 1${c.sym} = ${v.toLocaleString("ko-KR", { maximumFractionDigits: 4 })}원`); }
+      catch (err) { toast("저장 실패: " + err.message); }
+    };
+    inp.addEventListener("keydown", (e) => { if (e.key === "Enter") inp.blur(); });
+    inp.addEventListener("change", save);
+    card.appendChild(row);
+  });
+  return card;
+}
+
 function renderSettleView(shell) {
   const members = tripMembers();
   const view = h(`<div class="settle-view"></div>`);
@@ -1653,7 +1705,7 @@ function renderSettleView(shell) {
   const avg = members.length ? total / members.length : (names.length ? total / names.length : 0);
 
   const byCat = {};
-  expenses.forEach((e) => { const c = e.category || "기타"; byCat[c] = (byCat[c] || 0) + (Number(e.amount) || 0); });
+  expenses.forEach((e) => { const c = e.category || "기타"; byCat[c] = (byCat[c] || 0) + toKRW(e); });
   const catArr = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
 
   const body = h(`<div class="stl-body"></div>`);
@@ -1681,6 +1733,10 @@ function renderSettleView(shell) {
     legend.appendChild(h(`<div class="lg" style="color:var(--muted)">아직 지출이 없어요</div>`));
   }
   side.appendChild(sum);
+
+  // --- 환율 (외화가 쓰였을 때만) ---
+  const fxCard = buildRatesCard();
+  if (fxCard) side.appendChild(fxCard);
 
   // --- 송금 제안 ---
   const trf = h(`<div class="stl-card stl-transfer"><div class="stl-ctitle">이렇게 보내면 끝</div></div>`);
@@ -1720,7 +1776,7 @@ function renderSettleView(shell) {
   if (!expenses.length) main.appendChild(h(`<div class="stl-empty">아직 지출 내역이 없어요.<br/>‘＋ 지출 추가’로 시작하세요.</div>`));
   keys.forEach((k) => {
     const arr = groups.get(k).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
-    const dtotal = arr.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    const dtotal = arr.reduce((s, e) => s + toKRW(e), 0);
     const sec = h(`<div class="stl-day"><div class="stl-dhead"><span>${esc(dayGroupLabel(k))}</span><span class="dt">${won(dtotal)}원</span></div></div>`);
     arr.forEach((e) => sec.appendChild(expenseRow(e, members)));
     main.appendChild(sec);
@@ -1734,14 +1790,17 @@ function renderSettleView(shell) {
 
 function expenseRow(e, members) {
   const n = (e.sharedBy || []).length || 1;
-  const per = (Number(e.amount) || 0) / n;
+  const krw = toKRW(e);
+  const per = krw / n;
+  const foreign = (e.currency && e.currency !== "KRW");
   const dateStr = e.offTrip && e.date ? e.date : "";
   const sub = [e.payer ? `${e.payer} 결제` : "", e.place || "", dateStr].filter(Boolean).join(" · ") || `${n}명 나눔`;
+  const origLine = foreign ? `<div class="exp-orig">${fmtCur(e.amount, e.currency)}${hasRate(e.currency) ? "" : " · 환율 미고정"}</div>` : "";
   const row = h(`<div class="exp-item">
     <div class="exp-head">
       <span class="exp-cat" style="color:${catColor(e.category)};background:${catColor(e.category)}1a">${esc(e.category || "기타")}</span>
       <div class="exp-info"><div class="exp-desc">${esc(e.desc || "(내역 없음)")}</div><div class="exp-sub">${esc(sub)}</div></div>
-      <div class="exp-nums"><div class="exp-amt">${won(e.amount)}</div><div class="exp-per">1인 ${won(per)}</div></div>
+      <div class="exp-nums"><div class="exp-amt">${won(krw)}</div>${origLine}<div class="exp-per">1인 ${won(per)}</div></div>
     </div>
     <div class="exp-avs"></div>
   </div>`);
@@ -1770,7 +1829,7 @@ function computeSettlement() {
   let total = 0;
   names.forEach((n) => { share[n] = 0; paid[n] = 0; });
   expenses.forEach((e) => {
-    const amt = Number(e.amount) || 0; total += amt;
+    const amt = toKRW(e); total += amt;
     const sb = e.sharedBy || [];
     if (sb.length) { const per = amt / sb.length; sb.forEach((n) => { share[n] = (share[n] || 0) + per; }); }
     if (e.payer) paid[e.payer] = (paid[e.payer] || 0) + amt;
@@ -1792,7 +1851,8 @@ function computeSettlement() {
 
 // 데스크톱 상단 빠른 추가 폼 (3a desktop v2) — 언제·어디서·구분·결제자·나눠 낼 사람까지 한 줄에
 function buildInlineAdd(members, cats) {
-  if (!inlineAdd) inlineAdd = { day: 0, date: dateForDay(0), place: "", category: cats[0], payer: members[0], sharedBy: [...members], known: [...members] };
+  if (!inlineAdd) inlineAdd = { day: 0, date: dateForDay(0), place: "", category: cats[0], payer: members[0], sharedBy: [...members], known: [...members], currency: "KRW" };
+  if (!inlineAdd.currency) inlineAdd.currency = "KRW";
   if (!cats.includes(inlineAdd.category)) inlineAdd.category = cats[0];
   if (!members.includes(inlineAdd.payer)) inlineAdd.payer = members[0];
   // 새로 추가된 참여자는 자동으로 '나눠 낼 사람'에 포함
@@ -1808,7 +1868,7 @@ function buildInlineAdd(members, cats) {
       <div class="qa-r1"></div>
       <div class="qa-r2">
         <input class="qa-desc" placeholder="무엇에 썼나요?" />
-        <div class="qa-amtbox"><input class="qa-amt" inputmode="numeric" placeholder="0" /><span>원</span></div>
+        <div class="qa-amtbox"><input class="qa-amt" inputmode="decimal" placeholder="0" /><select class="qa-cursel"></select></div>
         <button class="btn qa-submit">추가</button>
       </div>
       <div class="qa-r3">
@@ -1824,11 +1884,15 @@ function buildInlineAdd(members, cats) {
   const whoW = box.querySelector(".qa-who");
   const descEl = box.querySelector(".qa-desc");
   const amtEl = box.querySelector(".qa-amt");
+  const curEl = box.querySelector(".qa-cursel");
   const perEl = box.querySelector(".qa-per");
+  CURRENCY_ORDER.forEach((cur) => { const o = document.createElement("option"); o.value = cur; o.textContent = CURRENCIES[cur].sym + (cur === "KRW" ? "원" : ` ${CURRENCIES[cur].unit}`); if (inlineAdd.currency === cur) o.selected = true; curEl.appendChild(o); });
+  curEl.addEventListener("change", () => { inlineAdd.currency = curEl.value; updatePer(); });
 
   const updatePer = () => {
-    const amt = Number(amtEl.value) || 0; const n = inlineAdd.sharedBy.length;
-    perEl.textContent = `${n}명 · 1인 ${n ? won(amt / n) : 0}원`;
+    const amt = (Number(String(amtEl.value).replace(/,/g, "")) || 0) * fxRate(inlineAdd.currency); const n = inlineAdd.sharedBy.length;
+    const foreign = inlineAdd.currency && inlineAdd.currency !== "KRW";
+    perEl.textContent = (foreign ? `≈ ${won(amt)}원 · ` : "") + `${n}명 · 1인 ${n ? won(amt / n) : 0}원`;
   };
   const renderR1 = () => {
     r1.innerHTML = "";
@@ -1893,12 +1957,12 @@ function buildInlineAdd(members, cats) {
   });
 
   const submit = async () => {
-    const amt = Number(amtEl.value) || 0;
+    const amt = Number(String(amtEl.value).replace(/,/g, "")) || 0;
     if (!amt) { toast("금액을 입력해 주세요"); amtEl.focus(); return; }
     if (!inlineAdd.sharedBy.length) { toast("나눠 낼 사람을 선택해 주세요"); return; }
     const off = inlineAdd.day === "off";
     const data = {
-      amount: amt, desc: descEl.value.trim(), category: inlineAdd.category || "기타",
+      amount: amt, currency: inlineAdd.currency || "KRW", desc: descEl.value.trim(), category: inlineAdd.category || "기타",
       offTrip: off, day: off ? null : inlineAdd.day,
       date: off ? (inlineAdd.date || "") : (dateForDay(inlineAdd.day) || ""),
       place: off ? "" : (inlineAdd.place || ""), payer: inlineAdd.payer || "", sharedBy: [...inlineAdd.sharedBy],
@@ -1923,15 +1987,16 @@ function openExpenseForm(existing) {
   const editMembers = existing ? [...new Set([...members, ...(existing.sharedBy || []), existing.payer].filter(Boolean))] : members;
   const exDay = existing ? (existing.offTrip ? "off" : (Number.isInteger(existing.day) ? existing.day : 0)) : 0;
   expForm = existing
-    ? { amount: existing.amount ?? "", desc: existing.desc || "", category: existing.category || cats[0], day: exDay, date: existing.date || dateForDay(exDay), place: existing.place || "", payer: existing.payer || members[0] || "", sharedBy: [...(existing.sharedBy || [])] }
-    : { amount: "", desc: "", category: cats[0], day: 0, date: dateForDay(0), place: "", payer: members[0] || "", sharedBy: [...members] };
+    ? { amount: existing.amount ?? "", currency: existing.currency || "KRW", desc: existing.desc || "", category: existing.category || cats[0], day: exDay, date: existing.date || dateForDay(exDay), place: existing.place || "", payer: existing.payer || members[0] || "", sharedBy: [...(existing.sharedBy || [])] }
+    : { amount: "", currency: "KRW", desc: "", category: cats[0], day: 0, date: dateForDay(0), place: "", payer: members[0] || "", sharedBy: [...members] };
 
   const bg = h(`<div class="modal-bg"></div>`);
   const modal = h(`
     <div class="modal exp-form">
       <div class="ef-head"><h3>${existing ? "지출 수정" : "지출 추가"}</h3><button class="ef-x" title="닫기">✕</button></div>
       <div class="ef-field"><div class="ef-lbl">언제, 어디서?</div><div class="ef-daycards" id="efDays"></div><div id="efPaidOn"></div><div class="ef-stops" id="efStops"></div></div>
-      <div class="ef-amount"><input id="efAmt" inputmode="numeric" placeholder="0" value="${existing ? existing.amount ?? "" : ""}" /><span>원</span></div>
+      <div class="ef-amount"><input id="efAmt" inputmode="decimal" placeholder="0" value="${existing ? existing.amount ?? "" : ""}" /><select id="efCur" class="ef-cursel"></select></div>
+      <div class="ef-krw" id="efKrw"></div>
       <div class="ef-per" id="efPer"></div>
       <div class="ef-field"><div class="ef-lbl">구분</div><div class="ef-cats" id="efCats"></div>
         <input class="ef-desc" id="efDesc" placeholder="무엇에 썼나요? (예: 저녁 한정식)" value="${esc(expForm.desc)}" /></div>
@@ -1948,6 +2013,8 @@ function openExpenseForm(existing) {
   modal.querySelector(".ef-x").addEventListener("click", () => bg.remove());
 
   const amtEl = modal.querySelector("#efAmt");
+  const curEl = modal.querySelector("#efCur");
+  const krwEl = modal.querySelector("#efKrw");
   const descEl = modal.querySelector("#efDesc");
   const perEl = modal.querySelector("#efPer");
   const saveBtn = modal.querySelector("#efSave");
@@ -1955,11 +2022,24 @@ function openExpenseForm(existing) {
   const paidW = modal.querySelector("#efPaidOn");
   const stopsW = modal.querySelector("#efStops");
 
+  CURRENCY_ORDER.forEach((cur) => { const o = document.createElement("option"); o.value = cur; o.textContent = `${CURRENCIES[cur].sym} ${CURRENCIES[cur].label}`; if (expForm.currency === cur) o.selected = true; curEl.appendChild(o); });
+
   const updateCalc = () => {
-    const amt = Number(amtEl.value) || 0; const n = expForm.sharedBy.length;
-    perEl.textContent = `${n}명 · 1인 ${n ? won(amt / n) : 0}원`;
-    saveBtn.textContent = amt > 0 ? `${won(amt)}원 ${existing ? "저장" : "추가"}` : (existing ? "저장" : "지출 추가");
+    const amt = Number(String(amtEl.value).replace(/,/g, "")) || 0;
+    const cur = expForm.currency || "KRW";
+    const krw = amt * fxRate(cur);
+    const n = expForm.sharedBy.length;
+    if (cur === "KRW") { krwEl.hidden = true; }
+    else {
+      krwEl.hidden = false;
+      krwEl.innerHTML = hasRate(cur)
+        ? `≈ <b>${won(krw)}원</b> <span class="fxr">(1${CURRENCIES[cur].sym} = ${fmtRate(cur)}원)</span>`
+        : `≈ <b>${won(krw)}원</b> <span class="fxr warn">임시 환율 1${CURRENCIES[cur].sym}=${fmtRate(cur)}원 · 정산탭에서 고정하세요</span>`;
+    }
+    perEl.textContent = `${n}명 · 1인 ${n ? won(krw / n) : 0}원`;
+    saveBtn.textContent = amt > 0 ? `${won(krw)}원 ${existing ? "저장" : "추가"}` : (existing ? "저장" : "지출 추가");
   };
+  curEl.addEventListener("change", () => { expForm.currency = curEl.value; updateCalc(); });
   amtEl.addEventListener("input", updateCalc);
   descEl.addEventListener("input", () => { expForm.desc = descEl.value; });
 
@@ -2057,12 +2137,12 @@ function openExpenseForm(existing) {
     catch (e) { toast("삭제 실패: " + e.message); }
   });
   saveBtn.addEventListener("click", async () => {
-    const amt = Number(amtEl.value) || 0;
+    const amt = Number(String(amtEl.value).replace(/,/g, "")) || 0;
     if (!amt) { toast("금액을 입력해 주세요"); amtEl.focus(); return; }
     if (!expForm.sharedBy.length) { toast("나눠 낼 사람을 한 명 이상 선택해 주세요"); return; }
     const off = expForm.day === "off";
     const data = {
-      amount: amt, desc: descEl.value.trim(), category: expForm.category || "기타",
+      amount: amt, currency: expForm.currency || "KRW", desc: descEl.value.trim(), category: expForm.category || "기타",
       offTrip: off, day: off ? null : expForm.day,
       date: off ? (expForm.date || "") : (dateForDay(expForm.day) || ""),
       place: off ? "" : (expForm.place || ""), payer: expForm.payer || "", sharedBy: expForm.sharedBy,
