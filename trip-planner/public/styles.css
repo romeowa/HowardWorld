@@ -209,6 +209,11 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 }
 @media (min-width: 600px) { .modal-bg { align-items: center; } .modal { border-radius: 18px; } }
 .modal h3 { font-size: 18px; font-weight: 600; margin-bottom: 14px; }
+@media (min-width: 600px) { .modal.modal-sm { max-width: 420px; } }
+.modal-desc { font-size: 14px; color: var(--muted); line-height: 1.6; margin-bottom: 14px; }
+.modal-desc b { color: var(--text); }
+.btn.danger-solid { background: var(--danger); color: #fff; font-weight: 600; }
+.btn.danger-solid:disabled { background: var(--surface-2); color: var(--muted); cursor: not-allowed; filter: none; }
 .field { margin-bottom: 12px; }
 .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 5px; }
 .field input, .field textarea, .field select {

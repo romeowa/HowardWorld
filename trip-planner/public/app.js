@@ -472,37 +472,46 @@ function forgetTrip(id) {
   renderHome();
 }
 
-// 실행취소(undo) 기반 소프트 삭제
-const pendingDeletes = new Set();   // 삭제 대기 중(UI에서 숨김) 여행 id
-let undoState = null;               // { id, timer }
+const pendingDeletes = new Set();   // (홈 목록 필터 호환용, 현재 미사용)
 
-function commitPendingDelete() {
-  if (!undoState) return;
-  const { id, timer } = undoState; clearTimeout(timer); undoState = null;
-  if (pendingDeletes.delete(id)) { logEvent("trip_delete", { trip: id }); deleteTripFull(id).catch((e) => console.error("삭제 실패", e)); }
-  const t = document.querySelector(".toast"); if (t) t.classList.remove("show");
-}
-
-// 여행 삭제 요청 — 즉시 숨기고 5초간 실행취소 토스트. 시간 지나면 실제 삭제.
-function softDeleteTrip(id, title) {
-  if (pendingDeletes.has(id)) return;
-  commitPendingDelete();              // 직전 대기건은 바로 확정
-  pendingDeletes.add(id);
-  if (location.pathname === "/") renderHome();   // 홈이면 목록에서 숨김
-  else { cleanup(); go("/"); }                   // 여행 화면이면 홈으로
-
-  let el = document.querySelector(".toast");
-  if (!el) { el = h(`<div class="toast"></div>`); document.body.appendChild(el); }
-  clearTimeout(el._t);
-  el.innerHTML = `<span>‘${esc(title || "여행")}’ 삭제됨</span><button class="toast-undo">실행취소</button>`;
-  void el.offsetWidth;               // 강제 리플로우 후 표시 (async 리렌더와 무관하게 확실히)
-  el.classList.add("show");
-  const timer = setTimeout(commitPendingDelete, 6000);
-  undoState = { id, timer };
-  el.querySelector(".toast-undo").addEventListener("click", () => {
-    clearTimeout(timer); undoState = null; el.classList.remove("show");
-    if (pendingDeletes.delete(id) && location.pathname === "/") renderHome();
+// 여행 삭제 — 여행 이름을 정확히 입력해야 영구 삭제(되돌릴 수 없음)
+function confirmDeleteTrip(id, title) {
+  const bg = h(`<div class="modal-bg"></div>`);
+  const modal = h(`
+    <div class="modal modal-sm">
+      <h3>여행 삭제</h3>
+      <p class="modal-desc">이 여행과 모든 일정·정산이 <b>영구 삭제</b>됩니다. 되돌릴 수 없어요.<br/>확인하려면 여행 이름 <b>“${esc(title || "제목 없음")}”</b>을(를) 그대로 입력하세요.</p>
+      <div class="field"><input id="delName" placeholder="여행 이름 입력" autocomplete="off" autocapitalize="off" /></div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="cancel">취소</button>
+        <button class="btn danger-solid" id="ok" disabled>삭제</button>
+      </div>
+    </div>`);
+  bg.appendChild(modal);
+  document.body.appendChild(bg);
+  const input = modal.querySelector("#delName");
+  const ok = modal.querySelector("#ok");
+  const norm = (s) => (s || "").trim();
+  input.addEventListener("input", () => { ok.disabled = norm(input.value) !== norm(title); });
+  const closeM = () => bg.remove();
+  bg.addEventListener("click", (e) => { if (e.target === bg) closeM(); });
+  modal.querySelector("#cancel").addEventListener("click", closeM);
+  ok.addEventListener("click", async () => {
+    if (norm(input.value) !== norm(title)) return;
+    ok.disabled = true; ok.textContent = "삭제 중…";
+    try {
+      logEvent("trip_delete", { trip: id });
+      await deleteTripFull(id);
+      closeM();
+      toast("여행을 삭제했어요");
+      cleanup();
+      go("/");
+    } catch (e) {
+      toast("삭제 실패: " + e.message);
+      ok.disabled = false; ok.textContent = "삭제";
+    }
   });
+  setTimeout(() => input.focus(), 60);
 }
 
 // 여행 + 하위 항목 전부 삭제 + 최근 목록에서 제거 (공용)
@@ -1040,7 +1049,7 @@ function paint() {
     if (a === "export") exportCurrentTrip();
     else if (a === "alarm") openAlarmModal(tripId);
     else if (a === "ics") exportTripICS();
-    else if (a === "delete") softDeleteTrip(tripId, trip.title);
+    else if (a === "delete") confirmDeleteTrip(tripId, trip.title);
   }));
 
   // 여행 전체를 감싸는 셸 (지도 있으면 넓게, 정산 탭도 넓게)
@@ -1375,6 +1384,18 @@ function panTo(it) {
   if (dayMap.getZoom() < 16) dayMap.setZoom(16);
 }
 
+// id로 해당 항목까지 스크롤·하이라이트 (저장 직후 등, 렌더 대기하며 재시도)
+function focusItemId(id, tries = 20) {
+  const row = document.querySelector(`.tl-row[data-id="${id}"]`);
+  const c = row && row.querySelector(".tl-content");
+  if (row && c) {
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    c.classList.remove("flash"); void c.offsetWidth; c.classList.add("flash");
+  } else if (tries > 0) {
+    setTimeout(() => focusItemId(id, tries - 1), 100);
+  }
+}
+
 // 핀 클릭 → 지도 확대 + 해당 항목으로 스크롤·하이라이트
 function focusItem(it) {
   panTo(it);
@@ -1440,8 +1461,8 @@ function openEditor(existing, presetDay) {
       </div>
       <div class="field"><label>메모</label><textarea id="memo" placeholder="예약 정보, 팁, 준비물…">${esc(editState.memo)}</textarea></div>
       <div class="modal-actions">
-        <button class="btn ghost" id="cancel">${existing ? "취소" : "닫기"}</button>
-        <button class="btn" id="save">${existing ? "저장" : "저장 후 계속"}</button>
+        <button class="btn ghost" id="cancel">취소</button>
+        <button class="btn" id="save">저장</button>
       </div>
     </div>`);
   bg.appendChild(modal);
@@ -1582,18 +1603,12 @@ function openEditor(existing, presetDay) {
         await updateDoc(doc(db, "trips", tripId, "items", existing.id), data);
         close();
       } else {
-        await addDoc(collection(db, "trips", tripId, "items"), { ...data, order: Date.now(), createdAt: serverTimestamp() });
+        const ref = await addDoc(collection(db, "trips", tripId, "items"), { ...data, order: Date.now(), createdAt: serverTimestamp() });
         logEvent("item_add", { trip: tripId });
-        // 모달을 닫지 않고 폼만 비워 이어서 입력 (날짜·종류는 유지)
-        toast(`추가됨 — 이어서 입력하세요`);
-        nameEl.value = ""; addrEl.value = "";
-        modal.querySelector("#timeH").value = ""; modal.querySelector("#timeM").value = "00"; modal.querySelector("#memo").value = "";
-        editState.name = editState.address = editState.time = editState.memo = "";
-        editState.lat = editState.lng = null;
-        if (pickMarker) { pickMarker.setMap(null); pickMarker = null; }
-        updatePicked();
-        resultsEl.innerHTML = "";
-        const q = modal.querySelector("#q"); q.value = ""; q.focus();
+        close();
+        // 방금 저장한 일정이 보이도록: 필터가 특정 날이면 그 날로 전환 후 스크롤·하이라이트
+        if (viewDay != null && viewDay !== data.day) { viewDay = data.day; paint(); }
+        focusItemId(ref.id);
       }
     } catch (e) { toast("저장 실패: " + e.message); }
   }
