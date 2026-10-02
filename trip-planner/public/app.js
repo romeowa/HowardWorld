@@ -1777,15 +1777,22 @@ function renderSettleView(shell) {
     </div>`);
     if (pool.settle.length) {
       pc.appendChild(h(`<div class="pool-settle-lbl">공금에서 각자</div>`));
-      pool.settle.forEach((s) => {
-        const recv = s.amount > 0;
-        pc.appendChild(h(`<div class="pool-srow">
-          <span class="av sm" style="background:${memberColor(s.who)}">${esc(initOf(s.who))}</span>
-          <span class="nm">${esc(s.who)}</span>
-          <span class="sp"></span>
-          <span class="ps-amt ${recv ? "recv" : "pay"}">${recv ? `+${won(s.amount)}원 받기` : `${won(s.amount)}원 내기`}</span>
-        </div>`));
-      });
+      const same = pool.settle.length > 1 && pool.settle.every((s) => s.amount === pool.settle[0].amount);
+      if (same) {
+        // 모두 같은 금액이면 한 줄로 요약
+        const a = pool.settle[0].amount, recv = a > 0;
+        pc.appendChild(h(`<div class="pool-srow one"><span class="nm">${pool.settle.length}명 각자</span><span class="sp"></span><span class="ps-amt ${recv ? "recv" : "pay"}">${recv ? `+${won(a)}원씩 받기` : `${won(-a)}원씩 내기`}</span></div>`));
+      } else {
+        pool.settle.forEach((s) => {
+          const recv = s.amount > 0;
+          pc.appendChild(h(`<div class="pool-srow">
+            <span class="av sm" style="background:${memberColor(s.who)}">${esc(initOf(s.who))}</span>
+            <span class="nm">${esc(s.who)}</span>
+            <span class="sp"></span>
+            <span class="ps-amt ${recv ? "recv" : "pay"}">${recv ? `+${won(s.amount)}원 받기` : `${won(-s.amount)}원 내기`}</span>
+          </div>`));
+        });
+      }
     }
     side.appendChild(pc);
   }
