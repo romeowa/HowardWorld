@@ -874,7 +874,7 @@ let unsubExpenses = null;      // 정산 내역 실시간 구독 (여행 화면 
 let tripTab = "plan";          // "plan"(일정) | "settle"(정산)
 let inlineAdd = null;          // 데스크톱 상단 인라인 추가 폼 상태 {day, date, category, payer}
 const won = (n) => (Math.round(Number(n) || 0)).toLocaleString("ko-KR");
-const POOL = "__pool__"; // 결제자 = 공동 지갑(공금) 표식
+const POOL = "__pool__"; // 결제자 = 공금(공동 지갑) 표식
 
 // 통화(외화 입력) — 원화 기준으로 환산해 정산. def=기본 환율(원/1단위), 사용자가 정산탭에서 고정 가능.
 const CURRENCIES = {
@@ -1765,13 +1765,13 @@ function renderSettleView(shell) {
   if (incList.length) sum.appendChild(h(`<div class="stl-incsum"><span>💰 수입·입금 <b>${incList.length}건</b></span><span class="amt">+${won(incomeTotal)}원</span></div>`));
   side.appendChild(sum);
 
-  // --- 공동 지갑 (입금 또는 공금 결제가 있을 때) ---
+  // --- 공금 (입금 또는 공금 결제가 있을 때) ---
   if (pool.used) {
     const bal = pool.balance;
     const balCls = bal > 0 ? "pos" : bal < 0 ? "neg" : "";
     const balNote = bal > 0 ? "입금 비율대로 환급돼요" : bal < 0 ? "입금보다 공금 결제가 많아요 · 비율대로 더 부담" : "딱 맞게 썼어요";
     const pc = h(`<div class="stl-card stl-pool">
-      <div class="stl-ctitle">💰 공동 지갑</div>
+      <div class="stl-ctitle">💰 공금</div>
       <div class="pool-row"><span>입금</span><span class="amt">${won(pool.in)}원</span></div>
       <div class="pool-row"><span>공금 결제</span><span class="amt">−${won(pool.spent)}원</span></div>
       <div class="pool-row bal ${balCls}"><span>잔액</span><span class="amt">${bal < 0 ? "−" : ""}${won(Math.abs(bal))}원</span></div>
@@ -1786,7 +1786,7 @@ function renderSettleView(shell) {
 
   // --- 송금 제안 ---
   const party = (name) => name === POOL
-    ? `<span class="av sm pool">💰</span><span class="nm">공동 지갑</span>`
+    ? `<span class="av sm pool">💰</span><span class="nm">공금</span>`
     : `<span class="av sm" style="background:${memberColor(name)}">${esc(initOf(name))}</span><span class="nm">${esc(name)}</span>`;
   const trf = h(`<div class="stl-card stl-transfer"><div class="stl-ctitle">이렇게 보내면 끝</div></div>`);
   if (transfers.length) {
@@ -1851,7 +1851,7 @@ function expenseRow(e, members) {
   const per = krw / n;
   const foreign = (e.currency && e.currency !== "KRW");
   const dateStr = e.offTrip && e.date ? e.date : "";
-  const payLabel = e.fromPool ? "💰 공동 지갑 결제" : (e.payer ? `${e.payer} 결제` : "");
+  const payLabel = e.fromPool ? "💰 공금 결제" : (e.payer ? `${e.payer} 결제` : "");
   const sub = [payLabel, e.place || "", dateStr].filter(Boolean).join(" · ") || `${n}명 나눔`;
   const origLine = foreign ? `<div class="exp-orig">${fmtCur(e.amount, e.currency)}${hasRate(e.currency) ? "" : " · 환율 미고정"}</div>` : "";
   const row = h(`<div class="exp-item">
@@ -1918,7 +1918,7 @@ function computeSettlement() {
   expenses.forEach((e) => {
     const rate = fxRate(e.currency || "KRW");
     if (e.kind === "income") {
-      // 입금 = 공동 지갑에 넣은 돈 (넣은 사람별 적립)
+      // 입금 = 공금에 넣은 돈 (넣은 사람별 적립)
       Object.entries(incomeContribs(e)).forEach(([m, a]) => { const k = (Number(a) || 0) * rate; contrib[m] = (contrib[m] || 0) + k; poolIn += k; });
       return;
     }
@@ -1928,7 +1928,7 @@ function computeSettlement() {
     if (e.fromPool) poolSpent += amt;            // 공금 결제 = 지갑에서 나감
     else if (e.payer) paidPersonal[e.payer] = (paidPersonal[e.payer] || 0) + amt;
   });
-  // 공동 지갑 잔액 & 환급/추가부담 (입금 비율, 입금 없으면 전원 균등)
+  // 공금 잔액 & 환급/추가부담 (입금 비율, 입금 없으면 전원 균등)
   const surplus = poolIn - poolSpent;
   const refund = {};
   names.forEach((n) => { refund[n] = 0; });
@@ -1943,7 +1943,7 @@ function computeSettlement() {
     net[n] = Math.round(paid[n] - share[n]);                    // 정산표 차액
     settleNet[n] = Math.round(paid[n] - share[n] - refund[n]);  // 환급 제외 개인정산용
   });
-  // 환급/추가부담 송금 (공동 지갑 ↔ 사람)
+  // 환급/추가부담 송금 (공금 ↔ 사람)
   const poolTransfers = [];
   if (surplus > 0) names.forEach((n) => { const r = Math.round(refund[n]); if (r > 0) poolTransfers.push({ from: POOL, to: n, amount: r }); });
   else if (surplus < 0) names.forEach((n) => { const r = Math.round(-refund[n]); if (r > 0) poolTransfers.push({ from: n, to: POOL, amount: r }); });
@@ -2045,11 +2045,11 @@ function buildInlineAdd(members, cats) {
     cats.forEach((c) => { const o = document.createElement("option"); o.value = c; o.textContent = c; if (inlineAdd.category === c) o.selected = true; catSel.appendChild(o); });
     catSel.addEventListener("change", () => { inlineAdd.category = catSel.value; renderR1(); });
     catPill.appendChild(catSel); r1.appendChild(catPill);
-    // 결제자 pill (아바타 / 공동 지갑)
+    // 결제자 pill (아바타 / 공금)
     const isPool = inlineAdd.payer === POOL;
     const payPill = h(`<span class="qa-paypill"><span class="qa-av"${isPool ? "" : ` style="background:${memberColor(inlineAdd.payer)}"`}>${isPool ? "💰" : esc(initOf(inlineAdd.payer))}</span></span>`);
     const paySel = h(`<select class="qa-paysel"></select>`);
-    const po = document.createElement("option"); po.value = POOL; po.textContent = "공동 지갑"; if (isPool) po.selected = true; paySel.appendChild(po);
+    const po = document.createElement("option"); po.value = POOL; po.textContent = "공금"; if (isPool) po.selected = true; paySel.appendChild(po);
     members.forEach((m) => { const o = document.createElement("option"); o.value = m; o.textContent = m; if (inlineAdd.payer === m) o.selected = true; paySel.appendChild(o); });
     paySel.addEventListener("change", () => { inlineAdd.payer = paySel.value; renderR1(); });
     payPill.appendChild(paySel); r1.appendChild(payPill);
@@ -2299,7 +2299,7 @@ function openExpenseForm(existing, kindArg) {
   const payWrap = modal.querySelector("#efPayers");
   const renderPayers = () => {
     payWrap.innerHTML = "";
-    const pc = h(`<button type="button" class="ef-payer pool ${expForm.payer === POOL ? "on" : ""}"><span class="av">💰</span><span class="nm">공동 지갑</span></button>`);
+    const pc = h(`<button type="button" class="ef-payer pool ${expForm.payer === POOL ? "on" : ""}"><span class="av">💰</span><span class="nm">공금</span></button>`);
     pc.addEventListener("click", () => { expForm.payer = POOL; renderPayers(); });
     payWrap.appendChild(pc);
     editMembers.forEach((m) => {
