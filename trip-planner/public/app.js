@@ -1769,7 +1769,7 @@ function renderSettleView(shell) {
   if (pool.used) {
     const bal = pool.balance;
     const balCls = bal > 0 ? "pos" : bal < 0 ? "neg" : "";
-    const balNote = bal > 0 ? "입금 비율대로 환급돼요" : bal < 0 ? "입금보다 공금 결제가 많아요 · 비율대로 더 부담" : "딱 맞게 썼어요";
+    const balNote = bal > 0 ? "남은 공금 · 아래에서 각자 받아가요" : bal < 0 ? "공금이 부족해요 · 아래에서 각자 채워요" : "공금이 딱 맞아요";
     const pc = h(`<div class="stl-card stl-pool">
       <div class="stl-ctitle">💰 공금</div>
       <div class="pool-row"><span>입금</span><span class="amt">${won(pool.in)}원</span></div>
@@ -1928,40 +1928,34 @@ function computeSettlement() {
     if (e.fromPool) poolSpent += amt;            // 공금 결제 = 지갑에서 나감
     else if (e.payer) paidPersonal[e.payer] = (paidPersonal[e.payer] || 0) + amt;
   });
-  // 공금 잔액 & 환급/추가부담 (입금 비율, 입금 없으면 전원 균등)
   const surplus = poolIn - poolSpent;
-  const refund = {};
-  names.forEach((n) => { refund[n] = 0; });
-  if (Math.abs(surplus) >= 1) {
-    if (poolIn > 0) names.forEach((n) => { refund[n] = (contrib[n] || 0) / poolIn * surplus; });
-    else { const per = surplus / (members0.length || 1); members0.forEach((n) => { refund[n] = (refund[n] || 0) + per; }); }
-  }
-  // 낸 돈(총) = 개인 결제 + 입금. 차액 = 낸 돈 − 쓴 돈
-  const paid = {}, net = {}, settleNet = {};
+  // 낸 돈(총) = 개인 결제 + 입금. 차액(net) = 낸 돈 − 쓴 돈
+  const paid = {}, net = {};
   names.forEach((n) => {
     paid[n] = (paidPersonal[n] || 0) + (contrib[n] || 0);
-    net[n] = Math.round(paid[n] - share[n]);                    // 정산표 차액
-    settleNet[n] = Math.round(paid[n] - share[n] - refund[n]);  // 환급 제외 개인정산용
+    net[n] = Math.round(paid[n] - share[n]);
   });
-  // 환급/추가부담 송금 (공금 ↔ 사람)
-  const poolTransfers = [];
-  if (surplus > 0) names.forEach((n) => { const r = Math.round(refund[n]); if (r > 0) poolTransfers.push({ from: POOL, to: n, amount: r }); });
-  else if (surplus < 0) names.forEach((n) => { const r = Math.round(-refund[n]); if (r > 0) poolTransfers.push({ from: n, to: POOL, amount: r }); });
-  // 개인-개인 송금 (settleNet 그리디)
-  const bal = names.map((n) => ({ n, v: settleNet[n] }));
-  const cred = bal.filter((b) => b.v > 0).sort((a, b) => b.v - a.v);
-  const debt = bal.filter((b) => b.v < 0).map((b) => ({ n: b.n, v: -b.v })).sort((a, b) => b.v - a.v);
-  const personTransfers = [];
-  let i = 0, j = 0;
-  while (i < debt.length && j < cred.length) {
-    const pay = Math.min(debt[i].v, cred[j].v);
-    if (pay > 0) personTransfers.push({ from: debt[i].n, to: cred[j].n, amount: pay });
-    debt[i].v -= pay; cred[j].v -= pay;
-    if (debt[i].v === 0) i++;
-    if (cred[j].v === 0) j++;
+  const poolUsed = (poolIn > 0 || poolSpent > 0);
+  let transfers = [];
+  if (poolUsed) {
+    // 공금이 있으면 모두 공금과만 정산: net>0 공금에서 받기, net<0 공금에 내기
+    names.filter((n) => net[n] > 0).sort((a, b) => net[b] - net[a]).forEach((n) => transfers.push({ from: POOL, to: n, amount: net[n] }));
+    names.filter((n) => net[n] < 0).sort((a, b) => net[a] - net[b]).forEach((n) => transfers.push({ from: n, to: POOL, amount: -net[n] }));
+  } else {
+    // 공금 없으면 개인-개인 그리디 송금
+    const bal = names.map((n) => ({ n, v: net[n] }));
+    const cred = bal.filter((b) => b.v > 0).sort((a, b) => b.v - a.v);
+    const debt = bal.filter((b) => b.v < 0).map((b) => ({ n: b.n, v: -b.v })).sort((a, b) => b.v - a.v);
+    let i = 0, j = 0;
+    while (i < debt.length && j < cred.length) {
+      const pay = Math.min(debt[i].v, cred[j].v);
+      if (pay > 0) transfers.push({ from: debt[i].n, to: cred[j].n, amount: pay });
+      debt[i].v -= pay; cred[j].v -= pay;
+      if (debt[i].v === 0) i++;
+      if (cred[j].v === 0) j++;
+    }
   }
-  const transfers = [...poolTransfers, ...personTransfers];
-  const pool = { used: (poolIn > 0 || poolSpent > 0), in: poolIn, spent: poolSpent, balance: surplus, refund };
+  const pool = { used: poolUsed, in: poolIn, spent: poolSpent, balance: surplus };
   return { names, share, paid, contrib, net, transfers, pool, total: 0 };
 }
 
