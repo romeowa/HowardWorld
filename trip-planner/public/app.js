@@ -1769,7 +1769,7 @@ function renderSettleView(shell) {
   if (pool.used) {
     const bal = pool.balance;
     const balCls = bal > 0 ? "pos" : bal < 0 ? "neg" : "";
-    const balNote = bal > 0 ? "남은 공금 · 아래에서 각자 받아가요" : bal < 0 ? "공금이 부족해요 · 아래에서 각자 채워요" : "공금이 딱 맞아요";
+    const balNote = bal > 0 ? "남은 공금은 아래에서 각자 받아가요" : bal < 0 ? "공금이 부족해요 · 아래에서 각자 채워요" : "공금을 딱 맞게 썼어요";
     const pc = h(`<div class="stl-card stl-pool">
       <div class="stl-ctitle">💰 공금</div>
       <div class="pool-row"><span>입금</span><span class="amt">${won(pool.in)}원</span></div>
@@ -1912,8 +1912,9 @@ function computeSettlement() {
     (e.sharedBy || []).forEach((n) => set.add(n));
   });
   const names = [...set];
-  const share = {}, paidPersonal = {}, contrib = {};
-  names.forEach((n) => { share[n] = 0; paidPersonal[n] = 0; contrib[n] = 0; });
+  // 쓴 돈을 개인 지출(shareP)과 공금 결제(poolShare)로 분리
+  const shareP = {}, poolShare = {}, paidPersonal = {}, contrib = {};
+  names.forEach((n) => { shareP[n] = 0; poolShare[n] = 0; paidPersonal[n] = 0; contrib[n] = 0; });
   let poolIn = 0, poolSpent = 0;
   expenses.forEach((e) => {
     const rate = fxRate(e.currency || "KRW");
@@ -1924,26 +1925,30 @@ function computeSettlement() {
     }
     const amt = toKRW(e);
     const sb = e.sharedBy || [];
-    if (sb.length) { const per = amt / sb.length; sb.forEach((n) => { share[n] = (share[n] || 0) + per; }); }
-    if (e.fromPool) poolSpent += amt;            // 공금 결제 = 지갑에서 나감
-    else if (e.payer) paidPersonal[e.payer] = (paidPersonal[e.payer] || 0) + amt;
+    if (e.fromPool) {
+      poolSpent += amt;                           // 공금 결제 = 지갑에서 나감 → 쓴 사람은 poolShare
+      if (sb.length) { const per = amt / sb.length; sb.forEach((n) => { poolShare[n] = (poolShare[n] || 0) + per; }); }
+    } else {
+      if (sb.length) { const per = amt / sb.length; sb.forEach((n) => { shareP[n] = (shareP[n] || 0) + per; }); }
+      if (e.payer) paidPersonal[e.payer] = (paidPersonal[e.payer] || 0) + amt;
+    }
   });
   const surplus = poolIn - poolSpent;
-  // 낸 돈(총) = 개인 결제 + 입금. 차액(net) = 낸 돈 − 쓴 돈
-  const paid = {}, net = {};
+  // 쓴 돈=개인+공금, 낸 돈=개인 결제+입금. 차액(net)=낸−쓴.
+  // 개인 정산(netPersonal)과 공금 정산(poolNet)을 분리해서 각각 처리.
+  const share = {}, paid = {}, net = {}, netPersonal = {}, poolNet = {};
   names.forEach((n) => {
+    share[n] = (shareP[n] || 0) + (poolShare[n] || 0);
     paid[n] = (paidPersonal[n] || 0) + (contrib[n] || 0);
-    net[n] = Math.round(paid[n] - share[n]);
+    netPersonal[n] = Math.round((paidPersonal[n] || 0) - (shareP[n] || 0));
+    poolNet[n] = Math.round((contrib[n] || 0) - (poolShare[n] || 0));
+    net[n] = netPersonal[n] + poolNet[n];  // 정산표 차액 = 개인정산 + 공금정산 (송금 합과 정확히 일치)
   });
   const poolUsed = (poolIn > 0 || poolSpent > 0);
-  let transfers = [];
-  if (poolUsed) {
-    // 공금이 있으면 모두 공금과만 정산: net>0 공금에서 받기, net<0 공금에 내기
-    names.filter((n) => net[n] > 0).sort((a, b) => net[b] - net[a]).forEach((n) => transfers.push({ from: POOL, to: n, amount: net[n] }));
-    names.filter((n) => net[n] < 0).sort((a, b) => net[a] - net[b]).forEach((n) => transfers.push({ from: n, to: POOL, amount: -net[n] }));
-  } else {
-    // 공금 없으면 개인-개인 그리디 송금
-    const bal = names.map((n) => ({ n, v: net[n] }));
+  const transfers = [];
+  // (1) 개인 지출: 개인-개인 그리디 (A가 내고 B가 쓴 것 등은 그대로 사람끼리)
+  {
+    const bal = names.map((n) => ({ n, v: netPersonal[n] }));
     const cred = bal.filter((b) => b.v > 0).sort((a, b) => b.v - a.v);
     const debt = bal.filter((b) => b.v < 0).map((b) => ({ n: b.n, v: -b.v })).sort((a, b) => b.v - a.v);
     let i = 0, j = 0;
@@ -1954,6 +1959,11 @@ function computeSettlement() {
       if (debt[i].v === 0) i++;
       if (cred[j].v === 0) j++;
     }
+  }
+  // (2) 공금(입금·공금 결제): 각자 공금과 주고받기 (poolNet>0 받기, <0 내기)
+  if (poolUsed) {
+    names.filter((n) => poolNet[n] > 0).sort((a, b) => poolNet[b] - poolNet[a]).forEach((n) => transfers.push({ from: POOL, to: n, amount: poolNet[n] }));
+    names.filter((n) => poolNet[n] < 0).sort((a, b) => poolNet[a] - poolNet[b]).forEach((n) => transfers.push({ from: n, to: POOL, amount: -poolNet[n] }));
   }
   const pool = { used: poolUsed, in: poolIn, spent: poolSpent, balance: surplus };
   return { names, share, paid, contrib, net, transfers, pool, total: 0 };
