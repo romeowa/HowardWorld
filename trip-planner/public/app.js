@@ -1769,14 +1769,24 @@ function renderSettleView(shell) {
   if (pool.used) {
     const bal = pool.balance;
     const balCls = bal > 0 ? "pos" : bal < 0 ? "neg" : "";
-    const balNote = bal > 0 ? "남은 공금은 아래에서 각자 받아가요" : bal < 0 ? "공금이 부족해요 · 아래에서 각자 채워요" : "공금을 딱 맞게 썼어요";
     const pc = h(`<div class="stl-card stl-pool">
       <div class="stl-ctitle">💰 공금</div>
       <div class="pool-row"><span>입금</span><span class="amt">${won(pool.in)}원</span></div>
       <div class="pool-row"><span>공금 결제</span><span class="amt">−${won(pool.spent)}원</span></div>
       <div class="pool-row bal ${balCls}"><span>잔액</span><span class="amt">${bal < 0 ? "−" : ""}${won(Math.abs(bal))}원</span></div>
-      <div class="pool-note ${balCls}">${balNote}</div>
     </div>`);
+    if (pool.settle.length) {
+      pc.appendChild(h(`<div class="pool-settle-lbl">공금에서 각자</div>`));
+      pool.settle.forEach((s) => {
+        const recv = s.amount > 0;
+        pc.appendChild(h(`<div class="pool-srow">
+          <span class="av sm" style="background:${memberColor(s.who)}">${esc(initOf(s.who))}</span>
+          <span class="nm">${esc(s.who)}</span>
+          <span class="sp"></span>
+          <span class="ps-amt ${recv ? "recv" : "pay"}">${recv ? `+${won(s.amount)}원 받기` : `${won(s.amount)}원 내기`}</span>
+        </div>`));
+      });
+    }
     side.appendChild(pc);
   }
 
@@ -1784,20 +1794,17 @@ function renderSettleView(shell) {
   const fxCard = buildRatesCard();
   if (fxCard) side.appendChild(fxCard);
 
-  // --- 송금 제안 ---
-  const party = (name) => name === POOL
-    ? `<span class="av sm pool">💰</span><span class="nm">공금</span>`
-    : `<span class="av sm" style="background:${memberColor(name)}">${esc(initOf(name))}</span><span class="nm">${esc(name)}</span>`;
+  // --- 송금 제안 (개인끼리) ---
   const trf = h(`<div class="stl-card stl-transfer"><div class="stl-ctitle">이렇게 보내면 끝</div></div>`);
   if (transfers.length) {
     transfers.forEach((t) => trf.appendChild(h(`<div class="trf-row">
-      ${party(t.from)}
+      <span class="av sm" style="background:${memberColor(t.from)}">${esc(initOf(t.from))}</span><span class="nm">${esc(t.from)}</span>
       <span class="arr">→</span>
-      ${party(t.to)}
+      <span class="av sm" style="background:${memberColor(t.to)}">${esc(initOf(t.to))}</span><span class="nm">${esc(t.to)}</span>
       <span class="sp"></span><span class="amt">${won(t.amount)}원</span>
     </div>`)));
   } else {
-    trf.appendChild(h(`<div class="trf-done">${expenses.length ? "모두 정산됐어요." : "지출을 추가하면 정산 결과가 여기 표시돼요."}</div>`));
+    trf.appendChild(h(`<div class="trf-done">${expenses.length ? "개인끼리 주고받을 건 없어요." : "지출을 추가하면 정산 결과가 여기 표시돼요."}</div>`));
   }
   side.appendChild(trf);
 
@@ -1960,12 +1967,13 @@ function computeSettlement() {
       if (cred[j].v === 0) j++;
     }
   }
-  // (2) 공금(입금·공금 결제): 각자 공금과 주고받기 (poolNet>0 받기, <0 내기)
+  // (2) 공금(입금·공금 결제): 각자 공금에서 받기(+)/내기(−) — '이렇게 보내면 끝'과 분리
+  const poolSettle = [];
   if (poolUsed) {
-    names.filter((n) => poolNet[n] > 0).sort((a, b) => poolNet[b] - poolNet[a]).forEach((n) => transfers.push({ from: POOL, to: n, amount: poolNet[n] }));
-    names.filter((n) => poolNet[n] < 0).sort((a, b) => poolNet[a] - poolNet[b]).forEach((n) => transfers.push({ from: n, to: POOL, amount: -poolNet[n] }));
+    names.filter((n) => poolNet[n] > 0).sort((a, b) => poolNet[b] - poolNet[a]).forEach((n) => poolSettle.push({ who: n, amount: poolNet[n] }));
+    names.filter((n) => poolNet[n] < 0).sort((a, b) => poolNet[a] - poolNet[b]).forEach((n) => poolSettle.push({ who: n, amount: poolNet[n] }));
   }
-  const pool = { used: poolUsed, in: poolIn, spent: poolSpent, balance: surplus };
+  const pool = { used: poolUsed, in: poolIn, spent: poolSpent, balance: surplus, settle: poolSettle };
   return { names, share, paid, contrib, net, transfers, pool, total: 0 };
 }
 

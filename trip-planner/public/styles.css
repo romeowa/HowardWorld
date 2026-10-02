@@ -690,6 +690,13 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .stl-pool .pool-row.bal.neg .amt { color: var(--danger); }
 .stl-pool .pool-note { margin-top: 6px; font-size: 11.5px; color: var(--muted); }
 .stl-pool .pool-note.neg { color: var(--danger); }
+.stl-pool .pool-settle-lbl { margin: 12px 0 8px; padding-top: 12px; border-top: 1px solid var(--line-soft); font-family: var(--mono); font-size: 11px; letter-spacing: .12em; color: var(--muted); text-transform: uppercase; }
+.stl-pool .pool-srow { display: flex; align-items: center; gap: 7px; padding: 5px 0; }
+.stl-pool .pool-srow .nm { font-size: 14px; color: var(--text); }
+.stl-pool .pool-srow .sp { flex: 1; }
+.stl-pool .pool-srow .ps-amt { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+.stl-pool .pool-srow .ps-amt.recv { color: var(--accent-dark); }
+.stl-pool .pool-srow .ps-amt.pay { color: var(--danger); }
 .trf-row .av.sm.pool { background: var(--text); color: #fff; font-size: 12px; }
 
 /* 정산: 데스크톱 빠른 추가 폼 v2 */
