@@ -889,6 +889,8 @@ const fmtRate = (cur) => fxRate(cur).toLocaleString("ko-KR", { maximumFractionDi
 const hasRate = (cur) => !cur || cur === "KRW" || !!(trip?.rates && Number(trip.rates[cur]) > 0);
 // 지출을 원화로 환산 (입력은 외화지만 계산·표시는 원화)
 const toKRW = (e) => (Number(e.amount) || 0) * fxRate(e.currency || "KRW");
+// 수입 기여 내역 {참여자: 금액(통화 원금)} — 신형 contribs 우선, 구형(payer/amount) 폴백
+const incomeContribs = (e) => (e && e.contribs && typeof e.contribs === "object") ? e.contribs : (e && e.payer ? { [e.payer]: Number(e.amount) || 0 } : {});
 // 외화 원금 표기: ¥5,000 / $12.50
 const fmtCur = (amt, cur) => { const c = CURRENCIES[cur] || CURRENCIES.KRW; return c.sym + (Number(amt) || 0).toLocaleString("ko-KR", { maximumFractionDigits: c.dec }); };
 // 지출들에서 실제로 쓰인 외화 목록(KRW 제외)
@@ -1857,32 +1859,52 @@ function expenseRow(e, members) {
   return row;
 }
 
-// 수입·입금 행 — 넣은 사람 + 금액(초록 +). 전원 공동비용 분배라 나눠낼 사람 토글 없음.
+// 수입·입금 행 — 넣은 사람별 금액(초록 +). 전원 공동비용 분배라 나눠낼 사람 토글 없음.
 function incomeRow(e) {
-  const krw = toKRW(e);
-  const foreign = (e.currency && e.currency !== "KRW");
-  const dateStr = e.offTrip && e.date ? e.date : "";
-  const sub = [e.place || "", dateStr].filter(Boolean).join(" · ") || "공동 비용으로 똑같이 나눔";
-  const origLine = foreign ? `<div class="exp-orig">${fmtCur(e.amount, e.currency)}${hasRate(e.currency) ? "" : " · 환율 미고정"}</div>` : "";
+  const cur = e.currency || "KRW";
+  const rate = fxRate(cur);
+  const entries = Object.entries(incomeContribs(e)).filter(([, a]) => (Number(a) || 0) > 0);
+  const krw = entries.reduce((s, [, a]) => s + (Number(a) || 0) * rate, 0);
+  const rawSum = entries.reduce((s, [, a]) => s + (Number(a) || 0), 0);
+  const foreign = cur !== "KRW";
+  const sub = (entries.length ? `${entries.length}명 입금` : "입금") + " · 공동 비용으로 똑같이 나눠요";
+  const origLine = foreign ? `<div class="exp-orig">${fmtCur(rawSum, cur)}${hasRate(cur) ? "" : " · 환율 미고정"}</div>` : "";
   const row = h(`<div class="exp-item inc">
     <div class="exp-head">
-      <span class="exp-payav" style="background:${memberColor(e.payer)}" title="${esc(e.payer || "")}">${esc(initOf(e.payer || "?"))}</span>
-      <div class="exp-info"><div class="exp-desc">${esc(e.payer || "(누구)")}님 입금${e.desc ? ` · ${esc(e.desc)}` : ""}</div><div class="exp-sub">${esc(sub)}</div></div>
+      <span class="exp-cat inc">입금</span>
+      <div class="exp-info"><div class="exp-desc">${e.desc ? esc(e.desc) : "입금"}</div><div class="exp-sub">${esc(sub)}</div></div>
       <div class="exp-nums"><div class="exp-amt inc">+${won(krw)}</div>${origLine}</div>
     </div>
+    <div class="exp-contribs"></div>
   </div>`);
+  const cw = row.querySelector(".exp-contribs");
+  entries.forEach(([m, a]) => cw.appendChild(h(`<span class="exp-contrib"><span class="av" style="background:${memberColor(m)}">${esc(initOf(m))}</span>${fmtCur(Number(a) || 0, cur)}</span>`)));
   row.querySelector(".exp-head").addEventListener("click", () => openExpenseForm(e));
   return row;
 }
 
 function computeSettlement() {
   const set = new Set(tripMembers());
-  expenses.forEach((e) => { if (e.payer) set.add(e.payer); (e.sharedBy || []).forEach((n) => set.add(n)); });
+  expenses.forEach((e) => {
+    if (e.payer) set.add(e.payer);
+    (e.sharedBy || []).forEach((n) => set.add(n));
+    if (e.kind === "income") Object.keys(incomeContribs(e)).forEach((n) => set.add(n));
+  });
   const names = [...set];
   const share = {}, paid = {};
   let total = 0;
   names.forEach((n) => { share[n] = 0; paid[n] = 0; });
   expenses.forEach((e) => {
+    const rate = fxRate(e.currency || "KRW");
+    if (e.kind === "income") {
+      // 넣은 사람마다 적립 + 전원(sharedBy, 없으면 현재 참여자) 공동비용 균등 분배
+      let pool = 0;
+      Object.entries(incomeContribs(e)).forEach(([m, a]) => { const k = (Number(a) || 0) * rate; paid[m] = (paid[m] || 0) + k; pool += k; });
+      const sm = (e.sharedBy && e.sharedBy.length) ? e.sharedBy : tripMembers();
+      if (sm.length && pool) { const per = pool / sm.length; sm.forEach((n) => { share[n] = (share[n] || 0) + per; }); }
+      total += pool;
+      return;
+    }
     const amt = toKRW(e); total += amt;
     const sb = e.sharedBy || [];
     if (sb.length) { const per = amt / sb.length; sb.forEach((n) => { share[n] = (share[n] || 0) + per; }); }
@@ -2044,6 +2066,8 @@ function openExpenseForm(existing, kindArg) {
   expForm = existing
     ? { kind, amount: existing.amount ?? "", currency: existing.currency || "KRW", desc: existing.desc || "", category: existing.category || cats[0], day: exDay, date: existing.date || dateForDay(exDay), place: existing.place || "", payer: existing.payer || members[0] || "", sharedBy: [...(existing.sharedBy || [])] }
     : { kind, amount: "", currency: "KRW", desc: "", category: cats[0], day: 0, date: dateForDay(0), place: "", payer: members[0] || "", sharedBy: [...members] };
+  // 수입: 참여자별 기여 금액 {이름: 원금}
+  expForm.contribs = (existing && existing.kind === "income") ? { ...incomeContribs(existing) } : {};
 
   const bg = h(`<div class="modal-bg"></div>`);
   const modal = h(`
@@ -2054,9 +2078,14 @@ function openExpenseForm(existing, kindArg) {
       <div class="ef-amount"><input id="efAmt" inputmode="decimal" placeholder="0" value="${existing ? existing.amount ?? "" : ""}" /><select id="efCur" class="ef-cursel"></select></div>
       <div class="ef-krw" id="efKrw"></div>
       <div class="ef-per" id="efPer"></div>
+      <div class="ef-field" id="efContribField" hidden>
+        <div class="ef-lbl2"><span>각자 넣은 금액</span><span class="ef-contribtools"><button type="button" class="ef-samebtn" id="efSame">전원 같게</button><select id="efCurInc" class="ef-cursel"></select></span></div>
+        <div class="ef-contriblist" id="efContribs"></div>
+        <div class="ef-contribtot" id="efContribTot"></div>
+      </div>
       <div class="ef-field"><div class="ef-lbl" id="efCatLbl">구분</div><div class="ef-cats" id="efCats"></div>
         <input class="ef-desc" id="efDesc" placeholder="무엇에 썼나요? (예: 저녁 한정식)" value="${esc(expForm.desc)}" /></div>
-      <div class="ef-field"><div class="ef-lbl" id="efPayLbl">결제한 사람</div><div class="ef-payers" id="efPayers"></div></div>
+      <div class="ef-field" id="efPayField"><div class="ef-lbl" id="efPayLbl">결제한 사람</div><div class="ef-payers" id="efPayers"></div></div>
       <div class="ef-field" id="efWhoField"><div class="ef-lbl2"><span>나눠 낼 사람</span><button class="ef-all" id="efAll" type="button">전체</button></div><div class="ef-who" id="efWho"></div></div>
       <div class="ef-actions">
         ${existing ? `<button class="btn danger" id="efDel">삭제</button>` : ""}
@@ -2078,13 +2107,28 @@ function openExpenseForm(existing, kindArg) {
   const paidW = modal.querySelector("#efPaidOn");
   const stopsW = modal.querySelector("#efStops");
 
-  CURRENCY_ORDER.forEach((cur) => { const o = document.createElement("option"); o.value = cur; o.textContent = `${CURRENCIES[cur].sym} ${CURRENCIES[cur].label}`; if (expForm.currency === cur) o.selected = true; curEl.appendChild(o); });
+  const curIncEl = modal.querySelector("#efCurInc");
+  const contribsW = modal.querySelector("#efContribs");
+  const contribTotEl = modal.querySelector("#efContribTot");
+  [curEl, curIncEl].forEach((sel) => CURRENCY_ORDER.forEach((cur) => { const o = document.createElement("option"); o.value = cur; o.textContent = `${CURRENCIES[cur].sym} ${CURRENCIES[cur].label}`; if (expForm.currency === cur) o.selected = true; sel.appendChild(o); }));
+
+  // 수입: 참여자별 기여 금액 합계(원화)
+  const incTotalKRW = () => tripMembers().reduce((s, m) => s + (Number(expForm.contribs[m]) || 0), 0) * fxRate(expForm.currency || "KRW");
+  const refreshSaveBtn = () => {
+    if (expForm.kind === "income") {
+      const krw = incTotalKRW();
+      saveBtn.textContent = krw > 0 ? `+${won(krw)}원 ${existing ? "저장" : "입금"}` : (existing ? "저장" : "입금 추가");
+    } else {
+      const amt = Number(String(amtEl.value).replace(/,/g, "")) || 0;
+      const krw = amt * fxRate(expForm.currency || "KRW");
+      saveBtn.textContent = amt > 0 ? `${won(krw)}원 ${existing ? "저장" : "추가"}` : (existing ? "저장" : "지출 추가");
+    }
+  };
 
   const updateCalc = () => {
     const amt = Number(String(amtEl.value).replace(/,/g, "")) || 0;
     const cur = expForm.currency || "KRW";
     const krw = amt * fxRate(cur);
-    const inc = expForm.kind === "income";
     if (cur === "KRW") { krwEl.hidden = true; }
     else {
       krwEl.hidden = false;
@@ -2092,29 +2136,65 @@ function openExpenseForm(existing, kindArg) {
         ? `≈ <b>${won(krw)}원</b> <span class="fxr">(1${CURRENCIES[cur].sym} = ${fmtRate(cur)}원)</span>`
         : `≈ <b>${won(krw)}원</b> <span class="fxr warn">임시 환율 1${CURRENCIES[cur].sym}=${fmtRate(cur)}원 · 정산탭에서 고정하세요</span>`;
     }
-    if (inc) {
-      const m = tripMembers().length || 1;
-      perEl.textContent = amt > 0 ? `${tripMembers().length}명 공동 비용으로 1인 ${won(krw / m)}원씩 차감` : "넣은 돈은 전원이 공동 비용으로 똑같이 나눠요";
-      saveBtn.textContent = amt > 0 ? `+${won(krw)}원 ${existing ? "저장" : "입금"}` : (existing ? "저장" : "입금 추가");
-    } else {
-      const n = expForm.sharedBy.length;
-      perEl.textContent = `${n}명 · 1인 ${n ? won(krw / n) : 0}원`;
-      saveBtn.textContent = amt > 0 ? `${won(krw)}원 ${existing ? "저장" : "추가"}` : (existing ? "저장" : "지출 추가");
-    }
+    const n = expForm.sharedBy.length;
+    perEl.textContent = `${n}명 · 1인 ${n ? won(krw / n) : 0}원`;
+    refreshSaveBtn();
   };
+
+  const updateContribTot = () => {
+    const cur = expForm.currency || "KRW";
+    const rate = fxRate(cur);
+    const sumRaw = tripMembers().reduce((s, m) => s + (Number(expForm.contribs[m]) || 0), 0);
+    const cnt = tripMembers().filter((m) => (Number(expForm.contribs[m]) || 0) > 0).length;
+    const mlen = tripMembers().length || 1;
+    const krw = sumRaw * rate;
+    contribTotEl.innerHTML = sumRaw > 0
+      ? `합계 <b>${fmtCur(sumRaw, cur)}</b>${cur !== "KRW" ? ` ≈ ${won(krw)}원` : ""} · ${cnt}명 · 공동 1인 ${won(krw / mlen)}원씩`
+      : "각자 넣은 금액을 입력하세요 · 공동 비용으로 똑같이 나뉘어요";
+    refreshSaveBtn();
+  };
+  const renderContribs = () => {
+    contribsW.innerHTML = "";
+    const cur = expForm.currency || "KRW";
+    tripMembers().forEach((m) => {
+      const v = expForm.contribs[m];
+      const rowEl = h(`<div class="ef-contribrow"><span class="av" style="background:${memberColor(m)}">${esc(initOf(m))}</span><span class="nm">${esc(m)}</span><input class="ef-contribamt" inputmode="decimal" placeholder="0" value="${v != null && v !== "" ? v : ""}" /><span class="u">${CURRENCIES[cur].sym}</span></div>`);
+      const inp = rowEl.querySelector("input");
+      inp.addEventListener("input", () => {
+        const val = Number(String(inp.value).replace(/,/g, "")) || 0;
+        if (val > 0) expForm.contribs[m] = val; else delete expForm.contribs[m];
+        updateContribTot();
+      });
+      contribsW.appendChild(rowEl);
+    });
+    updateContribTot();
+  };
+  modal.querySelector("#efSame").addEventListener("click", () => {
+    const first = tripMembers().map((m) => Number(expForm.contribs[m]) || 0).find((v) => v > 0);
+    if (!first) { toast("먼저 한 명의 금액을 입력하세요"); return; }
+    tripMembers().forEach((m) => { expForm.contribs[m] = first; });
+    renderContribs();
+  });
+
   const applyKind = () => {
     const inc = expForm.kind === "income";
     modal.querySelector("#efTitle").textContent = existing ? (inc ? "수입 수정" : "지출 수정") : (inc ? "수입·입금 추가" : "지출 추가");
-    modal.querySelector("#efCatLbl").textContent = inc ? "메모" : "구분";
+    modal.querySelector(".ef-amount").style.display = inc ? "none" : "";
+    krwEl.style.display = inc ? "none" : "";
+    perEl.style.display = inc ? "none" : "";
+    modal.querySelector("#efContribField").hidden = !inc;
+    modal.querySelector("#efPayField").style.display = inc ? "none" : "";
+    modal.querySelector("#efWhoField").style.display = inc ? "none" : "";
+    modal.querySelector("#efCatLbl").textContent = inc ? "메모 (선택)" : "구분";
     modal.querySelector("#efCats").style.display = inc ? "none" : "";
     descEl.placeholder = inc ? "무엇에 대한 입금인가요? (예: 공동경비)" : "무엇에 썼나요? (예: 저녁 한정식)";
-    modal.querySelector("#efPayLbl").textContent = inc ? "넣은 사람" : "결제한 사람";
-    modal.querySelector("#efWhoField").style.display = inc ? "none" : "";
     modal.querySelectorAll("#efKind button").forEach((b) => b.classList.toggle("on", b.dataset.k === expForm.kind));
-    updateCalc();
+    if (inc) renderContribs(); else updateCalc();
+    refreshSaveBtn();
   };
   modal.querySelectorAll("#efKind button").forEach((b) => b.addEventListener("click", () => { expForm.kind = b.dataset.k; applyKind(); }));
-  curEl.addEventListener("change", () => { expForm.currency = curEl.value; updateCalc(); });
+  curEl.addEventListener("change", () => { expForm.currency = curEl.value; curIncEl.value = curEl.value; updateCalc(); });
+  curIncEl.addEventListener("change", () => { expForm.currency = curIncEl.value; curEl.value = curIncEl.value; renderContribs(); });
   amtEl.addEventListener("input", updateCalc);
   descEl.addEventListener("input", () => { expForm.desc = descEl.value; });
 
@@ -2212,28 +2292,41 @@ function openExpenseForm(existing, kindArg) {
     catch (e) { toast("삭제 실패: " + e.message); }
   });
   saveBtn.addEventListener("click", async () => {
-    const amt = Number(String(amtEl.value).replace(/,/g, "")) || 0;
-    if (!amt) { toast("금액을 입력해 주세요"); amtEl.focus(); return; }
     const inc = expForm.kind === "income";
-    if (!inc && !expForm.sharedBy.length) { toast("나눠 낼 사람을 한 명 이상 선택해 주세요"); return; }
-    if (!expForm.payer) { toast(inc ? "넣은 사람을 선택해 주세요" : "결제한 사람을 선택해 주세요"); return; }
     const off = expForm.day === "off";
-    const data = {
-      kind: inc ? "income" : "expense",
-      amount: amt, currency: expForm.currency || "KRW", desc: descEl.value.trim(),
-      category: inc ? "" : (expForm.category || "기타"),
-      offTrip: off, day: off ? null : expForm.day,
-      date: off ? (expForm.date || "") : (dateForDay(expForm.day) || ""),
-      place: off ? "" : (expForm.place || ""), payer: expForm.payer || "",
-      sharedBy: inc ? [...tripMembers()] : expForm.sharedBy,
-    };
+    let data;
+    if (inc) {
+      const contribs = {}; let sumRaw = 0;
+      tripMembers().forEach((m) => { const v = Number(expForm.contribs[m]) || 0; if (v > 0) { contribs[m] = v; sumRaw += v; } });
+      if (sumRaw <= 0) { toast("한 명 이상 넣은 금액을 입력해 주세요"); return; }
+      data = {
+        kind: "income", contribs, amount: sumRaw, currency: expForm.currency || "KRW",
+        desc: descEl.value.trim(), category: "",
+        offTrip: off, day: off ? null : expForm.day,
+        date: off ? (expForm.date || "") : (dateForDay(expForm.day) || ""),
+        place: off ? "" : (expForm.place || ""), payer: "", sharedBy: [...tripMembers()],
+      };
+    } else {
+      const amt = Number(String(amtEl.value).replace(/,/g, "")) || 0;
+      if (!amt) { toast("금액을 입력해 주세요"); amtEl.focus(); return; }
+      if (!expForm.sharedBy.length) { toast("나눠 낼 사람을 한 명 이상 선택해 주세요"); return; }
+      if (!expForm.payer) { toast("결제한 사람을 선택해 주세요"); return; }
+      data = {
+        kind: "expense", contribs: null,
+        amount: amt, currency: expForm.currency || "KRW", desc: descEl.value.trim(),
+        category: expForm.category || "기타",
+        offTrip: off, day: off ? null : expForm.day,
+        date: off ? (expForm.date || "") : (dateForDay(expForm.day) || ""),
+        place: off ? "" : (expForm.place || ""), payer: expForm.payer || "", sharedBy: expForm.sharedBy,
+      };
+    }
     try {
       if (existing) await updateDoc(doc(db, "trips", tripId, "expenses", existing.id), data);
       else { await addDoc(collection(db, "trips", tripId, "expenses"), { ...data, order: Date.now(), createdAt: serverTimestamp() }); logEvent(inc ? "income_add" : "expense_add", { trip: tripId }); }
       bg.remove();
     } catch (e) { toast("저장 실패: " + e.message); }
   });
-  amtEl.focus();
+  if (kind !== "income") amtEl.focus();
 }
 
 
