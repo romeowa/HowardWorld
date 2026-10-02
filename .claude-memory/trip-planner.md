@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: f2a2b738-2280-4be0-a63c-ca09b5c4f9ff
-  modified: 2026-09-25T06:27:30.707Z
+  modified: 2026-09-28T13:58:10.134Z
 ---
 
 trip-planner: 링크 하나로 함께 짜는 여행 일정 공유 웹앱. 공용 [[howardworld-firebase-setup]] 위에 올림.
@@ -33,7 +33,8 @@ trip-planner: 링크 하나로 함께 짜는 여행 일정 공유 웹앱. 공용
   - 내역: **일자별(expDay=day 또는 date)로 묶어** 카드로 표시. 카드의 참여자 아바타(.exp-av) 클릭 시 sharedBy 즉시 토글(updateDoc). 카드 클릭 → 지출 수정.
   - 지출 추가/수정(openExpenseForm, 3b v2): 순서 = **언제·어디서(날짜 가로스크롤 카드 + 장소 칩) → 금액(크게) → 구분 칩(+새 구분) → 내역 → 결제자 아바타 → 나눠 낼 사람 아바타**. 날짜 카드에 '여행 외' 옵션(offTrip) → 결제일(date) 직접 입력.
   - 데스크톱 빠른 추가(buildInlineAdd, 3a desktop v2, .stl-quickadd, 모바일 숨김): 한 카드에 날짜/장소/구분/결제자 select + 나눠 낼 사람 토글 + 실시간 1인. 새 참여자는 known 추적으로 자동 나눔 포함.
-  - 데이터: trips/{id}/expenses = date·**day**(정수, 여행 외는 null)·**offTrip**(bool)·category·desc·amount·payer·sharedBy[]·**place**. 그룹핑 expDay(): day 정수→그날, offTrip/범위밖→"여행 외". 규칙: expenses read/write 공개(items와 동일). 구분 기본 6종 DEFAULT_CATS(숙박/식사/교통/간식/관광/기타).
+  - 데이터: trips/{id}/expenses = date·**day**(정수, 여행 외는 null)·**offTrip**(bool)·category·desc·amount·**currency**·payer·sharedBy[]·**place**. 그룹핑 expDay(): day 정수→그날, offTrip/범위밖→"여행 외". 규칙: expenses read/write 공개(items와 동일). 구분 기본 6종 DEFAULT_CATS(숙박/식사/교통/간식/관광/기타).
+  - **외화 입력/환율(2026-09)**: 지출 통화 `currency`(KRW/JPY/USD, 없으면 KRW). CURRENCIES 맵(sym/unit/label/dec/def 기본환율). `amount`는 **입력 통화 원금** 그대로 저장, 계산·표시는 전부 `toKRW(e)=amount×fxRate`로 원화 환산. `fxRate(cur)`=trip.rates[cur] 우선, 없으면 통화 def. 환율은 **정산 탭 '환율' 카드(buildRatesCard)**에서 쓰인 외화(usedForeign())마다 1단위=?원 직접 고정→`updateDoc(rates.${cur})`, trip onSnapshot이 재렌더. 고정 전엔 def로 계산되고 '기본값·고정 필요'/'환율 미고정' 경고. 지출 폼·빠른추가에 통화 select + 실시간 원화 미리보기(ef-krw). 지출 행은 원화 메인 + 외화 원금(fmtCur, 예 ¥5,000) 서브. 환율 표기는 `fmtRate`(소수 유지, won()은 반올림하니 주의). rates는 cleanTrip·createTripFromBundle에 포함(export/import·기기이동 보존).
   - 시안 원본: claude.ai/design 프로젝트 c4cd9018-f180-41fb-9d75-25e44224f54c, 파일 '여행일정 개선안.dc.html'(3a=정산 탭, 3b=지출 추가, 1a=일정 기준 스타일). DesignSync MCP(get_file)로 읽음.
 - 뺀 UI(2026-09): "홈 화면에 추가"(PWA 설치) 버튼, 홈의 "☁︎ 내 여행"(관리자 구글 로그인 시 Firestore 전체 trips 로드) 기능 모두 제거. 홈은 다시 이 기기 localStorage 최근 목록만. (trips list 규칙은 /admin용으로 유지, app.js의 auth import·getAuth·onAuthStateChanged는 /admin 전용으로 남김.)
 - 캘린더 내보내기(.ics): 여행 ⋯ 메뉴 '📅 캘린더에 추가(.ics)' → tripToICS()가 items를 VEVENT(시작일+day+time→DTSTART/DTEND 기본1h, 시간없으면 VALUE=DATE 종일; SUMMARY=이름, LOCATION=주소, DESCRIPTION=메모, GEO=lat;lng)로 만들어 다운로드. 맥/아이폰/구글 등에서 열면 캘린더에 추가됨. (반대로 ics '가져오기'는 웹앱이 기기 캘린더를 직접 못 읽어서, 구글 Calendar API OAuth가 필요 — 미구현/제거함.)
