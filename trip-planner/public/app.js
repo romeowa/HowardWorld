@@ -2078,7 +2078,7 @@ function openExpenseForm(existing, kindArg) {
       <div class="ef-amount"><input id="efAmt" inputmode="decimal" placeholder="0" value="${existing ? existing.amount ?? "" : ""}" /><select id="efCur" class="ef-cursel"></select></div>
       <div class="ef-krw" id="efKrw"></div>
       <div class="ef-per" id="efPer"></div>
-      <div class="ef-field" id="efContribField" hidden>
+      <div class="ef-field" id="efContribField" style="display:none">
         <div class="ef-lbl2"><span>각자 넣은 금액</span><span class="ef-contribtools"><button type="button" class="ef-samebtn" id="efSame">전원 같게</button><select id="efCurInc" class="ef-cursel"></select></span></div>
         <div class="ef-contriblist" id="efContribs"></div>
         <div class="ef-contribtot" id="efContribTot"></div>
@@ -2182,7 +2182,7 @@ function openExpenseForm(existing, kindArg) {
     modal.querySelector(".ef-amount").style.display = inc ? "none" : "";
     krwEl.style.display = inc ? "none" : "";
     perEl.style.display = inc ? "none" : "";
-    modal.querySelector("#efContribField").hidden = !inc;
+    modal.querySelector("#efContribField").style.display = inc ? "" : "none";
     modal.querySelector("#efPayField").style.display = inc ? "none" : "";
     modal.querySelector("#efWhoField").style.display = inc ? "none" : "";
     modal.querySelector("#efCatLbl").textContent = inc ? "메모 (선택)" : "구분";
