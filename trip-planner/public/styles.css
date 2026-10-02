@@ -698,6 +698,7 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .stl-pool .pool-srow .ps-amt.recv { color: var(--accent-dark); }
 .stl-pool .pool-srow .ps-amt.pay { color: var(--danger); }
 .trf-row .av.sm.pool { background: var(--text); color: #fff; font-size: 12px; }
+.stl-tally .tl-sub { font-family: "IBM Plex Sans KR", sans-serif; font-size: 11px; letter-spacing: 0; text-transform: none; color: var(--muted); font-weight: 400; margin-left: 6px; }
 
 /* 정산: 데스크톱 빠른 추가 폼 v2 */
 .stl-quickadd { display: flex; flex-direction: column; gap: 6px; }

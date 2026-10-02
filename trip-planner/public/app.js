@@ -1730,7 +1730,7 @@ function renderSettleView(shell) {
   const expenseTotal = expList.reduce((s, e) => s + toKRW(e), 0);
   const incomeTotal = incList.reduce((s, e) => s + toKRW(e), 0);
 
-  const { names, share, paid, transfers, pool, net: netMap } = computeSettlement();
+  const { names, transfers, pool, netPersonal, shareP, paidPersonal } = computeSettlement();
   const total = expenseTotal; // 요약·카테고리 바는 지출 기준
   const avg = members.length ? expenseTotal / members.length : (names.length ? expenseTotal / names.length : 0);
 
@@ -1818,14 +1818,14 @@ function renderSettleView(shell) {
   // --- 정산표 (모바일에도 표시) ---
   if (names.length) {
     const tally = h(`<div class="stl-card stl-tally">
-      <div class="stl-ctitle">정산표</div>
+      <div class="stl-ctitle">정산표 ${pool.used ? `<span class="tl-sub">공금 제외 · 개인 지출</span>` : ""}</div>
       <div class="tl-head"><span>이름</span><span>쓴 돈</span><span>낸 돈</span><span>차액</span></div>
     </div>`);
     names.forEach((n) => {
-      const net = netMap[n] || 0;
+      const net = netPersonal[n] || 0;
       const col = net > 0 ? "var(--accent-dark)" : net < 0 ? "var(--danger)" : "var(--muted)";
       const label = net > 0 ? `+${won(net)}` : net < 0 ? `${won(net)}` : "0";
-      tally.appendChild(h(`<div class="tl-row"><span class="tl-nm"><span class="av sm" style="background:${memberColor(n)}">${esc(initOf(n))}</span>${esc(n)}</span><span>${won(share[n] || 0)}</span><span>${won(paid[n] || 0)}</span><span class="tl-net" style="color:${col}">${label}</span></div>`));
+      tally.appendChild(h(`<div class="tl-row"><span class="tl-nm"><span class="av sm" style="background:${memberColor(n)}">${esc(initOf(n))}</span>${esc(n)}</span><span>${won(shareP[n] || 0)}</span><span>${won(paidPersonal[n] || 0)}</span><span class="tl-net" style="color:${col}">${label}</span></div>`));
     });
     side.appendChild(tally);
   }
@@ -1981,7 +1981,7 @@ function computeSettlement() {
     names.filter((n) => poolNet[n] < 0).sort((a, b) => poolNet[a] - poolNet[b]).forEach((n) => poolSettle.push({ who: n, amount: poolNet[n] }));
   }
   const pool = { used: poolUsed, in: poolIn, spent: poolSpent, balance: surplus, settle: poolSettle };
-  return { names, share, paid, contrib, net, transfers, pool, total: 0 };
+  return { names, share, paid, contrib, net, netPersonal, shareP, paidPersonal, transfers, pool, total: 0 };
 }
 
 // 데스크톱 상단 빠른 추가 폼 (3a desktop v2) — 언제·어디서·구분·결제자·나눠 낼 사람까지 한 줄에
