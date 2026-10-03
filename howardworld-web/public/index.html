@@ -13,11 +13,11 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Song+Myung&family=Nanum+Brush+Script&family=Nanum+Myeongjo:wght@400;800&display=swap">
 <style>
-  body{margin:0;background-color:#efe6d2;background-image:radial-gradient(rgba(120,95,50,.07) 1px,transparent 1.5px),radial-gradient(rgba(120,95,50,.05) 1px,transparent 1.5px);background-size:7px 9px,11px 5px;color:#1c1a17;-webkit-font-smoothing:antialiased}
-  a{color:#1c1a17}
-  a:hover{color:#b8322a}
+  body{margin:0;background-color:#efe6d2;background-image:radial-gradient(rgba(120,95,50,.07) 1px,transparent 1.5px),radial-gradient(rgba(120,95,50,.05) 1px,transparent 1.5px);background-size:7px 9px,11px 5px;color:#1c1a17;-webkit-font-smoothing:antialiased;word-break:keep-all}
+  a{color:#1c1a17}a:hover{color:#b8322a}
   .hw-book{transition:transform .3s cubic-bezier(.2,.8,.2,1),box-shadow .3s}
   .hw-book:hover{transform:translateY(-8px) rotate(-1.5deg);box-shadow:8px 14px 0 rgba(60,40,10,.15) !important}
+  .hw-read:hover{background:#1c1a17 !important}
   .hw-contact{transition:color .15s}
   .hw-contact:hover{color:#b8322a}
 </style>
@@ -31,145 +31,373 @@
 (function () {
   "use strict";
   var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+  var raf2 = function (fn) { requestAnimationFrame(function () { requestAnimationFrame(fn); }); };
 
-  function data(ko) {
-    var t = ko ? {
+  // ---------- data ----------
+  function texts(ko) {
+    return ko ? {
       era: "병오년 시월", title: "하워드 세상", seal: "하워드", sealSm: "印",
       role: "애플 디벨로퍼 아카데미 테크 멘토", motto: "꿈을 향해 이것저것 해보는 중", photoAlt: "하워드",
       works: "지은 것들", count: "네 권", soon: "집필 중", contact: "서신",
-      colo1: "병오년 시월", colo2: "하워드 짓다"
+      colo1: "병오년 시월", colo2: "하워드 짓다",
+      read: "펼쳐 읽기", close: "덮기", prev: "앞 장", next: "다음 장", swipe: "오른쪽으로 밀면 다음 장, 왼쪽으로 밀면 앞 장",
+      preface: "서문", fin: "끝", where: "구하는 곳", empty: "그림 자리", shots: "화면"
     } : {
       era: "October 2026", title: "Howard World", seal: "HW", sealSm: "H",
       role: "Tech Mentor, Apple Developer Academy", motto: "Trying all sorts of things on the way to my dreams", photoAlt: "Howard",
       works: "Works", count: "Four volumes", soon: "Being written", contact: "Contact",
-      colo1: "October 2026", colo2: "by Howard"
+      colo1: "October 2026", colo2: "by Howard",
+      read: "Open", close: "Close", prev: "Back", next: "Next", swipe: "Swipe right for the next page, left to go back",
+      preface: "Preface", fin: "Fin", where: "Get it", empty: "Image to come", shots: "Screens"
     };
-    var apps = [
-      { han: "壹", cover: "#2b3346", name: ko ? "피그맵" : "Pigmap", desc: ko ? "한국의 모든 핫플레이스 지도" : "A map of every hot place in Korea",
+  }
+  function appList(ko) {
+    return [
+      { key: "pig", han: "壹", cover: "#2b3346", name: ko ? "피그맵" : "Pigmap", desc: ko ? "한국의 모든 핫플레이스 지도" : "A map of every hot place in Korea",
         links: [{ label: "App Store", href: "https://apps.apple.com/kr/app/%ED%94%BC%EA%B7%B8%EB%A7%B5/id6471933646" }, { label: "Google Play", href: "https://play.google.com/store/apps/details?id=home.sweet.pigmap" }] },
-      { han: "貳", cover: "#7a2a24", name: ko ? "니니구" : "NINIGU", desc: ko ? "친구가 이어주는 새로운 만남" : "New connections, introduced by friends",
+      { key: "nin", han: "貳", cover: "#7a2a24", name: ko ? "니니구" : "NINIGU", desc: ko ? "친구가 이어주는 새로운 만남" : "New connections, introduced by friends",
         links: [{ label: "App Store", href: "https://apps.apple.com/kr/app/ninigu/id6754002478" }, { label: "Google Play", href: "https://play.google.com/store/apps/details?id=com.nunigu.app" }, { label: "ninigu.net", href: "https://ninigu.net" }] },
-      { han: "參", cover: "#3d5a3a", name: ko ? "행운일기" : "Lucky Diary", desc: ko ? "매일의 행운을 기록하는 일기" : "A diary for the little bits of luck each day",
+      { key: "luck", han: "參", cover: "#3d5a3a", name: ko ? "행운일기" : "Lucky Diary", desc: ko ? "매일의 행운을 기록하는 일기" : "A diary for the little bits of luck each day",
         links: [{ label: "App Store", href: "https://apps.apple.com/us/app/%ED%96%89%EC%9A%B4%EC%9D%BC%EA%B8%B0/id6799644137" }] },
-      { han: "肆", cover: "#5b4a32", name: ko ? "하워드 트립" : "Howard Trips", desc: ko ? "여행 일정과 정산을 함께" : "Plan trips and split costs together",
+      { key: "trip", han: "肆", cover: "#5b4a32", name: ko ? "하워드 트립" : "Howard Trips", desc: ko ? "여행 일정과 정산을 함께" : "Plan trips and split costs together",
         links: [{ label: "howard-trips.web.app", href: "https://howard-trips.web.app" }] }
     ];
+  }
+  function bookSpreads(a, ko, T) {
+    var title = { type: "title", han: a.han, name: a.name, desc: a.desc, icon: a.icon };
+    var end = { type: "end", fin: T.fin, seal: T.sealSm, where: a.soon ? "" : T.where, links: a.links, soon: !!a.soon, soonText: T.soon };
+    var inside = { type: "inside" };
+    var intro = function (body) { return { type: "text", kicker: T.preface, title: a.desc, body: body }; };
+    var shotsPh = { type: "image", caption: T.shots, empty: T.empty };
+    if (a.key === "pig") return [{ r: title, l: intro([ko ? "App Store와 Google Play에서 받을 수 있어요." : "Available on the App Store and Google Play."]) }, { r: shotsPh, l: end }];
+    if (a.key === "nin") return [{ r: title, l: intro([ko ? "App Store와 Google Play, 그리고 ninigu.net에서 만날 수 있어요." : "On the App Store, Google Play and ninigu.net."]) }, { r: shotsPh, l: end }];
+    if (a.key === "luck") return [{ r: title, l: intro([ko ? "매일의 작은 행운을 적어 두는 일기예요. App Store에서 받을 수 있어요." : "A diary for the little bits of luck each day. Available on the App Store."]) }, { r: shotsPh, l: end }];
+    return [
+      { r: title, l: intro([ko ? "Day별로 들를 곳과 시간, 메모를 적어 두고 링크 하나로 함께 가는 사람과 나눕니다." : "Write down each day's stops, times and notes, then share the whole trip with one link."]) },
+      { r: { type: "image", src: "./assets/trips-day.jpg", caption: ko ? "하루 일정" : "A day's plan" },
+        l: { type: "text", kicker: ko ? "일정" : "Itinerary", title: ko ? "하루를 시간 순서로" : "Each day, in order",
+          body: ko ? ["날짜를 고르면 그날 들를 곳이 시간 순서대로 놓입니다.", "장소마다 주소와 짧은 메모를 남길 수 있어요."] : ["Pick a day to see its stops laid out by time.", "Each stop keeps its address and a short note."] } },
+      { r: { type: "image", src: "./assets/trips-map.jpg", caption: ko ? "동선 지도" : "Route map" },
+        l: { type: "text", kicker: ko ? "지도" : "Map", title: ko ? "다닌 길을 한눈에" : "The whole route at a glance",
+          body: ko ? ["적어 둔 장소가 번호와 함께 지도 위에 이어집니다.", "전체 보기로 여행 전체 동선을 확인할 수 있어요."] : ["Your stops are numbered and connected on the map.", "Zoom out to see the route for the whole trip."] } },
+      { r: end, l: inside }
+    ];
+  }
+
+  // ---------- state ----------
+  var St = { lang: null, reader: null, spread: 0, phase: "idle", flip: null, vw: window.innerWidth, vh: window.innerHeight, tm: null, tx: 0 };
+  function curLang() { return St.lang || ((navigator.language || "ko").indexOf("ko") === 0 ? "ko" : "en"); }
+  function isMobile() { return St.vw < 760; }
+
+  // ---------- book page rendering (port of BookPage) ----------
+  var HAN = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
+  function pageWrap(shade, inner) {
+    return '<div style="position:relative;width:100%;height:100%;container-type:size;background-color:#f3ead6;background-image:' + shade + ',radial-gradient(rgba(120,95,50,.07) 1px,transparent 1.5px);background-size:100% 100%,7px 9px;font-family:\'Nanum Myeongjo\',serif;color:#1c1a17;overflow:hidden;box-sizing:border-box;word-break:keep-all">' + inner + '</div>';
+  }
+  function pageHTML(page, side) {
+    var ty = (page && page.type) || "inside";
+    var shade = side === "l" ? "linear-gradient(270deg,rgba(60,40,10,.16),transparent 9%)" : side === "r" ? "linear-gradient(90deg,rgba(60,40,10,.16),transparent 9%)" : "linear-gradient(90deg,transparent,transparent)";
+    if (ty === "inside") return pageWrap(shade, '<div style="position:absolute;inset:0;background-color:#e2d4b4;background-image:repeating-linear-gradient(45deg,rgba(120,90,40,.12) 0 1px,transparent 1px 14px),repeating-linear-gradient(-45deg,rgba(120,90,40,.12) 0 1px,transparent 1px 14px)"></div>');
+    var body = "";
+    if (ty === "title") {
+      var icon = page.icon ? '<div style="width:clamp(56px,20cqw,110px);aspect-ratio:1;border-radius:22%;overflow:hidden;box-shadow:0 6px 14px -8px rgba(40,30,10,.6)"><div role="img" style="width:100%;height:100%;background-image:url(\'' + page.icon + '\');background-size:108%;background-position:center"></div></div>' : "";
+      body = '<div style="flex:1;min-height:0;display:flex;flex-direction:row-reverse;gap:6cqw;align-items:stretch">' +
+        '<div style="display:flex;flex-direction:column;align-items:center;gap:3cqh">' +
+          '<div style="font-family:\'Song Myung\',serif;font-size:clamp(20px,6cqw,34px);color:#b8322a;line-height:1">' + esc(page.han) + '</div>' +
+          '<div style="writing-mode:vertical-rl;font-family:\'Song Myung\',serif;font-size:clamp(40px,14cqw,78px);line-height:1;letter-spacing:.06em;white-space:nowrap">' + esc(page.name) + '</div>' +
+        '</div>' +
+        '<div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;gap:3cqh;border-right:1px solid rgba(28,26,23,.35);padding-right:6cqw">' + icon +
+          '<div style="font-family:\'Nanum Brush Script\',cursive;font-size:clamp(26px,8cqw,46px);line-height:1.1;text-wrap:balance">' + esc(page.desc) + '</div>' +
+        '</div>' +
+      '</div>';
+    } else if (ty === "text") {
+      var paras = (page.body || []).map(function (p) { return '<p style="margin:0;font-size:clamp(14px,3.3cqw,18px);line-height:1.85;text-wrap:pretty">' + esc(p) + '</p>'; }).join("");
+      body = '<div style="flex:1;min-height:0;display:flex;flex-direction:column;gap:2.4cqh">' +
+        '<div style="font-family:\'Song Myung\',serif;font-size:clamp(14px,3.2cqw,18px);color:#b8322a;letter-spacing:.12em">' + esc(page.kicker) + '</div>' +
+        '<div style="font-family:\'Song Myung\',serif;font-size:clamp(24px,7cqw,40px);line-height:1.2;text-wrap:balance">' + esc(page.title) + '</div>' +
+        '<div style="width:12cqw;border-top:1.5px solid #1c1a17"></div>' + paras +
+      '</div>';
+    } else if (ty === "image") {
+      var imgInner = page.src ? '<div role="img" aria-label="' + esc(page.caption) + '" style="width:100%;height:100%;background-image:url(\'' + page.src + '\');background-size:contain;background-repeat:no-repeat;background-position:center"></div>'
+        : '<div style="font-family:\'Song Myung\',serif;font-size:clamp(14px,3.4cqw,18px);color:#8a7c60;letter-spacing:.12em">' + esc(page.empty) + '</div>';
+      body = '<div style="flex:1;min-height:0;display:flex;flex-direction:column;gap:2cqh">' +
+        '<div style="flex:1;min-height:0;border:1px solid #1c1a17;padding:2cqw;background:#e9dfc8;display:flex;align-items:center;justify-content:center;overflow:hidden">' + imgInner + '</div>' +
+        '<div style="font-size:clamp(12px,2.8cqw,14px);color:#4a4236;text-align:center">' + esc(page.caption) + '</div>' +
+      '</div>';
+    } else if (ty === "end") {
+      var endLinks = (page.links || []).map(function (l) { return '<a href="' + esc(l.href) + '" target="_blank" rel="noopener" style="font-weight:800;font-size:clamp(14px,3.4cqw,17px);color:#1c1a17;text-decoration:underline;text-decoration-color:#b8322a;text-underline-offset:4px;padding:11px 8px">' + esc(l.label) + '</a>'; }).join("");
+      var endSoon = page.soon ? '<div style="font-family:\'Nanum Brush Script\',cursive;font-size:clamp(28px,8cqw,40px);color:#b8322a;line-height:1">' + esc(page.soonText) + '</div>' : "";
+      body = '<div style="flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4cqh;text-align:center">' +
+        '<div style="display:flex;align-items:flex-end;gap:3cqw">' +
+          '<div style="font-family:\'Song Myung\',serif;font-size:clamp(48px,18cqw,96px);line-height:1">' + esc(page.fin) + '</div>' +
+          '<div style="width:clamp(30px,8cqw,44px);height:clamp(30px,8cqw,44px);background:#b8322a;color:#f3ead6;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:\'Song Myung\',serif;font-size:clamp(11px,2.6cqw,14px);transform:rotate(-4deg);margin-bottom:1cqh">' + esc(page.seal) + '</div>' +
+        '</div>' +
+        '<div style="font-family:\'Song Myung\',serif;font-size:clamp(14px,3.4cqw,18px);color:#b8322a;letter-spacing:.12em">' + esc(page.where) + '</div>' +
+        '<div style="display:flex;flex-direction:column;align-items:center">' + endLinks + endSoon + '</div>' +
+      '</div>';
+    }
+    var numLabel = page.num ? (HAN[page.num] || String(page.num)) : "";
+    var framed = '<div style="height:100%;padding:5cqw;box-sizing:border-box"><div style="position:relative;height:100%;border:2px solid #1c1a17;box-shadow:inset 0 0 0 3px #f3ead6,inset 0 0 0 4px #1c1a17;padding:6cqw 6cqw 4cqw;box-sizing:border-box;display:flex;flex-direction:column;gap:3cqh">' +
+      body + '<div style="text-align:center;font-family:\'Song Myung\',serif;font-size:clamp(11px,2.6cqw,14px);color:#4a4236">' + esc(numLabel) + '</div>' +
+    '</div></div>';
+    return pageWrap(shade, framed);
+  }
+  function coverArtHTML(cover, name, han) {
+    return '<div style="position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;container-type:inline-size;background:' + cover + ';border-radius:3px 6px 6px 3px;box-shadow:0 30px 60px -24px rgba(0,0,0,.7)">' +
+      '<div style="position:absolute;right:3cqw;top:0;bottom:0;border-left:2px solid rgba(239,230,210,.55)"></div>' +
+      '<div style="position:absolute;right:3cqw;top:0;bottom:0;width:7cqw;display:flex;flex-direction:column;justify-content:space-evenly"><div style="border-top:2px solid rgba(239,230,210,.55)"></div><div style="border-top:2px solid rgba(239,230,210,.55)"></div><div style="border-top:2px solid rgba(239,230,210,.55)"></div><div style="border-top:2px solid rgba(239,230,210,.55)"></div><div style="border-top:2px solid rgba(239,230,210,.55)"></div></div>' +
+      '<div style="position:absolute;left:9cqw;top:8cqw;width:22cqw;height:72%;background:#f5eedd;border:1px solid #1c1a17;box-shadow:inset 0 0 0 3px #f5eedd,inset 0 0 0 4px #1c1a17;display:flex;justify-content:center;padding:6cqw 0;box-sizing:border-box"><div style="writing-mode:vertical-rl;font-family:\'Song Myung\',serif;font-size:10cqw;line-height:1;letter-spacing:.08em;white-space:nowrap;overflow:hidden;color:#1c1a17">' + esc(name) + '</div></div>' +
+      '<div style="position:absolute;left:9cqw;bottom:7cqw;font-family:\'Song Myung\',serif;font-size:15cqw;line-height:1;color:#efe6d2;opacity:.8">' + esc(han) + '</div>' +
+    '</div>';
+  }
+
+  // ---------- page model ----------
+  function pageModel(key) {
+    var ko = curLang() === "ko", T = texts(ko);
+    var a = appList(ko).filter(function (x) { return x.key === key; })[0];
+    var n = 0;
+    var S = bookSpreads(a, ko, T).map(function (sp) {
+      var r = sp.r.type === "inside" ? sp.r : Object.assign({}, sp.r, { num: ++n });
+      var l = sp.l.type === "inside" ? sp.l : Object.assign({}, sp.l, { num: ++n });
+      return { r: r, l: l };
+    });
+    var P = [];
+    S.forEach(function (sp) { [sp.r, sp.l].forEach(function (p) { if (p.type !== "inside") P.push(p); }); });
+    return { a: a, S: S, P: P, count: isMobile() ? P.length : S.length };
+  }
+
+  // ---------- reader ----------
+  var ov = null, el = {};
+  function buildReaderDOM() {
+    ov = document.createElement("div");
+    ov.style.cssText = "position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;overflow:hidden";
+    ov.innerHTML =
+      '<div class="rbd" style="position:absolute;inset:0;background:rgba(22,19,14,.82);opacity:0;transition:opacity .6s"></div>' +
+      '<div class="rx" role="button" style="position:absolute;top:10px;right:12px;z-index:3;padding:12px 16px;font-family:\'Song Myung\',serif;font-size:16px;color:#efe6d2;cursor:pointer;opacity:0;transition:opacity .4s"></div>' +
+      '<div class="rbook" style="position:relative;z-index:2;transition:transform 1s cubic-bezier(.45,.05,.25,1),opacity .35s"></div>' +
+      '<div class="rnav" style="position:relative;z-index:2;display:flex;align-items:center;gap:6px;color:#efe6d2;font-family:\'Song Myung\',serif;font-size:16px;opacity:0;transition:opacity .4s">' +
+        '<div class="rprev" role="button" style="padding:12px 16px;cursor:pointer"></div>' +
+        '<div class="rpos" style="min-width:64px;text-align:center;font-family:\'Nanum Myeongjo\',serif;font-size:14px;color:#cfc4aa"></div>' +
+        '<div class="rnext" role="button" style="padding:12px 16px;cursor:pointer"></div>' +
+      '</div>' +
+      '<div class="rswipe" style="position:relative;z-index:2;font-family:\'Nanum Myeongjo\',serif;font-size:12px;color:#a89e86;margin-top:-8px;display:none"></div>';
+    document.body.appendChild(ov);
+    el.bd = ov.querySelector(".rbd"); el.x = ov.querySelector(".rx"); el.book = ov.querySelector(".rbook");
+    el.nav = ov.querySelector(".rnav"); el.prev = ov.querySelector(".rprev"); el.pos = ov.querySelector(".rpos"); el.next = ov.querySelector(".rnext"); el.swipe = ov.querySelector(".rswipe");
+    el.bd.addEventListener("click", closeReader);
+    el.x.addEventListener("click", closeReader);
+    el.prev.addEventListener("click", function () { go(-1); });
+    el.next.addEventListener("click", function () { go(1); });
+    el.book.addEventListener("touchstart", function (e) { St.tx = e.changedTouches[0].clientX; }, { passive: true });
+    el.book.addEventListener("touchend", function (e) { var dx = e.changedTouches[0].clientX - (St.tx || 0); if (dx > 40) go(1); else if (dx < -40) go(-1); }, { passive: true });
+    // persistent base pages + spine
+    el.pageL = document.createElement("div");
+    el.pageR = document.createElement("div");
+    el.spine = document.createElement("div");
+    el.book.appendChild(el.pageL); el.book.appendChild(el.pageR); el.book.appendChild(el.spine);
+  }
+
+  function dims() {
+    var m = isMobile(), vw = St.vw, vh = St.vh, w, h, p;
+    if (m) { w = Math.min(440, vw - 28, (vh - 150) * 0.68); h = w / 0.68; p = w; }
+    else { w = Math.min(1080, vw - 64, (vh - 150) * 1.42); h = w / 1.42; p = w / 2; }
+    return { m: m, w: w, h: h, p: p };
+  }
+
+  function apply() {
+    if (!St.reader || !ov) return;
+    var model = pageModel(St.reader), S = model.S, P = model.P, a = model.a, count = model.count;
+    var d = dims(), m = d.m, w = d.w, h = d.h, p = d.p;
+    var T = texts(curLang());
+    var f = St.flip, idx = St.spread, ph = St.phase, inside = { type: "inside" };
+    var baseL, baseR, leafFront, leafBack, leafLeft = "0px", leafOrigin = "right center", lfs = "l", lbs = "r";
+    if (m) {
+      baseL = f ? (f.dir > 0 ? P[f.to] : P[f.from]) : P[idx];
+      baseR = null;
+      if (f) { leafFront = f.dir > 0 ? P[f.from] : P[f.to]; leafBack = inside; lfs = "s"; lbs = "s"; }
+    } else {
+      if (f && f.dir > 0) { baseL = S[f.to].l; baseR = S[f.from].r; leafFront = S[f.from].l; leafBack = S[f.to].r; }
+      else if (f) { baseL = S[f.from].l; baseR = S[f.to].r; leafFront = S[f.from].r; leafBack = S[f.to].l; leafLeft = p + "px"; leafOrigin = "left center"; lfs = "r"; lbs = "l"; }
+      else { baseL = S[idx].l; baseR = S[idx].r; }
+    }
+    var shown = ph === "opening" || ph === "open";
+    var shift = !m && ph === "closed" ? "translateX(" + (p / 2) + "px)" : "translateX(0px)";
+    var cur = f ? f.to : idx;
+
+    // book frame
+    el.book.style.width = w + "px"; el.book.style.height = h + "px"; el.book.style.perspective = "2600px";
+    el.book.style.transform = (ph === "closing" ? shift + " scale(.96)" : shift);
+    el.book.style.opacity = ph === "closing" ? "0" : "1";
+    // base pages
+    el.pageL.style.cssText = "position:absolute;left:0;top:0;width:" + p + "px;height:100%;box-shadow:0 30px 60px -24px rgba(0,0,0,.7);display:grid;grid-template:100%/100%";
+    el.pageL.innerHTML = pageHTML(baseL, m ? "s" : "l");
+    if (m) { el.pageR.style.display = "none"; el.spine.style.display = "none"; }
+    else {
+      el.pageR.style.display = ""; el.pageR.style.cssText = "position:absolute;left:" + p + "px;top:0;width:" + p + "px;height:100%;visibility:" + (ph === "open" ? "visible" : "hidden") + ";box-shadow:0 30px 60px -24px rgba(0,0,0,.7);display:grid;grid-template:100%/100%";
+      el.pageR.innerHTML = pageHTML(baseR, "r");
+      el.spine.style.cssText = "position:absolute;left:" + (p - 1) + "px;top:0;bottom:0;width:2px;background:rgba(28,26,23,.35);visibility:" + (ph === "open" ? "visible" : "hidden");
+    }
+    // backdrop / nav opacity
+    el.bd.style.opacity = shown ? "1" : "0";
+    el.x.style.opacity = shown ? "1" : "0"; el.x.textContent = T.close + " ✕";
+    el.nav.style.opacity = shown ? "1" : "0";
+    el.prev.style.opacity = cur > 0 ? "1" : ".3"; el.prev.textContent = "← " + T.prev;
+    el.next.style.opacity = cur < count - 1 ? "1" : ".3"; el.next.textContent = T.next + " →";
+    el.pos.textContent = (cur + 1) + " / " + count;
+    el.swipe.style.display = m ? "" : "none"; el.swipe.textContent = T.swipe;
+
+    // cover (closed / opening)
+    var coverOn = ph === "closed" || ph === "opening";
+    if (coverOn) {
+      if (!el.cover) {
+        el.cover = document.createElement("div");
+        var coverBack = m ? inside : S[0].r;
+        el.cover.innerHTML = coverArtHTML(a.cover, a.name, a.han) +
+          '<div style="position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:rotateY(180deg);display:grid;grid-template:100%/100%">' + pageHTML(coverBack, "r") + '</div>';
+        el.book.appendChild(el.cover);
+      }
+      el.cover.style.cssText = "position:absolute;top:0;left:0;width:" + p + "px;height:100%;transform-style:preserve-3d;transform-origin:right center;transform:rotateY(" + (ph === "closed" ? "0deg" : "180deg") + ");transition:transform 1s cubic-bezier(.45,.05,.25,1);z-index:5";
+    } else if (el.cover) { el.cover.remove(); el.cover = null; }
+
+    // flip leaf
+    if (f) {
+      if (!el.leaf) {
+        el.leaf = document.createElement("div");
+        el.leaf.innerHTML =
+          '<div style="position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;display:grid;grid-template:100%/100%;box-shadow:0 10px 30px -10px rgba(0,0,0,.5)">' + pageHTML(leafFront, lfs) + '</div>' +
+          '<div style="position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;display:grid;grid-template:100%/100%;transform:rotateY(180deg);box-shadow:0 10px 30px -10px rgba(0,0,0,.5)">' + pageHTML(leafBack, lbs) + '</div>';
+        el.book.appendChild(el.leaf);
+      }
+      el.leaf.style.cssText = "position:absolute;top:0;left:" + leafLeft + ";width:" + p + "px;height:100%;transform-style:preserve-3d;transform-origin:" + leafOrigin + ";transform:rotateY(" + f.rot + "deg);transition:" + (f.anim ? "transform .72s cubic-bezier(.4,.1,.3,1)" : "none") + ";z-index:4";
+    } else if (el.leaf) { el.leaf.remove(); el.leaf = null; }
+  }
+
+  function openReader(key) {
+    clearTimeout(St.tm);
+    St.reader = key; St.spread = 0; St.phase = "closed"; St.flip = null;
+    document.body.style.overflow = "hidden";
+    if (!ov) buildReaderDOM();
+    el.cover && el.cover.remove(); el.cover = null;
+    el.leaf && el.leaf.remove(); el.leaf = null;
+    apply();
+    raf2(function () { if (St.phase === "closed") { St.phase = "opening"; apply(); } });
+    St.tm = setTimeout(function () { St.phase = "open"; apply(); }, 1100);
+  }
+  function closeReader() {
+    if (!St.reader) return;
+    clearTimeout(St.tm);
+    St.phase = "closing"; apply();
+    St.tm = setTimeout(function () {
+      document.body.style.overflow = "";
+      if (ov) { ov.remove(); ov = null; el = {}; }
+      St.reader = null; St.phase = "idle"; St.flip = null;
+    }, 380);
+  }
+  function go(dir) {
+    if (St.phase !== "open" || St.flip || !St.reader) return;
+    var count = pageModel(St.reader).count;
+    var to = St.spread + dir;
+    if (to < 0 || to >= count) return;
+    var m = isMobile();
+    var start = m && dir < 0 ? 180 : 0;
+    var target = m ? (dir > 0 ? 180 : 0) : (dir > 0 ? 180 : -180);
+    St.flip = { dir: dir, from: St.spread, to: to, rot: start, anim: false };
+    apply();
+    raf2(function () { if (St.flip) { St.flip.rot = target; St.flip.anim = true; apply(); } });
+    St.tm = setTimeout(function () { St.spread = to; St.flip = null; apply(); }, 760);
+  }
+
+  // ---------- main page ----------
+  function render() {
+    var ko = curLang() === "ko", T = texts(ko), titleFs = ko ? "clamp(54px,8vw,96px)" : "clamp(40px,6vw,76px)";
+    var apps = appList(ko);
+    var appsHTML = apps.map(function (a, i) {
+      var links = a.links.map(function (l) { return '<a href="' + esc(l.href) + '" target="_blank" rel="noopener" style="font-weight:800;font-size:clamp(14px,1.3vw,15px);text-decoration:underline;text-decoration-color:#b8322a;text-underline-offset:4px;padding:12px 0;white-space:nowrap">' + esc(l.label) + '</a>'; }).join("");
+      var soon = a.soon ? '<div style="font-family:\'Nanum Brush Script\',cursive;font-size:clamp(24px,2.4vw,28px);color:#b8322a;line-height:1;padding:10px 0">' + esc(T.soon) + '</div>' : "";
+      return '<article style="display:grid;grid-template-columns:clamp(104px,15vw,176px) minmax(0,1fr);gap:clamp(16px,2.4vw,28px)">' +
+        '<div class="hw-book hw-open" data-k="' + a.key + '" role="button" aria-label="' + esc(a.name + " " + T.read) + '" style="cursor:pointer;position:relative;aspect-ratio:176/244;container-type:inline-size;background:' + a.cover + ';border-radius:2px 4px 4px 2px;box-shadow:4px 6px 0 rgba(60,40,10,.18)">' +
+          '<div style="position:absolute;right:3cqw;top:0;bottom:0;border-left:1.5px solid rgba(239,230,210,.55)"></div>' +
+          '<div style="position:absolute;right:3cqw;top:0;bottom:0;width:8cqw;display:flex;flex-direction:column;justify-content:space-evenly"><div style="border-top:1.5px solid rgba(239,230,210,.55)"></div><div style="border-top:1.5px solid rgba(239,230,210,.55)"></div><div style="border-top:1.5px solid rgba(239,230,210,.55)"></div><div style="border-top:1.5px solid rgba(239,230,210,.55)"></div><div style="border-top:1.5px solid rgba(239,230,210,.55)"></div></div>' +
+          '<div style="position:absolute;left:9cqw;top:9cqw;width:26cqw;height:98cqw;background:#f5eedd;border:1px solid #1c1a17;box-shadow:inset 0 0 0 2px #f5eedd,inset 0 0 0 3px #1c1a17;display:flex;justify-content:center;padding:7cqw 0;box-sizing:border-box"><div style="writing-mode:vertical-rl;font-family:\'Song Myung\',serif;font-size:11.5cqw;line-height:1;letter-spacing:.06em;white-space:nowrap;overflow:hidden">' + esc(a.name) + '</div></div>' +
+          '<div style="position:absolute;left:9cqw;bottom:6cqw;font-family:\'Song Myung\',serif;font-size:17cqw;line-height:1;color:#efe6d2;opacity:.8">' + esc(a.han) + '</div>' +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:clamp(6px,1vw,12px);min-width:0;padding-top:2px">' +
+          '<div style="display:flex;align-items:baseline;gap:clamp(8px,1vw,10px)"><div style="font-family:\'Song Myung\',serif;font-size:clamp(17px,1.9vw,22px);color:#b8322a">' + esc(a.han) + '</div><h3 style="margin:0;font-weight:400;font-family:\'Song Myung\',serif;font-size:clamp(25px,2.9vw,34px);line-height:1.15">' + esc(a.name) + '</h3></div>' +
+          '<p style="margin:0;font-size:clamp(15px,1.45vw,17px);line-height:1.7;text-wrap:pretty">' + esc(a.desc) + '</p>' +
+          '<div style="flex:1"></div>' +
+          '<div style="display:flex;flex-wrap:wrap;column-gap:clamp(14px,1.6vw,18px);align-items:center;border-top:1px solid rgba(28,26,23,.22)">' +
+            '<div class="hw-read hw-open" data-k="' + a.key + '" role="button" style="cursor:pointer;font-family:\'Song Myung\',serif;font-size:clamp(14px,1.3vw,15px);color:#efe6d2;background:#b8322a;padding:6px 12px;border-radius:3px;margin:6px 0;white-space:nowrap">' + esc(T.read) + '</div>' +
+            links + soon +
+          '</div>' +
+        '</div>' +
+      '</article>';
+    }).join("");
+
     var contacts = [
       { label: ko ? "전자우편" : "Email", value: "romeowa@gmail.com", href: "mailto:romeowa@gmail.com", target: "_self" },
       { label: "LinkedIn", value: ko ? "한윤진" : "Yunjin Han", href: "https://www.linkedin.com/in/%EC%9C%A4%EC%A7%84-%ED%95%9C-7aaa4431/", target: "_blank" },
       { label: "Instagram", value: "@howard.yunjin", href: "https://www.instagram.com/howard.yunjin/", target: "_blank" }
-    ];
-    return { t: t, apps: apps, contacts: contacts, titleFs: ko ? "clamp(54px,8vw,96px)" : "clamp(40px,6vw,76px)" };
-  }
-
-  function bookCover(a) {
-    return '<div class="hw-book" style="position:relative;aspect-ratio:176/244;container-type:inline-size;background:' + a.cover + ';border-radius:2px 4px 4px 2px;box-shadow:4px 6px 0 rgba(60,40,10,.18)">' +
-      '<div style="position:absolute;right:3cqw;top:0;bottom:0;border-left:1.5px solid rgba(239,230,210,.55)"></div>' +
-      '<div style="position:absolute;right:3cqw;top:0;bottom:0;width:8cqw;display:flex;flex-direction:column;justify-content:space-evenly">' +
-        '<div style="border-top:1.5px solid rgba(239,230,210,.55)"></div><div style="border-top:1.5px solid rgba(239,230,210,.55)"></div><div style="border-top:1.5px solid rgba(239,230,210,.55)"></div><div style="border-top:1.5px solid rgba(239,230,210,.55)"></div><div style="border-top:1.5px solid rgba(239,230,210,.55)"></div>' +
-      '</div>' +
-      '<div style="position:absolute;left:9cqw;top:9cqw;width:26cqw;height:98cqw;background:#f5eedd;border:1px solid #1c1a17;box-shadow:inset 0 0 0 2px #f5eedd,inset 0 0 0 3px #1c1a17;display:flex;justify-content:center;padding:7cqw 0;box-sizing:border-box">' +
-        '<div style="writing-mode:vertical-rl;font-family:\'Song Myung\',serif;font-size:11.5cqw;line-height:1;letter-spacing:.06em;white-space:nowrap;overflow:hidden">' + esc(a.name) + '</div>' +
-      '</div>' +
-      '<div style="position:absolute;left:9cqw;bottom:6cqw;font-family:\'Song Myung\',serif;font-size:17cqw;line-height:1;color:#efe6d2;opacity:.8">' + esc(a.han) + '</div>' +
-    '</div>';
-  }
-
-  function appArticle(a, t) {
-    var links = a.links.map(function (l) {
-      return '<a href="' + esc(l.href) + '" target="_blank" rel="noopener" style="font-weight:800;font-size:clamp(14px,1.3vw,15px);text-decoration:underline;text-decoration-color:#b8322a;text-underline-offset:4px;padding:12px 0;white-space:nowrap">' + esc(l.label) + '</a>';
-    }).join("");
-    var soon = a.soon ? '<div style="font-family:\'Nanum Brush Script\',cursive;font-size:clamp(24px,2.4vw,28px);color:#b8322a;line-height:1;padding:10px 0">' + esc(t.soon) + '</div>' : "";
-    return '<article style="display:grid;grid-template-columns:clamp(104px,15vw,176px) minmax(0,1fr);gap:clamp(16px,2.4vw,28px)">' +
-      bookCover(a) +
-      '<div style="display:flex;flex-direction:column;gap:clamp(6px,1vw,12px);min-width:0;padding-top:2px">' +
-        '<div style="display:flex;align-items:baseline;gap:clamp(8px,1vw,10px)">' +
-          '<div style="font-family:\'Song Myung\',serif;font-size:clamp(17px,1.9vw,22px);color:#b8322a">' + esc(a.han) + '</div>' +
-          '<h3 style="margin:0;font-weight:400;font-family:\'Song Myung\',serif;font-size:clamp(25px,2.9vw,34px);line-height:1.15">' + esc(a.name) + '</h3>' +
-        '</div>' +
-        '<p style="margin:0;font-size:clamp(15px,1.45vw,17px);line-height:1.7;text-wrap:pretty">' + esc(a.desc) + '</p>' +
-        '<div style="flex:1"></div>' +
-        '<div style="display:flex;flex-wrap:wrap;column-gap:clamp(14px,1.6vw,18px);align-items:center;border-top:1px solid rgba(28,26,23,.22)">' + links + soon + '</div>' +
-      '</div>' +
-    '</article>';
-  }
-
-  function render(lang) {
-    var ko = lang === "ko";
-    var d = data(ko), t = d.t;
-    var apps = d.apps.map(function (a) { return appArticle(a, t); }).join("");
-    var contacts = d.contacts.map(function (c) {
-      return '<a href="' + esc(c.href) + '" target="' + c.target + '" rel="noopener" class="hw-contact" style="display:flex;align-items:baseline;gap:12px;padding:12px 0;text-decoration:none;border-bottom:1px solid rgba(28,26,23,.22)">' +
-        '<div style="font-family:\'Song Myung\',serif;font-size:15px;color:#b8322a;flex:none;min-width:64px">' + esc(c.label) + '</div>' +
-        '<div style="font-weight:800;font-size:clamp(14px,1.4vw,16px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(c.value) + '</div>' +
-      '</a>';
+    ].map(function (c) {
+      return '<a href="' + esc(c.href) + '" target="' + c.target + '" rel="noopener" class="hw-contact" style="display:flex;align-items:baseline;gap:12px;padding:12px 0;text-decoration:none;border-bottom:1px solid rgba(28,26,23,.22)"><div style="font-family:\'Song Myung\',serif;font-size:15px;color:#b8322a;flex:none;min-width:64px">' + esc(c.label) + '</div><div style="font-weight:800;font-size:clamp(14px,1.4vw,16px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(c.value) + '</div></a>';
     }).join("");
 
     var html =
       '<header style="display:flex;align-items:center;gap:2px;font-size:14px">' +
-        '<div id="hwKo" style="cursor:pointer;font-weight:800;text-decoration:' + (ko ? "underline" : "none") + ';text-underline-offset:4px;padding:12px 8px 12px 0">한</div>' +
-        '<div>·</div>' +
-        '<div id="hwEn" style="cursor:pointer;font-weight:800;text-decoration:' + (ko ? "none" : "underline") + ';text-underline-offset:4px;padding:12px 8px">EN</div>' +
-        '<div style="flex:1"></div>' +
-        '<div style="letter-spacing:.25em;font-size:clamp(12px,1.2vw,14px)">' + esc(t.era) + '</div>' +
+        '<div class="hw-ko" style="cursor:pointer;font-weight:800;text-decoration:' + (ko ? "underline" : "none") + ';text-underline-offset:4px;padding:12px 8px 12px 0">한</div><div>·</div>' +
+        '<div class="hw-en" style="cursor:pointer;font-weight:800;text-decoration:' + (ko ? "none" : "underline") + ';text-underline-offset:4px;padding:12px 8px">EN</div>' +
+        '<div style="flex:1"></div><div style="letter-spacing:.25em;font-size:clamp(12px,1.2vw,14px)">' + esc(T.era) + '</div>' +
       '</header>' +
-
       '<section style="display:flex;flex-wrap:wrap-reverse;gap:clamp(28px,4vw,44px);align-items:stretch">' +
         '<div style="flex:999 1 340px;display:flex;flex-direction:column;justify-content:flex-end;gap:clamp(14px,1.8vw,20px)">' +
-          '<div style="font-family:\'Nanum Brush Script\',cursive;font-size:clamp(44px,6vw,70px);line-height:1.05;text-wrap:balance">' + esc(t.motto) + '</div>' +
+          '<div style="font-family:\'Nanum Brush Script\',cursive;font-size:clamp(44px,6vw,70px);line-height:1.05;text-wrap:balance">' + esc(T.motto) + '</div>' +
           '<div style="width:clamp(56px,7vw,80px);border-top:2px solid #1c1a17"></div>' +
-          '<div style="font-size:clamp(16px,1.7vw,20px);line-height:1.7">' + esc(t.role) + '</div>' +
+          '<div style="font-size:clamp(16px,1.7vw,20px);line-height:1.7">' + esc(T.role) + '</div>' +
         '</div>' +
         '<div style="flex:1 1 auto;display:flex;justify-content:space-between;align-items:flex-end;gap:clamp(18px,4vw,44px)">' +
-          '<div style="flex:none;width:clamp(140px,17vw,200px);aspect-ratio:200/260;border:1px solid #1c1a17;padding:clamp(5px,.7vw,8px);box-sizing:border-box">' +
-            '<img src="./assets/howard.jpg" alt="' + esc(t.photoAlt) + '" style="display:block;width:100%;height:100%;object-fit:cover;object-position:40% 20%;filter:sepia(.35) saturate(.85)">' +
-          '</div>' +
+          '<div style="flex:none;width:clamp(140px,17vw,200px);aspect-ratio:200/260;border:1px solid #1c1a17;padding:clamp(5px,.7vw,8px);box-sizing:border-box"><img src="./assets/howard.jpg" alt="' + esc(T.photoAlt) + '" style="display:block;width:100%;height:100%;object-fit:cover;object-position:40% 20%;filter:sepia(.35) saturate(.85)"></div>' +
           '<div style="flex:none;display:flex;gap:clamp(10px,1.6vw,18px);align-items:flex-start;align-self:stretch;border-left:1px solid #1c1a17;padding-left:clamp(14px,2.4vw,28px)">' +
-            '<h1 style="margin:0;font-weight:400;writing-mode:vertical-rl;font-family:\'Song Myung\',serif;font-size:' + d.titleFs + ';line-height:1;letter-spacing:.05em;white-space:nowrap">' + esc(t.title) + '</h1>' +
-            '<div style="flex:none;width:clamp(44px,5.5vw,66px);height:clamp(44px,5.5vw,66px);background:#b8322a;color:#efe6d2;display:flex;align-items:center;justify-content:center;font-family:\'Song Myung\',serif;font-size:clamp(12px,1.4vw,17px);line-height:1;writing-mode:vertical-rl;white-space:nowrap;border-radius:4px;transform:rotate(-3deg);box-shadow:inset 0 0 0 3px #efe6d2,inset 0 0 0 5px #b8322a;margin-top:auto">' + esc(t.seal) + '</div>' +
+            '<h1 style="margin:0;font-weight:400;writing-mode:vertical-rl;font-family:\'Song Myung\',serif;font-size:' + titleFs + ';line-height:1;letter-spacing:.05em;white-space:nowrap">' + esc(T.title) + '</h1>' +
+            '<div style="flex:none;width:clamp(44px,5.5vw,66px);height:clamp(44px,5.5vw,66px);background:#b8322a;color:#efe6d2;display:flex;align-items:center;justify-content:center;font-family:\'Song Myung\',serif;font-size:clamp(12px,1.4vw,17px);line-height:1;writing-mode:vertical-rl;white-space:nowrap;border-radius:4px;transform:rotate(-3deg);box-shadow:inset 0 0 0 3px #efe6d2,inset 0 0 0 5px #b8322a;margin-top:auto">' + esc(T.seal) + '</div>' +
           '</div>' +
         '</div>' +
       '</section>' +
-
       '<section style="display:flex;flex-direction:column;gap:clamp(24px,3.5vw,40px)">' +
-        '<div style="display:flex;align-items:center;gap:clamp(12px,1.6vw,18px)">' +
-          '<h2 style="margin:0;font-weight:400;font-family:\'Song Myung\',serif;font-size:clamp(26px,3vw,32px)">' + esc(t.works) + '</h2>' +
-          '<div style="flex:1;border-top:1px solid #1c1a17"></div>' +
-          '<div style="font-size:clamp(13px,1.3vw,15px)">' + esc(t.count) + '</div>' +
-        '</div>' +
-        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,430px),1fr));gap:clamp(30px,4vw,44px) clamp(24px,4vw,48px)">' + apps + '</div>' +
+        '<div style="display:flex;align-items:center;gap:clamp(12px,1.6vw,18px)"><h2 style="margin:0;font-weight:400;font-family:\'Song Myung\',serif;font-size:clamp(26px,3vw,32px)">' + esc(T.works) + '</h2><div style="flex:1;border-top:1px solid #1c1a17"></div><div style="font-size:clamp(13px,1.3vw,15px)">' + esc(T.count) + '</div></div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,430px),1fr));gap:clamp(30px,4vw,44px) clamp(24px,4vw,48px)">' + appsHTML + '</div>' +
       '</section>' +
-
       '<section style="display:flex;flex-direction:column;gap:clamp(14px,2vw,22px)">' +
-        '<div style="display:flex;align-items:center;gap:clamp(12px,1.6vw,18px)">' +
-          '<h2 style="margin:0;font-weight:400;font-family:\'Song Myung\',serif;font-size:clamp(26px,3vw,32px)">' + esc(t.contact) + '</h2>' +
-          '<div style="flex:1;border-top:1px solid #1c1a17"></div>' +
-        '</div>' +
+        '<div style="display:flex;align-items:center;gap:clamp(12px,1.6vw,18px)"><h2 style="margin:0;font-weight:400;font-family:\'Song Myung\',serif;font-size:clamp(26px,3vw,32px)">' + esc(T.contact) + '</h2><div style="flex:1;border-top:1px solid #1c1a17"></div></div>' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:4px clamp(24px,4vw,48px)">' + contacts + '</div>' +
       '</section>' +
-
       '<footer style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px">' +
         '<div style="font-size:12px;color:#6f6a5f">© HowardWorld</div>' +
         '<div style="border:1px solid #1c1a17;padding:clamp(10px,1.3vw,14px) clamp(9px,1.1vw,12px);display:flex;gap:clamp(7px,.9vw,10px);align-items:flex-start">' +
-          '<div style="writing-mode:vertical-rl;font-family:\'Song Myung\',serif;font-size:clamp(13px,1.4vw,16px);line-height:1.4;letter-spacing:.1em;white-space:nowrap">' + esc(t.colo1) + '</div>' +
-          '<div style="writing-mode:vertical-rl;font-family:\'Song Myung\',serif;font-size:clamp(13px,1.4vw,16px);line-height:1.4;letter-spacing:.1em;white-space:nowrap">' + esc(t.colo2) + '</div>' +
-          '<div style="width:clamp(24px,2.6vw,30px);height:clamp(24px,2.6vw,30px);background:#b8322a;color:#efe6d2;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:\'Song Myung\',serif;font-size:clamp(10px,1.1vw,12px);align-self:flex-end;transform:rotate(-4deg)">' + esc(t.sealSm) + '</div>' +
+          '<div style="writing-mode:vertical-rl;font-family:\'Song Myung\',serif;font-size:clamp(13px,1.4vw,16px);line-height:1.4;letter-spacing:.1em;white-space:nowrap">' + esc(T.colo1) + '</div>' +
+          '<div style="writing-mode:vertical-rl;font-family:\'Song Myung\',serif;font-size:clamp(13px,1.4vw,16px);line-height:1.4;letter-spacing:.1em;white-space:nowrap">' + esc(T.colo2) + '</div>' +
+          '<div style="width:clamp(24px,2.6vw,30px);height:clamp(24px,2.6vw,30px);background:#b8322a;color:#efe6d2;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:\'Song Myung\',serif;font-size:clamp(10px,1.1vw,12px);align-self:flex-end;transform:rotate(-4deg)">' + esc(T.sealSm) + '</div>' +
         '</div>' +
       '</footer>';
 
     var frame = document.getElementById("frame");
     frame.innerHTML = html;
-    document.documentElement.lang = lang;
-    document.getElementById("hwKo").addEventListener("click", function () { setLang("ko"); });
-    document.getElementById("hwEn").addEventListener("click", function () { setLang("en"); });
+    document.documentElement.lang = curLang();
+    frame.querySelector(".hw-ko").addEventListener("click", function () { setLang("ko"); });
+    frame.querySelector(".hw-en").addEventListener("click", function () { setLang("en"); });
+    frame.querySelectorAll(".hw-open").forEach(function (b) { b.addEventListener("click", function () { openReader(b.dataset.k); }); });
   }
 
-  function setLang(l) { try { localStorage.setItem("hw-lang", l); } catch (e) {} render(l); }
+  function setLang(l) { try { localStorage.setItem("hw-lang", l); } catch (e) {} St.lang = l; render(); }
 
-  var init = null;
-  try { init = localStorage.getItem("hw-lang"); } catch (e) {}
-  if (!init) init = (navigator.language || "ko").indexOf("ko") === 0 ? "ko" : "en";
-  render(init);
+  window.addEventListener("resize", function () { St.vw = window.innerWidth; St.vh = window.innerHeight; if (St.reader) apply(); });
+  window.addEventListener("keydown", function (e) {
+    if (!St.reader) return;
+    if (e.key === "Escape") closeReader();
+    else if (e.key === "ArrowRight") go(1);
+    else if (e.key === "ArrowLeft") go(-1);
+  });
+
+  try { St.lang = localStorage.getItem("hw-lang"); } catch (e) {}
+  render();
 })();
 </script>
 </body>
