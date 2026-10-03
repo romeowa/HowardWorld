@@ -1,138 +1,175 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HowardWorld — 만들고 있는 앱들</title>
-  <meta name="description" content="혼자 만드는 작은 앱들 — 피그맵, 니니구, 행운일기" />
-  <meta property="og:title" content="HowardWorld" />
-  <meta property="og:description" content="혼자 만드는 작은 앱들 — 피그맵, 니니구, 행운일기" />
-  <meta property="og:type" content="website" />
-  <meta name="theme-color" content="#f2f0ec" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <style>
-    :root {
-      --bg: #f2f0ec; --card: #fbfaf7; --ink: #1b1a17; --muted: #6f6a5f;
-      --line: #e6e2da; --accent: #0f766e; --accent-soft: #e3f0ee;
-      --shadow: 0 1px 2px rgba(27,26,23,.04), 0 6px 20px rgba(27,26,23,.06);
-    }
-    @media (prefers-color-scheme: dark) {
-      :root:not([data-theme="light"]) {
-        --bg: #1a1916; --card: #23221e; --ink: #f3f1ec; --muted: #a39d92;
-        --line: #332f29; --accent: #4db6a8; --accent-soft: #1f3a36;
-        --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
-      }
-    }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; }
-    body {
-      font-family: "IBM Plex Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
-      background: var(--bg); color: var(--ink);
-      -webkit-font-smoothing: antialiased; line-height: 1.5;
-      padding: 0 16px;
-    }
-    .wrap { max-width: 560px; margin: 0 auto; padding: 64px 0 56px; }
-
-    header { text-align: center; margin-bottom: 40px; }
-    .kicker {
-      display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: .22em;
-      color: var(--accent); text-transform: uppercase; margin-bottom: 14px;
-    }
-    h1 { font-size: 30px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 10px; }
-    header p { color: var(--muted); font-size: 16px; margin: 0; }
-
-    .apps { display: flex; flex-direction: column; gap: 16px; }
-    .app {
-      background: var(--card); border: 1px solid var(--line); border-radius: 18px;
-      padding: 20px; box-shadow: var(--shadow);
-    }
-    .app-top { display: flex; align-items: center; gap: 14px; }
-    .app-icon {
-      width: 58px; height: 58px; border-radius: 15px; flex: 0 0 auto; object-fit: cover;
-      border: 1px solid var(--line); background: var(--bg);
-      display: flex; align-items: center; justify-content: center; font-size: 30px;
-    }
-    .app-meta { min-width: 0; flex: 1; }
-    .app-name { font-size: 18px; font-weight: 700; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; }
-    .app-desc { color: var(--muted); font-size: 14px; margin-top: 3px; }
-    .soon {
-      font-size: 11px; font-weight: 600; color: var(--accent);
-      background: var(--accent-soft); border-radius: 999px; padding: 3px 9px;
-    }
-    .app-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-    .btn {
-      display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
-      font-size: 13.5px; font-weight: 600; padding: 9px 15px; border-radius: 11px;
-      background: var(--ink); color: var(--bg); border: 1px solid var(--ink);
-      transition: transform .08s ease, opacity .15s ease;
-    }
-    .btn:active { transform: scale(.97); }
-    .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
-    .app-note { color: var(--muted); font-size: 13px; margin-top: 14px; }
-
-    footer { margin-top: 44px; text-align: center; color: var(--muted); font-size: 13px; }
-    footer a { color: var(--accent); text-decoration: none; font-weight: 600; }
-    footer .copy { margin-top: 12px; font-size: 12px; opacity: .8; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Howard World · 하워드 세상</title>
+<meta name="description" content="하워드가 지은 것들 — 피그맵, 니니구, 행운일기, 하워드 트립">
+<meta property="og:title" content="Howard World · 하워드 세상">
+<meta property="og:description" content="하워드가 지은 것들 — 피그맵, 니니구, 행운일기, 하워드 트립">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#efe6d2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Song+Myung&family=Nanum+Brush+Script&family=Nanum+Myeongjo:wght@400;800&display=swap">
+<style>
+  body{margin:0;background-color:#efe6d2;background-image:radial-gradient(rgba(120,95,50,.07) 1px,transparent 1.5px),radial-gradient(rgba(120,95,50,.05) 1px,transparent 1.5px);background-size:7px 9px,11px 5px;color:#1c1a17;-webkit-font-smoothing:antialiased}
+  a{color:#1c1a17}
+  a:hover{color:#b8322a}
+  .hw-book{transition:transform .3s cubic-bezier(.2,.8,.2,1),box-shadow .3s}
+  .hw-book:hover{transform:translateY(-8px) rotate(-1.5deg);box-shadow:8px 14px 0 rgba(60,40,10,.15) !important}
+  .hw-contact{transition:color .15s}
+  .hw-contact:hover{color:#b8322a}
+</style>
 </head>
 <body>
-  <main class="wrap">
-    <header>
-      <span class="kicker">HowardWorld</span>
-      <h1>만들고 있는 것들</h1>
-      <p>혼자 만드는 작은 앱들</p>
-    </header>
+<div style="max-width:1200px;margin:0 auto;padding:clamp(10px,2.5vw,28px);box-sizing:border-box;font-family:'Nanum Myeongjo',serif">
+  <div id="frame" style="border:clamp(2px,.3vw,3px) solid #1c1a17;box-shadow:inset 0 0 0 4px #efe6d2,inset 0 0 0 5px #1c1a17;border-radius:clamp(14px,2vw,0px);padding:clamp(14px,3.5vw,40px) clamp(18px,4.5vw,56px) clamp(24px,4vw,48px);display:flex;flex-direction:column;gap:clamp(30px,4.5vw,52px)"></div>
+</div>
 
-    <section class="apps">
-      <!-- 피그맵 -->
-      <article class="app">
-        <div class="app-top">
-          <img class="app-icon" src="/pigmap.jpg" alt="피그맵" width="58" height="58" />
-          <div class="app-meta">
-            <div class="app-name">피그맵 <span style="font-size:13px;font-weight:500;color:var(--muted)">Pigmap</span></div>
-            <div class="app-desc">한국의 모든 핫플레이스 지도</div>
-          </div>
-        </div>
-        <div class="app-links">
-          <a class="btn" href="https://apps.apple.com/app/id6471933646" target="_blank" rel="noopener">App Store</a>
-          <a class="btn ghost" href="https://play.google.com/store/apps/details?id=home.sweet.pigmap" target="_blank" rel="noopener">▶ Google Play</a>
-        </div>
-      </article>
+<script>
+(function () {
+  "use strict";
+  var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
 
-      <!-- 니니구 -->
-      <article class="app">
-        <div class="app-top">
-          <img class="app-icon" src="/ninigu.jpg" alt="니니구" width="58" height="58" />
-          <div class="app-meta">
-            <div class="app-name">니니구 <span style="font-size:13px;font-weight:500;color:var(--muted)">NINIGU</span></div>
-            <div class="app-desc">친구가 이어주는 새로운 만남</div>
-          </div>
-        </div>
-        <div class="app-links">
-          <a class="btn" href="https://apps.apple.com/app/id6754002478" target="_blank" rel="noopener">App Store</a>
-          <a class="btn ghost" href="https://ninigu.net" target="_blank" rel="noopener">🌐 ninigu.net</a>
-        </div>
-      </article>
+  function data(ko) {
+    var t = ko ? {
+      era: "병오년 시월", title: "하워드 세상", seal: "하워드", sealSm: "印",
+      role: "애플 디벨로퍼 아카데미 테크 멘토", motto: "꿈을 향해 이것저것 해보는 중", photoAlt: "하워드",
+      works: "지은 것들", count: "네 권", soon: "집필 중", contact: "서신",
+      colo1: "병오년 시월", colo2: "하워드 짓다"
+    } : {
+      era: "October 2026", title: "Howard World", seal: "HW", sealSm: "H",
+      role: "Tech Mentor, Apple Developer Academy", motto: "Trying all sorts of things on the way to my dreams", photoAlt: "Howard",
+      works: "Works", count: "Four volumes", soon: "Being written", contact: "Contact",
+      colo1: "October 2026", colo2: "by Howard"
+    };
+    var apps = [
+      { han: "壹", cover: "#2b3346", name: ko ? "피그맵" : "Pigmap", desc: ko ? "한국의 모든 핫플레이스 지도" : "A map of every hot place in Korea",
+        links: [{ label: "App Store", href: "https://apps.apple.com/kr/app/%ED%94%BC%EA%B7%B8%EB%A7%B5/id6471933646" }, { label: "Google Play", href: "https://play.google.com/store/apps/details?id=home.sweet.pigmap" }] },
+      { han: "貳", cover: "#7a2a24", name: ko ? "니니구" : "NINIGU", desc: ko ? "친구가 이어주는 새로운 만남" : "New connections, introduced by friends",
+        links: [{ label: "App Store", href: "https://apps.apple.com/kr/app/ninigu/id6754002478" }, { label: "Google Play", href: "https://play.google.com/store/apps/details?id=com.nunigu.app" }, { label: "ninigu.net", href: "https://ninigu.net" }] },
+      { han: "參", cover: "#3d5a3a", name: ko ? "행운일기" : "Lucky Diary", desc: ko ? "매일의 행운을 기록하는 일기" : "A diary for the little bits of luck each day", links: [], soon: true },
+      { han: "肆", cover: "#5b4a32", name: ko ? "하워드 트립" : "Howard Trips", desc: ko ? "여행 일정과 정산을 함께" : "Plan trips and split costs together",
+        links: [{ label: "howard-trips.web.app", href: "https://howard-trips.web.app" }] }
+    ];
+    var contacts = [
+      { label: ko ? "전자우편" : "Email", value: "romeowa@gmail.com", href: "mailto:romeowa@gmail.com", target: "_self" },
+      { label: "LinkedIn", value: ko ? "한윤진" : "Yunjin Han", href: "https://www.linkedin.com/in/%EC%9C%A4%EC%A7%84-%ED%95%9C-7aaa4431/", target: "_blank" },
+      { label: "Instagram", value: "@howard.yunjin", href: "https://www.instagram.com/howard.yunjin/", target: "_blank" }
+    ];
+    return { t: t, apps: apps, contacts: contacts, titleFs: ko ? "clamp(54px,8vw,96px)" : "clamp(40px,6vw,76px)" };
+  }
 
-      <!-- 행운일기 -->
-      <article class="app">
-        <div class="app-top">
-          <div class="app-icon" aria-hidden="true">🍀</div>
-          <div class="app-meta">
-            <div class="app-name">행운일기 <span class="soon">준비 중</span></div>
-            <div class="app-desc">매일의 행운을 기록하는 일기</div>
-          </div>
-        </div>
-        <div class="app-note">곧 만나요. 출시되면 여기에서 받을 수 있어요.</div>
-      </article>
-    </section>
+  function bookCover(a) {
+    return '<div class="hw-book" style="position:relative;aspect-ratio:176/244;container-type:inline-size;background:' + a.cover + ';border-radius:2px 4px 4px 2px;box-shadow:4px 6px 0 rgba(60,40,10,.18)">' +
+      '<div style="position:absolute;right:3cqw;top:0;bottom:0;border-left:1.5px solid rgba(239,230,210,.55)"></div>' +
+      '<div style="position:absolute;right:3cqw;top:0;bottom:0;width:8cqw;display:flex;flex-direction:column;justify-content:space-evenly">' +
+        '<div style="border-top:1.5px solid rgba(239,230,210,.55)"></div><div style="border-top:1.5px solid rgba(239,230,210,.55)"></div><div style="border-top:1.5px solid rgba(239,230,210,.55)"></div><div style="border-top:1.5px solid rgba(239,230,210,.55)"></div><div style="border-top:1.5px solid rgba(239,230,210,.55)"></div>' +
+      '</div>' +
+      '<div style="position:absolute;left:9cqw;top:9cqw;width:26cqw;height:98cqw;background:#f5eedd;border:1px solid #1c1a17;box-shadow:inset 0 0 0 2px #f5eedd,inset 0 0 0 3px #1c1a17;display:flex;justify-content:center;padding:7cqw 0;box-sizing:border-box">' +
+        '<div style="writing-mode:vertical-rl;font-family:\'Song Myung\',serif;font-size:11.5cqw;line-height:1;letter-spacing:.06em;white-space:nowrap;overflow:hidden">' + esc(a.name) + '</div>' +
+      '</div>' +
+      '<div style="position:absolute;left:9cqw;bottom:6cqw;font-family:\'Song Myung\',serif;font-size:17cqw;line-height:1;color:#efe6d2;opacity:.8">' + esc(a.han) + '</div>' +
+    '</div>';
+  }
 
-    <footer>
-      <a href="https://howard-trips.web.app" target="_blank" rel="noopener">여행 일정 →</a>
-      <div class="copy">© HowardWorld</div>
-    </footer>
-  </main>
+  function appArticle(a, t) {
+    var links = a.links.map(function (l) {
+      return '<a href="' + esc(l.href) + '" target="_blank" rel="noopener" style="font-weight:800;font-size:clamp(14px,1.3vw,15px);text-decoration:underline;text-decoration-color:#b8322a;text-underline-offset:4px;padding:12px 0;white-space:nowrap">' + esc(l.label) + '</a>';
+    }).join("");
+    var soon = a.soon ? '<div style="font-family:\'Nanum Brush Script\',cursive;font-size:clamp(24px,2.4vw,28px);color:#b8322a;line-height:1;padding:10px 0">' + esc(t.soon) + '</div>' : "";
+    return '<article style="display:grid;grid-template-columns:clamp(104px,15vw,176px) minmax(0,1fr);gap:clamp(16px,2.4vw,28px)">' +
+      bookCover(a) +
+      '<div style="display:flex;flex-direction:column;gap:clamp(6px,1vw,12px);min-width:0;padding-top:2px">' +
+        '<div style="display:flex;align-items:baseline;gap:clamp(8px,1vw,10px)">' +
+          '<div style="font-family:\'Song Myung\',serif;font-size:clamp(17px,1.9vw,22px);color:#b8322a">' + esc(a.han) + '</div>' +
+          '<h3 style="margin:0;font-weight:400;font-family:\'Song Myung\',serif;font-size:clamp(25px,2.9vw,34px);line-height:1.15">' + esc(a.name) + '</h3>' +
+        '</div>' +
+        '<p style="margin:0;font-size:clamp(15px,1.45vw,17px);line-height:1.7;text-wrap:pretty">' + esc(a.desc) + '</p>' +
+        '<div style="flex:1"></div>' +
+        '<div style="display:flex;flex-wrap:wrap;column-gap:clamp(14px,1.6vw,18px);align-items:center;border-top:1px solid rgba(28,26,23,.22)">' + links + soon + '</div>' +
+      '</div>' +
+    '</article>';
+  }
+
+  function render(lang) {
+    var ko = lang === "ko";
+    var d = data(ko), t = d.t;
+    var apps = d.apps.map(function (a) { return appArticle(a, t); }).join("");
+    var contacts = d.contacts.map(function (c) {
+      return '<a href="' + esc(c.href) + '" target="' + c.target + '" rel="noopener" class="hw-contact" style="display:flex;align-items:baseline;gap:12px;padding:12px 0;text-decoration:none;border-bottom:1px solid rgba(28,26,23,.22)">' +
+        '<div style="font-family:\'Song Myung\',serif;font-size:15px;color:#b8322a;flex:none;min-width:64px">' + esc(c.label) + '</div>' +
+        '<div style="font-weight:800;font-size:clamp(14px,1.4vw,16px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(c.value) + '</div>' +
+      '</a>';
+    }).join("");
+
+    var html =
+      '<header style="display:flex;align-items:center;gap:2px;font-size:14px">' +
+        '<div id="hwKo" style="cursor:pointer;font-weight:800;text-decoration:' + (ko ? "underline" : "none") + ';text-underline-offset:4px;padding:12px 8px 12px 0">한</div>' +
+        '<div>·</div>' +
+        '<div id="hwEn" style="cursor:pointer;font-weight:800;text-decoration:' + (ko ? "none" : "underline") + ';text-underline-offset:4px;padding:12px 8px">EN</div>' +
+        '<div style="flex:1"></div>' +
+        '<div style="letter-spacing:.25em;font-size:clamp(12px,1.2vw,14px)">' + esc(t.era) + '</div>' +
+      '</header>' +
+
+      '<section style="display:flex;flex-wrap:wrap-reverse;gap:clamp(28px,4vw,44px);align-items:stretch">' +
+        '<div style="flex:999 1 340px;display:flex;flex-direction:column;justify-content:flex-end;gap:clamp(14px,1.8vw,20px)">' +
+          '<div style="font-family:\'Nanum Brush Script\',cursive;font-size:clamp(44px,6vw,70px);line-height:1.05;text-wrap:balance">' + esc(t.motto) + '</div>' +
+          '<div style="width:clamp(56px,7vw,80px);border-top:2px solid #1c1a17"></div>' +
+          '<div style="font-size:clamp(16px,1.7vw,20px);line-height:1.7">' + esc(t.role) + '</div>' +
+        '</div>' +
+        '<div style="flex:1 1 auto;display:flex;justify-content:space-between;align-items:flex-end;gap:clamp(18px,4vw,44px)">' +
+          '<div style="flex:none;width:clamp(140px,17vw,200px);aspect-ratio:200/260;border:1px solid #1c1a17;padding:clamp(5px,.7vw,8px);box-sizing:border-box">' +
+            '<img src="./assets/howard.jpg" alt="' + esc(t.photoAlt) + '" style="display:block;width:100%;height:100%;object-fit:cover;object-position:40% 20%;filter:sepia(.35) saturate(.85)">' +
+          '</div>' +
+          '<div style="flex:none;display:flex;gap:clamp(10px,1.6vw,18px);align-items:flex-start;align-self:stretch;border-left:1px solid #1c1a17;padding-left:clamp(14px,2.4vw,28px)">' +
+            '<h1 style="margin:0;font-weight:400;writing-mode:vertical-rl;font-family:\'Song Myung\',serif;font-size:' + d.titleFs + ';line-height:1;letter-spacing:.05em;white-space:nowrap">' + esc(t.title) + '</h1>' +
+            '<div style="flex:none;width:clamp(44px,5.5vw,66px);height:clamp(44px,5.5vw,66px);background:#b8322a;color:#efe6d2;display:flex;align-items:center;justify-content:center;font-family:\'Song Myung\',serif;font-size:clamp(12px,1.4vw,17px);line-height:1;writing-mode:vertical-rl;white-space:nowrap;border-radius:4px;transform:rotate(-3deg);box-shadow:inset 0 0 0 3px #efe6d2,inset 0 0 0 5px #b8322a;margin-top:auto">' + esc(t.seal) + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</section>' +
+
+      '<section style="display:flex;flex-direction:column;gap:clamp(24px,3.5vw,40px)">' +
+        '<div style="display:flex;align-items:center;gap:clamp(12px,1.6vw,18px)">' +
+          '<h2 style="margin:0;font-weight:400;font-family:\'Song Myung\',serif;font-size:clamp(26px,3vw,32px)">' + esc(t.works) + '</h2>' +
+          '<div style="flex:1;border-top:1px solid #1c1a17"></div>' +
+          '<div style="font-size:clamp(13px,1.3vw,15px)">' + esc(t.count) + '</div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,430px),1fr));gap:clamp(30px,4vw,44px) clamp(24px,4vw,48px)">' + apps + '</div>' +
+      '</section>' +
+
+      '<section style="display:flex;flex-direction:column;gap:clamp(14px,2vw,22px)">' +
+        '<div style="display:flex;align-items:center;gap:clamp(12px,1.6vw,18px)">' +
+          '<h2 style="margin:0;font-weight:400;font-family:\'Song Myung\',serif;font-size:clamp(26px,3vw,32px)">' + esc(t.contact) + '</h2>' +
+          '<div style="flex:1;border-top:1px solid #1c1a17"></div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:4px clamp(24px,4vw,48px)">' + contacts + '</div>' +
+      '</section>' +
+
+      '<footer style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px">' +
+        '<div style="font-size:12px;color:#6f6a5f">© HowardWorld</div>' +
+        '<div style="border:1px solid #1c1a17;padding:clamp(10px,1.3vw,14px) clamp(9px,1.1vw,12px);display:flex;gap:clamp(7px,.9vw,10px);align-items:flex-start">' +
+          '<div style="writing-mode:vertical-rl;font-family:\'Song Myung\',serif;font-size:clamp(13px,1.4vw,16px);line-height:1.4;letter-spacing:.1em;white-space:nowrap">' + esc(t.colo1) + '</div>' +
+          '<div style="writing-mode:vertical-rl;font-family:\'Song Myung\',serif;font-size:clamp(13px,1.4vw,16px);line-height:1.4;letter-spacing:.1em;white-space:nowrap">' + esc(t.colo2) + '</div>' +
+          '<div style="width:clamp(24px,2.6vw,30px);height:clamp(24px,2.6vw,30px);background:#b8322a;color:#efe6d2;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:\'Song Myung\',serif;font-size:clamp(10px,1.1vw,12px);align-self:flex-end;transform:rotate(-4deg)">' + esc(t.sealSm) + '</div>' +
+        '</div>' +
+      '</footer>';
+
+    var frame = document.getElementById("frame");
+    frame.innerHTML = html;
+    document.documentElement.lang = lang;
+    document.getElementById("hwKo").addEventListener("click", function () { setLang("ko"); });
+    document.getElementById("hwEn").addEventListener("click", function () { setLang("en"); });
+  }
+
+  function setLang(l) { try { localStorage.setItem("hw-lang", l); } catch (e) {} render(l); }
+
+  var init = null;
+  try { init = localStorage.getItem("hw-lang"); } catch (e) {}
+  if (!init) init = (navigator.language || "ko").indexOf("ko") === 0 ? "ko" : "en";
+  render(init);
+})();
+</script>
 </body>
 </html>
