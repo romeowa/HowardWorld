@@ -79,13 +79,14 @@
     var title = { type: "title", han: a.han, name: a.name, desc: a.desc, icon: a.icon };
     var end = { type: "end", fin: T.fin, seal: T.sealSm, where: a.soon ? "" : T.where, links: a.links, soon: !!a.soon, soonText: T.soon };
     var inside = { type: "inside" };
+    var back = { type: "back", cover: a.cover };
     var intro = function (body) { return { type: "text", kicker: T.preface, title: a.desc, body: body }; };
     var img = function (src, cap) { return { type: "image", src: src, caption: cap }; };
     var text = function (kicker, ti, body) { return { type: "text", kicker: kicker, title: ti, body: body }; };
     var build = function (introBody, feats) {
       var sp = [{ r: title, l: intro(introBody) }];
       feats.forEach(function (f) { sp.push({ r: img(f.shot, f.cap), l: text(f.kicker, f.title, f.body) }); });
-      sp.push({ r: end, l: inside });
+      sp.push({ r: end, l: back });
       return sp;
     };
     if (a.key === "pig") return build(
@@ -144,7 +145,7 @@
       { r: { type: "image", src: "./assets/trips-map.jpg", caption: ko ? "동선 지도" : "Route map" },
         l: { type: "text", kicker: ko ? "지도" : "Map", title: ko ? "다닌 길을 한눈에" : "The whole route at a glance",
           body: ko ? ["적어 둔 장소가 번호와 함께 지도 위에 이어집니다.", "전체 보기로 여행 전체 동선을 확인할 수 있어요."] : ["Your stops are numbered and connected on the map.", "Zoom out to see the route for the whole trip."] } },
-      { r: end, l: inside }
+      { r: end, l: back }
     ];
   }
 
@@ -163,6 +164,10 @@
     var ty = (page && page.type) || "inside";
     var shade = side === "l" ? "linear-gradient(270deg,rgba(60,40,10,.16),transparent 9%)" : side === "r" ? "linear-gradient(90deg,rgba(60,40,10,.16),transparent 9%)" : "linear-gradient(90deg,transparent,transparent)";
     if (ty === "inside") return pageWrap(shade, '<div style="position:absolute;inset:0;background-color:#e2d4b4;background-image:repeating-linear-gradient(45deg,rgba(120,90,40,.12) 0 1px,transparent 1px 14px),repeating-linear-gradient(-45deg,rgba(120,90,40,.12) 0 1px,transparent 1px 14px)"></div>');
+    if (ty === "back") return '<div style="position:relative;width:100%;height:100%;container-type:size;background:' + (page.cover || "#5b4a32") + ';display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5cqh;overflow:hidden;box-shadow:inset 0 0 0 2cqw rgba(239,230,210,.12)">' +
+      '<img src="./assets/seal-howard.png?v=2" alt="" style="width:30cqw;height:auto"/>' +
+      '<div style="font-family:\'Song Myung\',serif;font-size:4.2cqw;letter-spacing:.32em;color:#efe6d2;opacity:.72">HOWARDWORLD</div>' +
+    '</div>';
     var body = "";
     if (ty === "title") {
       var icon = page.icon ? '<div style="width:clamp(56px,20cqw,110px);aspect-ratio:1;border-radius:22%;overflow:hidden;box-shadow:0 6px 14px -8px rgba(40,30,10,.6)"><div role="img" style="width:100%;height:100%;background-image:url(\'' + page.icon + '\');background-size:108%;background-position:center"></div></div>' : "";
@@ -222,8 +227,9 @@
     var a = appList(ko).filter(function (x) { return x.key === key; })[0];
     var n = 0;
     var S = bookSpreads(a, ko, T).map(function (sp) {
-      var r = sp.r.type === "inside" ? sp.r : Object.assign({}, sp.r, { num: ++n });
-      var l = sp.l.type === "inside" ? sp.l : Object.assign({}, sp.l, { num: ++n });
+      var noNum = function (t) { return t === "inside" || t === "back"; };
+      var r = noNum(sp.r.type) ? sp.r : Object.assign({}, sp.r, { num: ++n });
+      var l = noNum(sp.l.type) ? sp.l : Object.assign({}, sp.l, { num: ++n });
       return { r: r, l: l };
     });
     var P = [];
