@@ -1637,6 +1637,13 @@ async function addMember(name) {
 
 // 정산 탭 뷰 (엑셀 정산표를 여행 안으로 — 3a 디자인)
 const dateForDay = (i) => (trip?.startDate ? ymd(addDays(parseDate(trip.startDate), i)) : "");
+// 오늘이 여행 기간 안이면 그 Day 인덱스, 아니면 0(Day 1 폴백)
+const defaultDayIndex = () => {
+  if (!trip?.startDate) return 0;
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const d = dayDiff(parseDate(trip.startDate), t);
+  return (d >= 0 && d < (trip.dayCount || 1)) ? d : 0;
+};
 function expDay(e) {
   if (e.offTrip) return "off";
   if (Number.isInteger(e.day)) return e.day;
@@ -1967,7 +1974,7 @@ function computeSettlement() {
 
 // 데스크톱 상단 빠른 추가 폼 (3a desktop v2) — 언제·어디서·구분·결제자·나눠 낼 사람까지 한 줄에
 function buildInlineAdd(members, cats) {
-  if (!inlineAdd) inlineAdd = { day: 0, date: dateForDay(0), place: "", category: cats[0], payer: members[0], sharedBy: [...members], known: [...members], currency: "KRW" };
+  if (!inlineAdd) { const d0 = defaultDayIndex(); inlineAdd = { day: d0, date: dateForDay(d0), place: "", category: cats[0], payer: members[0], sharedBy: [...members], known: [...members], currency: "KRW" }; }
   if (!inlineAdd.currency) inlineAdd.currency = "KRW";
   if (!cats.includes(inlineAdd.category)) inlineAdd.category = cats[0];
   if (inlineAdd.payer !== POOL && !members.includes(inlineAdd.payer)) inlineAdd.payer = members[0];
@@ -2114,7 +2121,7 @@ function openExpenseForm(existing, kindArg) {
   const exDay = existing ? (existing.offTrip ? "off" : (Number.isInteger(existing.day) ? existing.day : 0)) : 0;
   expForm = existing
     ? { kind, amount: existing.amount ?? "", currency: existing.currency || "KRW", desc: existing.desc || "", category: existing.category || cats[0], day: exDay, date: existing.date || dateForDay(exDay), place: existing.place || "", payer: existing.fromPool ? POOL : (existing.payer || members[0] || ""), sharedBy: [...(existing.sharedBy || [])] }
-    : { kind, amount: "", currency: "KRW", desc: "", category: cats[0], day: 0, date: dateForDay(0), place: "", payer: members[0] || "", sharedBy: [...members] };
+    : (() => { const d0 = defaultDayIndex(); return { kind, amount: "", currency: "KRW", desc: "", category: cats[0], day: d0, date: dateForDay(d0), place: "", payer: members[0] || "", sharedBy: [...members] }; })();
   // 수입: 참여자별 기여 금액 {이름: 원금}
   expForm.contribs = (existing && existing.kind === "income") ? { ...incomeContribs(existing) } : {};
 
