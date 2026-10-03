@@ -41,14 +41,26 @@
       works: "지은 것들", count: "네 권", soon: "집필 중", contact: "서신",
       colo1: "병오년 시월", colo2: "하워드 짓다",
       read: "펼쳐 읽기", close: "덮기", prev: "앞 장", next: "다음 장", swipe: "오른쪽으로 밀면 다음 장, 왼쪽으로 밀면 앞 장",
-      preface: "서문", fin: "끝", where: "구하는 곳", empty: "그림 자리", shots: "화면"
+      preface: "서문", fin: "끝", where: "구하는 곳", empty: "그림 자리", shots: "화면",
+      about: [
+        "iOS 개발 열다섯 해. 스타트업 두 곳에서 4년, 카카오에서 11년을 지냈습니다.",
+        "한 번은 “내 앱 하나 안 만들어 보면 후회하겠다”는 마음으로 회사를 나와, 지금은 혼자 앱을 만들고 있어요.",
+        "하루의 절반은 개발, 절반은 데이터를 고르고 담는 일. 거창한 발명보다, 사람들이 원래 하던 행동에서 크게 벗어나지 않는 서비스를 지향합니다.",
+        "조급하지 않게, 지속 가능한 삶을 만들어 가는 중입니다."
+      ]
     } : {
       era: "October 2026", title: "Howard World", seal: "HW", sealSm: "H",
       role: "Tech Mentor, Apple Developer Academy", motto: "Trying all sorts of things on the way to my dreams", photoAlt: "Howard",
       works: "Works", count: "Four volumes", soon: "Being written", contact: "Contact",
       colo1: "October 2026", colo2: "by Howard",
       read: "Open", close: "Close", prev: "Back", next: "Next", swipe: "Swipe right for the next page, left to go back",
-      preface: "Preface", fin: "Fin", where: "Get it", empty: "Image to come", shots: "Screens"
+      preface: "Preface", fin: "Fin", where: "Get it", empty: "Image to come", shots: "Screens",
+      about: [
+        "Fifteen years in iOS — four at two startups, eleven at Kakao.",
+        "One day, sure I'd regret never shipping an app of my own, I left to build alone.",
+        "Half my day is code, the other half is choosing and entering data. I'd rather make things that don't stray far from what people already do than invent something grand.",
+        "Unhurried, I'm building toward a sustainable way to live."
+      ]
     };
   }
   function appList(ko) {
@@ -393,6 +405,8 @@
       return '<a href="' + esc(c.href) + '" target="' + c.target + '" rel="noopener" class="hw-contact" style="display:flex;align-items:baseline;gap:12px;padding:12px 0;text-decoration:none;border-bottom:1px solid rgba(28,26,23,.22)"><div style="font-family:\'Song Myung\',serif;font-size:15px;color:#b8322a;flex:none;min-width:64px">' + esc(c.label) + '</div><div style="font-weight:800;font-size:clamp(14px,1.4vw,16px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(c.value) + '</div></a>';
     }).join("");
 
+    var aboutHTML = (T.about || []).map(function (p) { return '<p style="margin:0;font-size:clamp(15px,1.55vw,18px);line-height:1.9;text-wrap:pretty">' + esc(p) + '</p>'; }).join("");
+
     var html =
       '<header style="display:flex;align-items:center;gap:2px;font-size:14px">' +
         '<div class="hw-ko" style="cursor:pointer;font-weight:800;text-decoration:' + (ko ? "underline" : "none") + ';text-underline-offset:4px;padding:12px 8px 12px 0">한</div><div>·</div>' +
@@ -412,6 +426,10 @@
             '<div style="flex:none;width:clamp(44px,5.5vw,66px);height:clamp(44px,5.5vw,66px);background:#b8322a;color:#efe6d2;display:flex;align-items:center;justify-content:center;font-family:\'Song Myung\',serif;font-size:clamp(12px,1.4vw,17px);line-height:1;writing-mode:vertical-rl;white-space:nowrap;border-radius:4px;transform:rotate(-3deg);box-shadow:inset 0 0 0 3px #efe6d2,inset 0 0 0 5px #b8322a;margin-top:auto">' + esc(T.seal) + '</div>' +
           '</div>' +
         '</div>' +
+      '</section>' +
+      '<section style="display:flex;flex-direction:column;gap:clamp(16px,2vw,24px)">' +
+        '<div style="display:flex;align-items:center;gap:clamp(12px,1.6vw,18px)"><h2 style="margin:0;font-weight:400;font-family:\'Song Myung\',serif;font-size:clamp(26px,3vw,32px)">' + esc(T.preface) + '</h2><div style="flex:1;border-top:1px solid #1c1a17"></div></div>' +
+        '<div style="display:flex;flex-direction:column;gap:clamp(10px,1.3vw,16px);max-width:760px">' + aboutHTML + '</div>' +
       '</section>' +
       '<section style="display:flex;flex-direction:column;gap:clamp(24px,3.5vw,40px)">' +
         '<div style="display:flex;align-items:center;gap:clamp(12px,1.6vw,18px)"><h2 style="margin:0;font-weight:400;font-family:\'Song Myung\',serif;font-size:clamp(26px,3vw,32px)">' + esc(T.works) + '</h2><div style="flex:1;border-top:1px solid #1c1a17"></div><div style="font-size:clamp(13px,1.3vw,15px)">' + esc(T.count) + '</div></div>' +
