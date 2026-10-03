@@ -294,12 +294,13 @@
     el.book.style.width = w + "px"; el.book.style.height = h + "px"; el.book.style.perspective = "2600px";
     el.book.style.transform = (ph === "closing" ? shift + " scale(.96)" : shift);
     el.book.style.opacity = ph === "closing" ? "0" : "1";
-    // base pages
-    el.pageL.style.cssText = "position:absolute;left:0;top:0;width:" + p + "px;height:100%;box-shadow:0 30px 60px -24px rgba(0,0,0,.7);display:grid;grid-template:100%/100%";
+    // base pages. 좌→우: 표지는 오른쪽 반을 덮으므로, 열리는 동안 '왼쪽' 페이지를 숨긴다(표지 뒷면이 대신 보임).
+    var hideClosing = !m && (ph === "closed" || ph === "opening");
+    el.pageL.style.cssText = "position:absolute;left:0;top:0;width:" + p + "px;height:100%;visibility:" + (hideClosing ? "hidden" : "visible") + ";box-shadow:0 30px 60px -24px rgba(0,0,0,.7);display:grid;grid-template:100%/100%";
     el.pageL.innerHTML = pageHTML(baseL, m ? "s" : "l");
     if (m) { el.pageR.style.display = "none"; el.spine.style.display = "none"; }
     else {
-      el.pageR.style.display = ""; el.pageR.style.cssText = "position:absolute;left:" + p + "px;top:0;width:" + p + "px;height:100%;visibility:" + (ph === "open" ? "visible" : "hidden") + ";box-shadow:0 30px 60px -24px rgba(0,0,0,.7);display:grid;grid-template:100%/100%";
+      el.pageR.style.display = ""; el.pageR.style.cssText = "position:absolute;left:" + p + "px;top:0;width:" + p + "px;height:100%;box-shadow:0 30px 60px -24px rgba(0,0,0,.7);display:grid;grid-template:100%/100%";
       el.pageR.innerHTML = pageHTML(baseR, "r");
       el.spine.style.cssText = "position:absolute;left:" + (p - 1) + "px;top:0;bottom:0;width:2px;background:rgba(28,26,23,.35);visibility:" + (ph === "open" ? "visible" : "hidden");
     }
