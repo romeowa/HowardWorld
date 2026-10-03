@@ -53,11 +53,11 @@
   }
   function appList(ko) {
     return [
-      { key: "pig", han: "壹", cover: "#2b3346", icon: "./assets/icon-pigmap.png", name: ko ? "피그맵" : "Pigmap", desc: ko ? "한국의 모든 핫플레이스 지도" : "A map of every hot place in Korea",
+      { key: "pig", han: "壹", cover: "#2b3346", icon: "./assets/icon-pig.png", name: ko ? "피그맵" : "Pigmap", desc: ko ? "한국의 모든 핫플레이스 지도" : "A map of every hot place in Korea",
         links: [{ label: "App Store", href: "https://apps.apple.com/kr/app/%ED%94%BC%EA%B7%B8%EB%A7%B5/id6471933646" }, { label: "Google Play", href: "https://play.google.com/store/apps/details?id=home.sweet.pigmap" }] },
-      { key: "nin", han: "貳", cover: "#7a2a24", icon: "./assets/icon-ninigu.png", name: ko ? "니니구" : "NINIGU", desc: ko ? "친구가 이어주는 새로운 만남" : "New connections, introduced by friends",
+      { key: "nin", han: "貳", cover: "#7a2a24", icon: "./assets/icon-nin.png", name: ko ? "니니구" : "NINIGU", desc: ko ? "친구가 이어주는 새로운 만남" : "New connections, introduced by friends",
         links: [{ label: "App Store", href: "https://apps.apple.com/kr/app/ninigu/id6754002478" }, { label: "Google Play", href: "https://play.google.com/store/apps/details?id=com.nunigu.app" }, { label: "ninigu.net", href: "https://ninigu.net" }] },
-      { key: "luck", han: "參", cover: "#3d5a3a", name: ko ? "행운일기" : "Lucky Diary", desc: ko ? "매일의 행운을 기록하는 일기" : "A diary for the little bits of luck each day",
+      { key: "luck", han: "參", cover: "#3d5a3a", icon: "./assets/icon-luck.png", name: ko ? "행운일기" : "Lucky Diary", desc: ko ? "매일의 행운을 기록하는 일기" : "A diary for the little bits of luck each day",
         links: [{ label: "App Store", href: "https://apps.apple.com/us/app/%ED%96%89%EC%9A%B4%EC%9D%BC%EA%B8%B0/id6799644137" }] },
       { key: "trip", han: "肆", cover: "#5b4a32", name: ko ? "하워드 트립" : "Howard Trips", desc: ko ? "여행 일정과 정산을 함께" : "Plan trips and split costs together",
         links: [{ label: "howard-trips.web.app", href: "https://howard-trips.web.app" }] }
@@ -70,36 +70,60 @@
     var intro = function (body) { return { type: "text", kicker: T.preface, title: a.desc, body: body }; };
     var img = function (src, cap) { return { type: "image", src: src, caption: cap }; };
     var text = function (kicker, ti, body) { return { type: "text", kicker: kicker, title: ti, body: body }; };
-    if (a.key === "pig") return [
-      { r: title, l: intro(ko ? ["한국의 모든 핫플레이스를 한곳에 모았어요.", "관심 주제를 구독하고 원하는 곳을 쉽게 찾아보세요."] : ["Every hot place in Korea, gathered in one map.", "Subscribe to topics and find the spots you want."]) },
-      { r: img("./assets/shot-pig-1.jpg", ko ? "핫플 구독" : "Subscribe to hot places"),
-        l: text(ko ? "구독" : "Subscribe", ko ? "관심사로 구독" : "Follow what you love",
-          ko ? ["BTS·백종원·인기 유튜브 등 주제별 핫플을 구독해 최신 정보를 빠르게.", "관심사와 위치 기반 맞춤 추천."] : ["Follow topics like BTS, Baek Jong-won or popular YouTubers for fresh spots.", "Personalized picks by your interests and location."]) },
-      { r: img("./assets/shot-pig-2.jpg", ko ? "지도 뷰" : "Map view"),
-        l: text(ko ? "지도" : "Map", ko ? "지도로 한눈에" : "All at a glance",
-          ko ? ["주변 핫플을 지도에서 바로 확인하고 상세 정보를 봅니다.", "마음에 드는 곳은 저장해 언제든 다시."] : ["See nearby spots right on the map with full details.", "Save favorites and come back anytime."]) },
-      { r: end, l: inside }
-    ];
-    if (a.key === "nin") return [
-      { r: title, l: intro(ko ? ["낯선 사람이 아니라, 친구가 소개해주는 사람.", "어색함보다 설렘으로 시작하는 첫 만남."] : ["Not a stranger — someone a friend introduces.", "A first meeting that starts with a flutter, not awkwardness."]) },
-      { r: img("./assets/shot-nin-1.jpg", ko ? "친구의 소개" : "Introduced by a friend"),
-        l: text(ko ? "소개" : "Introduce", ko ? "친구를 통한 연결" : "Connected through a friend",
-          ko ? ["두 사람을 모두 아는 친구가 소개 요청을 확인하고 전달해요.", "상대가 수락해야 비로소 대화가 시작됩니다."] : ["A mutual friend reviews the intro and passes it along.", "A chat begins only when the other person accepts."]) },
-      { r: img("./assets/shot-nin-2.jpg", ko ? "둘러보기" : "Browse"),
-        l: text(ko ? "둘러보기" : "Browse", ko ? "친구의 친구에서" : "Friends of friends",
-          ko ? ["성별·나이·지역으로 나와 잘 맞는 사람을 찾고,", "친구의 솔로 리스트에서 추천을 받아요."] : ["Find people who fit you by gender, age and area,", "and get picks from your friends' single lists."]) },
-      { r: end, l: inside }
-    ];
-    if (a.key === "luck") return [
-      { r: title, l: intro(ko ? ["일기를 쓰면 번호가 나옵니다.", "하루 한 편의 기록이 로또 번호 하나가 되는 다이어리."] : ["Write a diary, get a number.", "A diary where each day's entry becomes a lottery number."]) },
-      { r: img("./assets/shot-luck-1.jpg", ko ? "하루 한 편" : "One entry a day"),
-        l: text(ko ? "기록" : "Write", ko ? "하루 한 편, 공 하나" : "A day, a ball",
-          ko ? ["글 한 편과 사진 한 장을 쓰면 그 자리에서 공이 하나 발행돼요.", "일곱 편이 모이면 한 주치 번호가 영수증으로 인쇄됩니다."] : ["Write a note and a photo, and a ball is issued on the spot.", "Seven entries print a week's numbers as a receipt."]) },
-      { r: img("./assets/shot-luck-2.jpg", ko ? "맞춰보기" : "Check the draw"),
-        l: text(ko ? "결과" : "Results", ko ? "맞춰보고, 남깁니다" : "Check it, keep it",
-          ko ? ["추첨 뒤 내 번호와 당첨 번호를 나란히 확인하고,", "누적 수지와 통계로 한 주씩 쌓아 봅니다."] : ["After the draw, compare your numbers with the winning ones,", "and build up totals and stats week by week."]) },
-      { r: end, l: inside }
-    ];
+    var build = function (introBody, feats) {
+      var sp = [{ r: title, l: intro(introBody) }];
+      feats.forEach(function (f) { sp.push({ r: img(f.shot, f.cap), l: text(f.kicker, f.title, f.body) }); });
+      sp.push({ r: end, l: inside });
+      return sp;
+    };
+    if (a.key === "pig") return build(
+      ko ? ["한국의 모든 핫플레이스를 한곳에 모았어요.", "관심 있는 주제를 구독하고, 지도 위에서 원하는 곳을 쉽게 찾아보세요.", "리뷰로 진짜 모습을 확인하고, 마음에 든 곳은 저장해 둡니다."]
+         : ["Every hot place in Korea, gathered into one map.", "Subscribe to the topics you like and find spots right on the map.", "Check real reviews, and save the places you love."],
+      [
+        { shot: "./assets/shot-pig-1.jpg", cap: ko ? "핫플 구독" : "Subscribe", kicker: ko ? "구독" : "Subscribe", title: ko ? "관심사로 구독" : "Follow what you love",
+          body: ko ? ["BTS, 백종원, 인기 유튜브 방송 등 다양한 주제의 핫플을 구독하세요.", "구독한 주제에 새로운 곳이 올라오면 실시간으로 업데이트됩니다."] : ["Follow topics like BTS, Baek Jong-won or popular YouTube shows.", "New spots in the topics you follow update in real time."] },
+        { shot: "./assets/shot-pig-2.jpg", cap: ko ? "맞춤 추천" : "For you", kicker: ko ? "추천" : "For you", title: ko ? "나에게 맞는 곳" : "Picked for you",
+          body: ko ? ["관심사와 지금 위치를 바탕으로 가장 잘 맞는 핫플을 추천해드려요.", "취향에 가까운 곳부터 자연스럽게 만나보세요."] : ["Recommendations drawn from your interests and current location.", "The places closest to your taste surface first."] },
+        { shot: "./assets/shot-pig-3.jpg", cap: ko ? "지도 뷰" : "Map view", kicker: ko ? "지도" : "Map", title: ko ? "지도로 한눈에" : "All on the map",
+          body: ko ? ["주변의 핫플을 지도에서 한눈에 확인하고,", "핀을 누르면 사진과 상세 정보를 바로 볼 수 있어요."] : ["See the spots around you at a glance,", "and tap a pin for photos and full details."] },
+        { shot: "./assets/shot-pig-4.jpg", cap: ko ? "리뷰와 평가" : "Reviews", kicker: ko ? "리뷰" : "Reviews", title: ko ? "진짜 모습을 확인" : "What it's really like",
+          body: ko ? ["다른 사람들의 리뷰와 평가로 핫플의 실제 분위기를 확인하고,", "다녀온 곳에는 직접 평가를 남길 수 있어요."] : ["Reviews and ratings show what a place is really like,", "and you can leave your own after a visit."] },
+        { shot: "./assets/shot-pig-5.jpg", cap: ko ? "저장" : "Save", kicker: ko ? "저장" : "Save", title: ko ? "마음에 든 곳은 저장" : "Keep your favorites",
+          body: ko ? ["가고 싶은 곳을 저장해 두고,", "언제든 내 목록에서 다시 꺼내 보세요."] : ["Save the places you want to go,", "and open them again anytime in your list."] }
+      ]
+    );
+    if (a.key === "nin") return build(
+      ko ? ["낯선 사람이 아니라, 친구가 소개해주는 사람.", "어색함보다 설렘으로 시작하는 첫 만남.", "니니구는 친구를 통해 소개받는 익숙한 문화를 그대로 옮겨왔어요."]
+         : ["Not a stranger — someone a friend introduces.", "A first meeting that starts with a flutter, not awkwardness.", "NINIGU brings the familiar warmth of real-life introductions."],
+      [
+        { shot: "./assets/shot-nin-1.jpg", cap: ko ? "둘러보기" : "Browse", kicker: ko ? "둘러보기" : "Browse", title: ko ? "친구의 친구에서" : "Friends of friends",
+          body: ko ? ["친구의 친구를 통해 새로운 인연을 발견하세요.", "성별·나이·지역을 설정해 나와 잘 맞는 사람을 찾아볼 수 있어요."] : ["Discover new connections through friends of friends.", "Filter by gender, age and area to find people who fit you."] },
+        { shot: "./assets/shot-nin-2.jpg", cap: ko ? "솔로 리스트" : "Single list", kicker: ko ? "솔로 리스트" : "Single list", title: ko ? "나를 아는 사람의 추천" : "Picks from people who know you",
+          body: ko ? ["친구들의 솔로 리스트에 참여하고, 나를 잘 아는 사람들의 추천을 받아보세요.", "친구의 승인을 받으면 더 자세한 프로필과 사진을 볼 수 있어요."] : ["Join your friends' single lists and get picks from people who know you.", "With a friend's approval, see fuller profiles and photos."] },
+        { shot: "./assets/shot-nin-3.jpg", cap: ko ? "매칭" : "Match", kicker: ko ? "매칭" : "Match", title: ko ? "신중한 연결" : "A careful connection",
+          body: ko ? ["마음에 드는 사람이 생기면 매칭을 요청해요.", "두 사람을 아는 친구가 먼저 소개를 확인하고 승인합니다.", "상대가 직접 수락했을 때 비로소 대화가 시작돼요."] : ["Request a match when someone catches your eye.", "A mutual friend reviews and approves the intro first.", "The chat begins only when the other person accepts."] },
+        { shot: "./assets/shot-nin-4.jpg", cap: ko ? "프로필" : "Profile", kicker: ko ? "프로필" : "Profile", title: ko ? "있는 그대로의 나" : "Just as you are",
+          body: ko ? ["사진, 취향, 관심사, 가치관까지 있는 그대로 보여주세요.", "나를 잘 아는 친구일수록 더 잘 어울리는 사람을 소개해줄 수 있으니까요."] : ["Show your photos, taste, interests and values as they are.", "The better a friend knows you, the better the match they can make."] },
+        { shot: "./assets/shot-nin-5.jpg", cap: ko ? "연결" : "Connect", kicker: ko ? "연결" : "Connect", title: ko ? "신뢰와 설렘으로" : "Trust and a flutter",
+          body: ko ? ["누군가의 추천 한마디가 주는 안심,", "조금 더 신중하고 따뜻한 연결을 응원합니다."] : ["The reassurance of a trusted recommendation,", "for connections that are a little warmer and more careful."] }
+      ]
+    );
+    if (a.key === "luck") return build(
+      ko ? ["일기를 쓰면 번호가 나옵니다.", "하루 한 편의 기록이 로또 번호 하나가 되는 다이어리.", "일곱 편을 채우면 6개의 번호와 보너스 한 개, 한 줄이 완성돼요."]
+         : ["Write a diary, get a number.", "A diary where each day's entry becomes a lottery number.", "Fill seven entries for six numbers plus a bonus — one full line."],
+      [
+        { shot: "./assets/shot-luck-1.jpg", cap: ko ? "하루 한 편" : "One a day", kicker: ko ? "기록" : "Write", title: ko ? "하루 한 편, 공 하나" : "A day, a ball",
+          body: ko ? ["글 한 편과 사진 한 장을 쓰면 그 자리에서 공이 하나 발행돼요.", "번호는 그날 쓴 글에서 만들어져, 매번 다른 번호가 나옵니다."] : ["Write a note and a photo, and a ball is issued on the spot.", "Numbers come from what you wrote — different every time."] },
+        { shot: "./assets/shot-luck-2.jpg", cap: ko ? "주간 영수증" : "Weekly receipt", kicker: ko ? "토요일" : "Saturday", title: ko ? "토요일 밤, 봉투가 도착" : "A Saturday envelope",
+          body: ko ? ["빠뜨린 날은 토요일이 오기 전까지 소급해서 채울 수 있어요.", "일곱 편이 모이면 한 주치 번호가 영수증으로 인쇄됩니다."] : ["Missed a day? Backfill it anytime before Saturday.", "Seven entries print a week's numbers as a receipt."] },
+        { shot: "./assets/shot-luck-3.jpg", cap: ko ? "당첨 확인" : "Check the draw", kicker: ko ? "결과" : "Results", title: ko ? "맞춰보고, 남깁니다" : "Check it, keep it",
+          body: ko ? ["추첨이 끝나면 내 번호와 당첨 번호를 나란히 확인하고,", "맞은 번호가 어느 날에서 나왔는지도 함께 보여줘요."] : ["After the draw, line up your numbers with the winning ones,", "and see which day each matched number came from."] },
+        { shot: "./assets/shot-luck-4.jpg", cap: ko ? "기록과 통계" : "Stats", kicker: ko ? "기록" : "Log", title: ko ? "한 주씩 쌓이는 재미" : "Week by week",
+          body: ko ? ["실제로 샀는지, 몇 장 샀는지, 얼마를 받았는지 기록하면", "누적 수지와 통계로 쌓여요. 가장 잘 맞은 번호, 최고 등수까지."] : ["Log what you bought and what you won,", "and it builds into totals and stats — best numbers, best rank and more."] },
+        { shot: "./assets/shot-luck-5.jpg", cap: ko ? "세 가지 표정" : "Three moods", kicker: ko ? "분위기" : "Style", title: ko ? "조용하게 만들었어요" : "Made to be quiet",
+          body: ko ? ["복권 판매점·밤의 서재·모눈 노트. 테마에 따라 앱 아이콘도 바뀌어요.", "회원가입도 광고도 없이, 일기와 사진은 기기 안에만 저장됩니다."] : ["Lottery shop, night study or grid notebook — the icon changes too.", "No sign-up, no ads; diaries and photos stay only on your device."] }
+      ]
+    );
     return [
       { r: title, l: intro([ko ? "Day별로 들를 곳과 시간, 메모를 적어 두고 링크 하나로 함께 가는 사람과 나눕니다." : "Write down each day's stops, times and notes, then share the whole trip with one link."]) },
       { r: { type: "image", src: "./assets/trips-day.jpg", caption: ko ? "하루 일정" : "A day's plan" },
