@@ -285,8 +285,8 @@
     var cur = f ? f.to : idx;
     // 모바일: 넘긴 페이지 더미 너비(왼쪽). 그만큼 읽는 페이지를 안쪽으로 민다.
     var mStack = m && cur > 0 && ph !== "closed" && ph !== "opening";
-    var sLayers = mStack ? Math.max(3, Math.min(6, cur + 2)) : 0, sStep = 6;
-    var stackW = mStack ? (14 + sLayers * sStep) : 0;
+    var sLayers = mStack ? Math.max(3, Math.min(5, cur + 1)) : 0, sStep = 3;
+    var stackW = mStack ? (6 + sLayers * sStep) : 0;
     var pLeft = m ? stackW : 0, pWidth = m ? (p - stackW) : p;
     // 좌→우 진행(현대식 책): 왼쪽이 먼저(낮은 쪽번호=S.r), 오른쪽이 다음(S.l)
     var baseL, baseR, leafFront, leafBack, leafLeft = (m ? stackW + "px" : "0px"), leafOrigin = "left center", lfs = "r", lbs = "l";
@@ -309,16 +309,17 @@
     el.book.style.opacity = ph === "closing" ? "0" : "1";
     // base pages. 좌→우: 표지는 오른쪽 반을 덮으므로, 열리는 동안 '왼쪽' 페이지를 숨긴다(표지 뒷면이 대신 보임).
     var hideClosing = !m && (ph === "closed" || ph === "opening");
-    el.pageL.style.cssText = "position:absolute;left:" + pLeft + "px;top:0;width:" + pWidth + "px;height:100%;visibility:" + (hideClosing ? "hidden" : "visible") + ";box-shadow:0 30px 60px -24px rgba(0,0,0,.7);display:grid;grid-template:100%/100%";
+    el.pageL.style.cssText = "position:absolute;left:" + pLeft + "px;top:0;width:" + pWidth + "px;height:100%;z-index:2;visibility:" + (hideClosing ? "hidden" : "visible") + ";box-shadow:" + (m ? "-3px 0 6px -2px rgba(40,30,10,.4)," : "") + "0 30px 60px -24px rgba(0,0,0,.7);display:grid;grid-template:100%/100%";
     el.pageL.innerHTML = pageHTML(baseL, m ? "s" : "l");
     // 모바일: 넘긴 페이지가 왼쪽에 '쌓인 페이지 더미'로 또렷이 남는다(내용은 안 보여도 넘겨진 형태)
     if (mStack) {
       var inner = "";
       for (var li = 0; li < sLayers; li++) {
         var depth = li / (sLayers - 1 || 1); // 0(안쪽)~1(바깥 위)
-        inner += '<div style="position:absolute;top:' + (depth * 2) + 'px;bottom:' + (depth * 2) + 'px;left:' + (li * sStep) + 'px;right:0;background:#f2ead6;border:1px solid rgba(70,55,25,.45);border-radius:2px 0 0 2px;box-shadow:2px 0 4px -2px rgba(40,30,10,.35)"></div>';
+        inner += '<div style="position:absolute;top:' + (depth * 1.5) + 'px;bottom:' + (depth * 1.5) + 'px;left:' + (li * sStep) + 'px;right:0;background:#efe6cf;border-left:1px solid rgba(70,55,25,.4);border-radius:2px 0 0 2px"></div>';
       }
-      el.stack.style.cssText = "display:block;position:absolute;left:0;top:3%;height:94%;width:" + stackW + "px;z-index:3";
+      // 더미는 현재 페이지 '아래'에 깔려(오른쪽 일부는 페이지에 가려짐), 왼쪽 단면만 얇게 보인다
+      el.stack.style.cssText = "display:block;position:absolute;left:0;top:2%;height:96%;width:" + (stackW + 48) + "px;z-index:1";
       el.stack.innerHTML = inner;
     } else { el.stack.style.display = "none"; el.stack.innerHTML = ""; }
     if (m) { el.pageR.style.display = "none"; el.spine.style.display = "none"; }
