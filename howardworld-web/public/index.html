@@ -40,7 +40,7 @@
       role: "애플 디벨로퍼 아카데미 테크 멘토", motto: "꿈을 향해 이것저것 해보는 중", photoAlt: "하워드",
       works: "지은 것들", count: "네 권", soon: "집필 중", contact: "서신",
       colo1: "병오년 시월", colo2: "하워드 짓다",
-      read: "펼쳐 읽기", close: "덮기", prev: "앞 장", next: "다음 장", swipe: "오른쪽으로 밀면 다음 장, 왼쪽으로 밀면 앞 장",
+      read: "펼쳐 읽기", close: "덮기", prev: "앞 장", next: "다음 장", swipe: "왼쪽으로 밀면 다음 장, 오른쪽으로 밀면 앞 장",
       preface: "서문", fin: "끝", where: "구하는 곳", empty: "그림 자리", shots: "화면",
       about: [
         "iOS와 함께한 지 열일곱 해. 스타트업 두 곳에서 4년, 카카오에서 11년을 지냈습니다.",
@@ -53,7 +53,7 @@
       role: "Tech Mentor, Apple Developer Academy", motto: "Trying all sorts of things on the way to my dreams", photoAlt: "Howard",
       works: "Works", count: "Four volumes", soon: "Being written", contact: "Contact",
       colo1: "October 2026", colo2: "by Howard",
-      read: "Open", close: "Close", prev: "Back", next: "Next", swipe: "Swipe right for the next page, left to go back",
+      read: "Open", close: "Close", prev: "Back", next: "Next", swipe: "Swipe left for the next page, right to go back",
       preface: "Preface", fin: "Fin", where: "Get it", empty: "Image to come", shots: "Screens",
       about: [
         "Seventeen years with iOS — four at two startups, eleven at Kakao,",
@@ -254,7 +254,7 @@
     el.prev.addEventListener("click", function () { go(-1); });
     el.next.addEventListener("click", function () { go(1); });
     el.book.addEventListener("touchstart", function (e) { St.tx = e.changedTouches[0].clientX; }, { passive: true });
-    el.book.addEventListener("touchend", function (e) { var dx = e.changedTouches[0].clientX - (St.tx || 0); if (dx > 40) go(1); else if (dx < -40) go(-1); }, { passive: true });
+    el.book.addEventListener("touchend", function (e) { var dx = e.changedTouches[0].clientX - (St.tx || 0); if (dx < -40) go(1); else if (dx > 40) go(-1); }, { passive: true });
     // persistent base pages + spine
     el.pageL = document.createElement("div");
     el.pageR = document.createElement("div");
@@ -275,18 +275,19 @@
     var d = dims(), m = d.m, w = d.w, h = d.h, p = d.p;
     var T = texts(curLang());
     var f = St.flip, idx = St.spread, ph = St.phase, inside = { type: "inside" };
-    var baseL, baseR, leafFront, leafBack, leafLeft = "0px", leafOrigin = "right center", lfs = "l", lbs = "r";
+    // 좌→우 진행(현대식 책): 왼쪽이 먼저(낮은 쪽번호=S.r), 오른쪽이 다음(S.l)
+    var baseL, baseR, leafFront, leafBack, leafLeft = "0px", leafOrigin = "left center", lfs = "r", lbs = "l";
     if (m) {
       baseL = f ? (f.dir > 0 ? P[f.to] : P[f.from]) : P[idx];
       baseR = null;
       if (f) { leafFront = f.dir > 0 ? P[f.from] : P[f.to]; leafBack = inside; lfs = "s"; lbs = "s"; }
     } else {
-      if (f && f.dir > 0) { baseL = S[f.to].l; baseR = S[f.from].r; leafFront = S[f.from].l; leafBack = S[f.to].r; }
-      else if (f) { baseL = S[f.from].l; baseR = S[f.to].r; leafFront = S[f.from].r; leafBack = S[f.to].l; leafLeft = p + "px"; leafOrigin = "left center"; lfs = "r"; lbs = "l"; }
-      else { baseL = S[idx].l; baseR = S[idx].r; }
+      if (f && f.dir > 0) { baseL = S[f.from].r; baseR = S[f.to].l; leafFront = S[f.from].l; leafBack = S[f.to].r; leafLeft = p + "px"; leafOrigin = "left center"; lfs = "r"; lbs = "l"; }
+      else if (f) { baseL = S[f.to].r; baseR = S[f.from].l; leafFront = S[f.from].r; leafBack = S[f.to].l; leafLeft = "0px"; leafOrigin = "right center"; lfs = "l"; lbs = "r"; }
+      else { baseL = S[idx].r; baseR = S[idx].l; }
     }
     var shown = ph === "opening" || ph === "open";
-    var shift = !m && ph === "closed" ? "translateX(" + (p / 2) + "px)" : "translateX(0px)";
+    var shift = !m && ph === "closed" ? "translateX(" + (-p / 2) + "px)" : "translateX(0px)";
     var cur = f ? f.to : idx;
 
     // book frame
@@ -321,7 +322,7 @@
           '<div style="position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:rotateY(180deg);display:grid;grid-template:100%/100%">' + pageHTML(coverBack, "r") + '</div>';
         el.book.appendChild(el.cover);
       }
-      el.cover.style.cssText = "position:absolute;top:0;left:0;width:" + p + "px;height:100%;transform-style:preserve-3d;transform-origin:right center;transform:rotateY(" + (ph === "closed" ? "0deg" : "180deg") + ");transition:transform 1s cubic-bezier(.45,.05,.25,1);z-index:5";
+      el.cover.style.cssText = "position:absolute;top:0;left:" + (m ? 0 : p) + "px;width:" + p + "px;height:100%;transform-style:preserve-3d;transform-origin:left center;transform:rotateY(" + (ph === "closed" ? "0deg" : "-180deg") + ");transition:transform 1s cubic-bezier(.45,.05,.25,1);z-index:5";
     } else if (el.cover) { el.cover.remove(); el.cover = null; }
 
     // flip leaf
@@ -364,8 +365,8 @@
     var to = St.spread + dir;
     if (to < 0 || to >= count) return;
     var m = isMobile();
-    var start = m && dir < 0 ? 180 : 0;
-    var target = m ? (dir > 0 ? 180 : 0) : (dir > 0 ? 180 : -180);
+    var start = m && dir < 0 ? -180 : 0;
+    var target = m ? (dir > 0 ? -180 : 0) : (dir > 0 ? -180 : 180);
     St.flip = { dir: dir, from: St.spread, to: to, rot: start, anim: false };
     apply();
     raf2(function () { if (St.flip) { St.flip.rot = target; St.flip.anim = true; apply(); } });
