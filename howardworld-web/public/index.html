@@ -261,11 +261,12 @@
     el.next.addEventListener("click", function () { go(1); });
     el.book.addEventListener("touchstart", function (e) { St.tx = e.changedTouches[0].clientX; }, { passive: true });
     el.book.addEventListener("touchend", function (e) { var dx = e.changedTouches[0].clientX - (St.tx || 0); if (dx < -40) go(1); else if (dx > 40) go(-1); }, { passive: true });
-    // persistent base pages + spine
+    // persistent base pages + spine (+ 모바일 넘긴 페이지 더미)
+    el.stack = document.createElement("div");
     el.pageL = document.createElement("div");
     el.pageR = document.createElement("div");
     el.spine = document.createElement("div");
-    el.book.appendChild(el.pageL); el.book.appendChild(el.pageR); el.book.appendChild(el.spine);
+    el.book.appendChild(el.stack); el.book.appendChild(el.pageL); el.book.appendChild(el.pageR); el.book.appendChild(el.spine);
   }
 
   function dims() {
@@ -305,6 +306,11 @@
     var hideClosing = !m && (ph === "closed" || ph === "opening");
     el.pageL.style.cssText = "position:absolute;left:0;top:0;width:" + p + "px;height:100%;visibility:" + (hideClosing ? "hidden" : "visible") + ";box-shadow:0 30px 60px -24px rgba(0,0,0,.7);display:grid;grid-template:100%/100%";
     el.pageL.innerHTML = pageHTML(baseL, m ? "s" : "l");
+    // 모바일: 넘긴 페이지가 왼쪽 책등에 쌓인 자취로 남는다(내용은 안 보여도 '넘겨진 형태')
+    if (m && cur > 0 && ph !== "closed" && ph !== "opening") {
+      var sw = Math.max(9, Math.min(24, Math.round(cur * 1.6) + 6));
+      el.stack.style.cssText = "display:block;position:absolute;left:0;top:3%;height:94%;width:" + sw + "px;z-index:3;border-radius:1px 3px 3px 1px;background:repeating-linear-gradient(90deg,#efe6d2 0 2.5px,#c9ba98 2.5px 3.5px);box-shadow:4px 0 8px -3px rgba(40,30,10,.45)";
+    } else { el.stack.style.display = "none"; }
     if (m) { el.pageR.style.display = "none"; el.spine.style.display = "none"; }
     else {
       el.pageR.style.display = ""; el.pageR.style.cssText = "position:absolute;left:" + p + "px;top:0;width:" + p + "px;height:100%;box-shadow:0 30px 60px -24px rgba(0,0,0,.7);display:grid;grid-template:100%/100%";
