@@ -284,9 +284,10 @@
     // 좌→우 진행(현대식 책): 왼쪽이 먼저(낮은 쪽번호=S.r), 오른쪽이 다음(S.l)
     var baseL, baseR, leafFront, leafBack, leafLeft = "0px", leafOrigin = "left center", lfs = "r", lbs = "l";
     if (m) {
-      baseL = f ? (f.dir > 0 ? P[f.to] : P[f.from]) : P[idx];
+      // 모바일: 카드 뒤집기(가운데 축). 현재 장이 앞면, 다음 장이 뒷면 — 넘기는 내내 장이 보인다.
+      baseL = f ? P[f.to] : P[idx];
       baseR = null;
-      if (f) { leafFront = f.dir > 0 ? P[f.from] : P[f.to]; leafBack = inside; lfs = "s"; lbs = "s"; }
+      if (f) { leafFront = P[f.from]; leafBack = P[f.to]; lfs = "s"; lbs = "s"; leafOrigin = "center center"; leafLeft = "0px"; }
     } else {
       if (f && f.dir > 0) { baseL = S[f.from].r; baseR = S[f.to].l; leafFront = S[f.from].l; leafBack = S[f.to].r; leafLeft = p + "px"; leafOrigin = "left center"; lfs = "r"; lbs = "l"; }
       else if (f) { baseL = S[f.to].r; baseR = S[f.from].l; leafFront = S[f.from].r; leafBack = S[f.to].l; leafLeft = "0px"; leafOrigin = "right center"; lfs = "l"; lbs = "r"; }
@@ -301,7 +302,7 @@
     el.book.style.transform = (ph === "closing" ? shift + " scale(.96)" : shift);
     el.book.style.opacity = ph === "closing" ? "0" : "1";
     // base pages. 좌→우: 표지는 오른쪽 반을 덮으므로, 열리는 동안 '왼쪽' 페이지를 숨긴다(표지 뒷면이 대신 보임).
-    var hideClosing = !m && (ph === "closed" || ph === "opening");
+    var hideClosing = !m ? (ph === "closed" || ph === "opening") : !!f; // 모바일은 카드 뒤집는 동안 뒤 페이지 숨김
     el.pageL.style.cssText = "position:absolute;left:0;top:0;width:" + p + "px;height:100%;visibility:" + (hideClosing ? "hidden" : "visible") + ";box-shadow:0 30px 60px -24px rgba(0,0,0,.7);display:grid;grid-template:100%/100%";
     el.pageL.innerHTML = pageHTML(baseL, m ? "s" : "l");
     if (m) { el.pageR.style.display = "none"; el.spine.style.display = "none"; }
@@ -372,8 +373,8 @@
     var to = St.spread + dir;
     if (to < 0 || to >= count) return;
     var m = isMobile();
-    var start = m && dir < 0 ? -180 : 0;
-    var target = m ? (dir > 0 ? -180 : 0) : (dir > 0 ? -180 : 180);
+    var start = 0;
+    var target = dir > 0 ? -180 : 180;
     St.flip = { dir: dir, from: St.spread, to: to, rot: start, anim: false };
     apply();
     raf2(function () { if (St.flip) { St.flip.rot = target; St.flip.anim = true; apply(); } });
