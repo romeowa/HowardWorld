@@ -622,6 +622,11 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .ef-chip { padding: 8px 13px; border-radius: 10px; font-size: 14px; border: 1px solid var(--line); background: var(--card); color: var(--muted-2); }
 .ef-chip.on { border-color: var(--accent); background: #e3f0ee; color: var(--accent-dark); font-weight: 600; }
 .ef-chip.ghost { border-style: dashed; color: var(--muted); font-weight: 400; }
+.ef-chip.ec-toggle.on { border-color: var(--accent); color: var(--accent-dark); border-style: solid; }
+.ef-chip.editing { display: inline-flex; align-items: center; gap: 0; padding: 0; overflow: hidden; }
+.ef-chip.editing .ec-name { border: none; background: transparent; padding: 8px 5px 8px 12px; font: inherit; color: var(--text); cursor: pointer; }
+.ef-chip.editing .ec-del { border: none; background: transparent; padding: 8px 10px 8px 5px; color: var(--muted); cursor: pointer; font-size: 12px; line-height: 1; }
+.ef-chip.editing .ec-del:hover { color: var(--danger); }
 .ef-stop { padding: 7px 12px; border-radius: 16px; font-size: 13px; border: 1px solid var(--line); background: var(--card); color: var(--muted-2); }
 .ef-stop.on { border-color: var(--accent); background: #e3f0ee; color: var(--accent-dark); font-weight: 600; }
 .ef-nostop { font-size: 12.5px; color: var(--muted); }

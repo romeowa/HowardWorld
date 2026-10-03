@@ -2074,7 +2074,10 @@ function buildInlineAdd(members, cats) {
     renderWho(); updatePer();
   });
 
+  let qaSaving = false; // 더블 탭 중복 저장 방지
+  const submitBtn = box.querySelector(".qa-submit");
   const submit = async () => {
+    if (qaSaving) return;
     const amt = Number(String(amtEl.value).replace(/,/g, "")) || 0;
     if (!amt) { toast("금액을 입력해 주세요"); amtEl.focus(); return; }
     if (!inlineAdd.sharedBy.length) { toast("나눠 낼 사람을 선택해 주세요"); return; }
@@ -2086,13 +2089,16 @@ function buildInlineAdd(members, cats) {
       date: off ? (inlineAdd.date || "") : (dateForDay(inlineAdd.day) || ""),
       place: off ? "" : (inlineAdd.place || ""), fromPool, payer: fromPool ? "" : (inlineAdd.payer || ""), sharedBy: [...inlineAdd.sharedBy],
     };
+    qaSaving = true; submitBtn.disabled = true;
     try {
       await addDoc(collection(db, "trips", tripId, "expenses"), { ...data, order: Date.now(), createdAt: serverTimestamp() });
       logEvent("expense_add", { trip: tripId });
+      amtEl.value = ""; descEl.value = ""; updatePer();
       toast("추가됨");
     } catch (e) { toast("저장 실패: " + e.message); }
+    qaSaving = false; submitBtn.disabled = false;
   };
-  box.querySelector(".qa-submit").addEventListener("click", submit);
+  submitBtn.addEventListener("click", submit);
   descEl.addEventListener("keydown", (e) => { if (e.key === "Enter") amtEl.focus(); });
   amtEl.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
   return box;
@@ -2102,7 +2108,7 @@ function buildInlineAdd(members, cats) {
 let expForm = null;
 function openExpenseForm(existing, kindArg) {
   const members = tripMembers();
-  const cats = tripCats();
+  const cats = [...tripCats()]; // 복사본 — 원본(trip.expenseCategories/DEFAULT_CATS) 변형 방지
   const kind = existing ? (existing.kind === "income" ? "income" : "expense") : (kindArg === "income" ? "income" : "expense");
   const editMembers = existing ? [...new Set([...members, ...(existing.sharedBy || []), existing.payer].filter(Boolean))] : members;
   const exDay = existing ? (existing.offTrip ? "off" : (Number.isInteger(existing.day) ? existing.day : 0)) : 0;
@@ -2277,13 +2283,49 @@ function openExpenseForm(existing, kindArg) {
   renderDays(); renderPaidOn(); renderStops();
 
   const catsWrap = modal.querySelector("#efCats");
+  // 구분 이름 변경 — 목록 + 기존 지출들의 category 문자열까지 같이 갱신
+  const renameCategory = async (oldName, newName) => {
+    newName = (newName || "").trim();
+    if (!newName || newName === oldName) return;
+    if (cats.includes(newName)) { toast("이미 있는 구분이에요"); return; }
+    const idx = cats.indexOf(oldName); if (idx < 0) return;
+    cats[idx] = newName;
+    if (expForm.category === oldName) expForm.category = newName;
+    try {
+      await saveCats([...cats]);
+      const affected = expenses.filter((e) => (e.category || "") === oldName);
+      await Promise.all(affected.map((e) => updateDoc(doc(db, "trips", tripId, "expenses", e.id), { category: newName })));
+    } catch (e) { toast("저장 실패: " + e.message); }
+  };
+  // 구분 삭제 — 쓰던 지출은 '기타'로 이동
+  const deleteCategory = async (name) => {
+    const used = expenses.filter((e) => (e.category || "") === name).length;
+    if (used && !confirm(`'${name}' 구분을 쓴 지출 ${used}건이 있어요.\n삭제하면 그 지출은 '기타'로 바뀝니다. 계속할까요?`)) return;
+    let newCats = cats.filter((c) => c !== name);
+    if (used && !newCats.includes("기타")) newCats.push("기타");
+    if (!newCats.length) newCats = ["기타"];
+    cats.length = 0; newCats.forEach((c) => cats.push(c));
+    if (expForm.category === name) expForm.category = cats[0];
+    try {
+      await saveCats([...cats]);
+      if (used) { const affected = expenses.filter((e) => (e.category || "") === name); await Promise.all(affected.map((e) => updateDoc(doc(db, "trips", tripId, "expenses", e.id), { category: "기타" }))); }
+    } catch (e) { toast("저장 실패: " + e.message); }
+  };
+  let catEdit = false;
   const renderCats = () => {
     catsWrap.innerHTML = "";
     cats.forEach((c) => {
-      const on = expForm.category === c;
-      const b = h(`<button type="button" class="ef-chip ${on ? "on" : ""}" style="${on ? `background:${catColor(c)};border-color:${catColor(c)};color:#fff` : ""}">${esc(c)}</button>`);
-      b.addEventListener("click", () => { expForm.category = c; renderCats(); });
-      catsWrap.appendChild(b);
+      if (catEdit) {
+        const chip = h(`<span class="ef-chip editing" style="border-color:${catColor(c)}"><button type="button" class="ec-name">${esc(c)}</button><button type="button" class="ec-del" title="삭제">✕</button></span>`);
+        chip.querySelector(".ec-name").addEventListener("click", async () => { const nn = (prompt("구분 이름 수정", c) || "").trim(); if (nn && nn !== c) { await renameCategory(c, nn); renderCats(); } });
+        chip.querySelector(".ec-del").addEventListener("click", async () => { await deleteCategory(c); renderCats(); });
+        catsWrap.appendChild(chip);
+      } else {
+        const on = expForm.category === c;
+        const b = h(`<button type="button" class="ef-chip ${on ? "on" : ""}" style="${on ? `background:${catColor(c)};border-color:${catColor(c)};color:#fff` : ""}">${esc(c)}</button>`);
+        b.addEventListener("click", () => { expForm.category = c; renderCats(); });
+        catsWrap.appendChild(b);
+      }
     });
     const addb = h(`<button type="button" class="ef-chip ghost">+ 새 구분</button>`);
     addb.addEventListener("click", async () => {
@@ -2293,6 +2335,9 @@ function openExpenseForm(existing, kindArg) {
       await saveCats([...cats]);
     });
     catsWrap.appendChild(addb);
+    const editb = h(`<button type="button" class="ef-chip ghost ec-toggle ${catEdit ? "on" : ""}">${catEdit ? "완료" : "✏️ 편집"}</button>`);
+    editb.addEventListener("click", () => { catEdit = !catEdit; renderCats(); });
+    catsWrap.appendChild(editb);
   };
   renderCats();
 
@@ -2337,7 +2382,9 @@ function openExpenseForm(existing, kindArg) {
     try { await deleteDoc(doc(db, "trips", tripId, "expenses", existing.id)); bg.remove(); }
     catch (e) { toast("삭제 실패: " + e.message); }
   });
+  let efSaving = false; // 더블 탭 중복 저장 방지
   saveBtn.addEventListener("click", async () => {
+    if (efSaving) return;
     const inc = expForm.kind === "income";
     const off = expForm.day === "off";
     let data;
@@ -2368,11 +2415,12 @@ function openExpenseForm(existing, kindArg) {
         fromPool, payer: fromPool ? "" : (expForm.payer || ""), sharedBy: expForm.sharedBy,
       };
     }
+    efSaving = true; saveBtn.disabled = true;
     try {
       if (existing) await updateDoc(doc(db, "trips", tripId, "expenses", existing.id), data);
       else { await addDoc(collection(db, "trips", tripId, "expenses"), { ...data, order: Date.now(), createdAt: serverTimestamp() }); logEvent(inc ? "income_add" : "expense_add", { trip: tripId }); }
       bg.remove();
-    } catch (e) { toast("저장 실패: " + e.message); }
+    } catch (e) { efSaving = false; saveBtn.disabled = false; toast("저장 실패: " + e.message); }
   });
   if (kind !== "income") amtEl.focus();
 }
