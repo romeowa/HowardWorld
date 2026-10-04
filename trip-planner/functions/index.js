@@ -146,23 +146,41 @@ exports.pushNotify = onSchedule(
 function gbHash(password, salt) {
   return crypto.scryptSync(String(password), salt, 32).toString("hex");
 }
+const GB_ADMIN = "romeowa@gmail.com";
+// Authorization: Bearer <Firebase ID token> 가 romeowa면 관리자로 인정
+async function gbIsAdmin(req) {
+  const h = (req.get && req.get("authorization")) || "";
+  const m = h.match(/^Bearer (.+)$/i);
+  if (!m) return false;
+  try { const d = await admin.auth().verifyIdToken(m[1]); return d.email === GB_ADMIN; }
+  catch (e) { return false; }
+}
 exports.guestbook = onRequest(
   { region: "asia-northeast3", memory: "256MiB", invoker: "public" },
   async (req, res) => {
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-    res.set("Access-Control-Allow-Headers", "Content-Type");
+    res.set("Access-Control-Allow-Headers", "Content-Type,Authorization");
     if (req.method === "OPTIONS") { res.status(204).send(""); return; }
     const db = admin.firestore();
     try {
       if (req.method === "GET") {
+        const isAdmin = await gbIsAdmin(req);
         const snap = await db.collection("guestbook").orderBy("ts", "desc").limit(300).get();
         const items = snap.docs.map((d) => {
           const x = d.data();
-          return { id: d.id, nick: x.nick, body: x.body, ts: x.ts && x.ts.toMillis ? x.ts.toMillis() : 0 };
+          const sec = !!x.secret;
+          const show = isAdmin || !sec; // 비밀글은 관리자만 내용/답글을 본다
+          return {
+            id: d.id, nick: x.nick, secret: sec,
+            ts: x.ts && x.ts.toMillis ? x.ts.toMillis() : 0,
+            body: show ? x.body : null,
+            reply: (show && x.reply) ? x.reply : null,
+            replyTs: (show && x.replyTs && x.replyTs.toMillis) ? x.replyTs.toMillis() : null,
+          };
         });
         res.set("Cache-Control", "no-store");
-        res.status(200).json({ items });
+        res.status(200).json({ items, admin: isAdmin });
         return;
       }
       if (req.method === "POST") {
@@ -173,15 +191,33 @@ exports.guestbook = onRequest(
           const nick = String(b.nick || "").trim().replace(/\s+/g, " ").slice(0, 20);
           const body = String(b.body || "").trim().slice(0, 500);
           const password = String(b.password || "");
+          const secret = !!b.secret;
           if (!nick || !body) { res.status(400).json({ error: "닉네임과 내용을 입력해 주세요." }); return; }
           if (password.length < 1 || password.length > 64) { res.status(400).json({ error: "비밀번호를 입력해 주세요." }); return; }
           const salt = crypto.randomBytes(16).toString("hex");
           const pwHash = gbHash(password, salt);
           const ref = await db.collection("guestbook").add({
-            nick, body, salt, pwHash, app: "howardworld",
+            nick, body, salt, pwHash, secret, app: "howardworld",
             ts: admin.firestore.FieldValue.serverTimestamp(),
           });
-          res.status(200).json({ item: { id: ref.id, nick, body, ts: Date.now() } });
+          res.status(200).json({ item: { id: ref.id, nick, body, secret, reply: null, ts: Date.now() } });
+          return;
+        }
+        if (action === "reply") { // 관리자 대댓글(글당 1개, 빈 내용이면 삭제)
+          if (!(await gbIsAdmin(req))) { res.status(403).json({ error: "관리자만 답글을 달 수 있어요." }); return; }
+          const id = String(b.id || "");
+          const body = String(b.body || "").trim().slice(0, 500);
+          if (!id) { res.status(400).json({ error: "대상이 없습니다." }); return; }
+          const ref = db.collection("guestbook").doc(id);
+          const doc = await ref.get();
+          if (!doc.exists) { res.status(404).json({ error: "이미 삭제된 글입니다." }); return; }
+          if (body) {
+            await ref.set({ reply: body, replyTs: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+            res.status(200).json({ ok: true, reply: body, replyTs: Date.now() });
+          } else {
+            await ref.set({ reply: admin.firestore.FieldValue.delete(), replyTs: admin.firestore.FieldValue.delete() }, { merge: true });
+            res.status(200).json({ ok: true, reply: null });
+          }
           return;
         }
         if (action === "del") {
@@ -191,14 +227,17 @@ exports.guestbook = onRequest(
           const ref = db.collection("guestbook").doc(id);
           const doc = await ref.get();
           if (!doc.exists) { res.status(404).json({ error: "이미 삭제된 글입니다." }); return; }
-          const x = doc.data();
-          const attempt = gbHash(password, x.salt || "");
-          let ok = false;
-          try {
-            ok = !!x.pwHash && attempt.length === x.pwHash.length &&
-              crypto.timingSafeEqual(Buffer.from(attempt, "hex"), Buffer.from(x.pwHash, "hex"));
-          } catch (e) { ok = false; }
-          if (!ok) { res.status(403).json({ error: "비밀번호가 맞지 않습니다." }); return; }
+          const isAdmin = await gbIsAdmin(req);
+          if (!isAdmin) { // 관리자가 아니면 비밀번호 검증
+            const x = doc.data();
+            const attempt = gbHash(password, x.salt || "");
+            let ok = false;
+            try {
+              ok = !!x.pwHash && attempt.length === x.pwHash.length &&
+                crypto.timingSafeEqual(Buffer.from(attempt, "hex"), Buffer.from(x.pwHash, "hex"));
+            } catch (e) { ok = false; }
+            if (!ok) { res.status(403).json({ error: "비밀번호가 맞지 않습니다." }); return; }
+          }
           await ref.delete();
           res.status(200).json({ ok: true });
           return;

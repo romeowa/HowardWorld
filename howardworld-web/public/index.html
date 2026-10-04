@@ -93,6 +93,34 @@
   var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
   var raf2 = function (fn) { requestAnimationFrame(function () { requestAnimationFrame(fn); }); };
 
+  // 방명록 관리자(대댓글·비밀글 열람)용 — 기존 구글 로그인(romeowa) 재사용. SDK는 필요할 때만 로드.
+  var gbCfg = { apiKey: "AIzaSyAx1DsvOcDSiDvPYG32Nw6wiFRQz8X5PB8", authDomain: "howardworld.firebaseapp.com", projectId: "howardworld", storageBucket: "howardworld.firebasestorage.app", messagingSenderId: "940701312592", appId: "1:940701312592:web:8882de89e067b9a727d355" };
+  var gbAdmin = { user: null };
+  var _gbAuth = null;
+  function gbEnsureAuth() {
+    if (_gbAuth) return _gbAuth;
+    _gbAuth = (async function () {
+      var FB = "https://www.gstatic.com/firebasejs/10.12.2/";
+      var mods = await Promise.all([import(FB + "firebase-app.js"), import(FB + "firebase-auth.js")]);
+      var app = mods[0].initializeApp(gbCfg, "gb");
+      return { auth: mods[1].getAuth(app), am: mods[1] };
+    })();
+    return _gbAuth;
+  }
+  function gbCurrentUser(auth, am) { return new Promise(function (res) { var off = am.onAuthStateChanged(auth, function (u) { off(); res(u); }); }); }
+  async function gbAdminLogin() {
+    var T = texts(curLang());
+    try {
+      var e = await gbEnsureAuth();
+      var u = await gbCurrentUser(e.auth, e.am);
+      if (!u) { u = (await e.am.signInWithPopup(e.auth, new e.am.GoogleAuthProvider())).user; }
+      if (!u || u.email !== "romeowa@gmail.com") { try { await e.am.signOut(e.auth); } catch (_) {} alert(T.gb.notAdmin); return; }
+      gbAdmin.user = u; render();
+    } catch (err) { /* 팝업 취소 등 무시 */ }
+  }
+  async function gbAdminLogout() { try { var e = await gbEnsureAuth(); await e.am.signOut(e.auth); } catch (_) {} gbAdmin.user = null; render(); }
+  async function gbToken() { try { return gbAdmin.user ? await gbAdmin.user.getIdToken() : null; } catch (_) { return null; } }
+
   // ---------- data ----------
   function texts(ko) {
     return ko ? {
@@ -102,7 +130,7 @@
       colo1: "병오년 시월", colo2: "하워드 짓다",
       read: "펼쳐 읽기", close: "덮기", prev: "앞 장", next: "다음 장", swipe: "왼쪽으로 밀면 다음 장, 오른쪽으로 밀면 앞 장",
       preface: "서문", fin: "끝", where: "구하는 곳", empty: "그림 자리", shots: "화면",
-      gb: { title: "방명록", nick: "닉네임", pw: "비밀번호", body: "한마디 남겨 주세요", post: "남기기", del: "삭제", empty: "첫 인사를 남겨 보세요.", pwAsk: "삭제하려면 비밀번호를 입력하세요", posting: "남기는 중…", need: "닉네임·내용·비밀번호를 모두 입력해 주세요.", neterr: "네트워크 오류예요. 잠시 후 다시 시도해 주세요.", loadErr: "방명록을 불러오지 못했어요." },
+      gb: { title: "방명록", nick: "닉네임", pw: "비밀번호", body: "한마디 남겨 주세요", post: "남기기", del: "삭제", empty: "첫 인사를 남겨 보세요.", pwAsk: "삭제하려면 비밀번호를 입력하세요", posting: "남기는 중…", need: "닉네임·내용·비밀번호를 모두 입력해 주세요.", neterr: "네트워크 오류예요. 잠시 후 다시 시도해 주세요.", loadErr: "방명록을 불러오지 못했어요.", secret: "비밀글", secretMsg: "비밀글입니다", ownerName: "하워드", replyPh: "답글 달기…", replySave: "답글", adminIn: "관리자", adminOut: "관리 모드 끄기", notAdmin: "관리자 계정이 아니에요.", confirmDel: "이 글을 삭제할까요?" },
       about: [
         "개발을 시작한 지 열일곱 해. 스타트업 두 곳에서 4년, 카카오에서 11년을 지냈습니다.",
         "그리고 지금은 2년째 애플 디벨로퍼 아카데미에서 학생들을 가르치는 테크 멘토로 지내고 있어요.",
@@ -116,7 +144,7 @@
       colo1: "October 2026", colo2: "by Howard",
       read: "Open", close: "Close", prev: "Back", next: "Next", swipe: "Swipe left for the next page, right to go back",
       preface: "Preface", fin: "Fin", where: "Get it", empty: "Image to come", shots: "Screens",
-      gb: { title: "Guestbook", nick: "Nickname", pw: "Password", body: "Leave a note", post: "Post", del: "Delete", empty: "Be the first to say hello.", pwAsk: "Enter the password to delete", posting: "Posting…", need: "Please enter a nickname, note and password.", neterr: "Network error. Please try again.", loadErr: "Couldn't load the guestbook." },
+      gb: { title: "Guestbook", nick: "Nickname", pw: "Password", body: "Leave a note", post: "Post", del: "Delete", empty: "Be the first to say hello.", pwAsk: "Enter the password to delete", posting: "Posting…", need: "Please enter a nickname, note and password.", neterr: "Network error. Please try again.", loadErr: "Couldn't load the guestbook.", secret: "Private", secretMsg: "Private note", ownerName: "Howard", replyPh: "Write a reply…", replySave: "Reply", adminIn: "Admin", adminOut: "Exit admin", notAdmin: "Not the admin account.", confirmDel: "Delete this note?" },
       about: [
         "Seventeen years since I started developing — four at two startups, eleven at Kakao,",
         "and now a second year as a tech mentor at the Apple Developer Academy, teaching students.",
@@ -336,6 +364,9 @@
   function apply() {
     if (!St.reader || !ov) return;
     var model = pageModel(St.reader), S = model.S, P = model.P, a = model.a, count = model.count;
+    // 뷰포트 전환(모바일↔데스크톱)으로 쪽 수가 바뀌어도 범위를 벗어나지 않게 보정
+    if (St.spread > count - 1) St.spread = count - 1;
+    if (St.spread < 0) St.spread = 0;
     var d = dims(), m = d.m, w = d.w, h = d.h, p = d.p;
     var T = texts(curLang());
     var f = St.flip, idx = St.spread, ph = St.phase, inside = { type: "inside" };
@@ -490,56 +521,100 @@
   // ---------- 방명록 ----------
   var GB_URL = "/gb";
   function gbFmt(ts) { var d = new Date(ts || Date.now()); var p = function (n) { return (n < 10 ? "0" : "") + n; }; return d.getFullYear() + "." + p(d.getMonth() + 1) + "." + p(d.getDate()); }
-  function gbItemHTML(it, T) {
+  async function gbFetch(method, payload) {
+    var opt = { method: method, headers: {} };
+    var tok = await gbToken();
+    if (tok) opt.headers["Authorization"] = "Bearer " + tok;
+    if (payload) { opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(payload); }
+    var r = await fetch(GB_URL, opt);
+    var j = await r.json().catch(function () { return {}; });
+    return { ok: r.ok, j: j };
+  }
+  function gbItemHTML(it, T, admin) {
+    var masked = it.secret && (it.body == null); // 비밀글이고 열람 권한 없음
+    var lock = it.secret ? '<span title="' + esc(T.gb.secret) + '" style="color:#a89e86;font-size:13px">🔒</span> ' : '';
+    var bodyHTML = masked
+      ? '<div style="margin-top:4px;font-size:14px;color:#8a7c60;font-style:italic">🔒 ' + esc(T.gb.secretMsg) + '</div>'
+      : '<div style="margin-top:4px;font-size:clamp(14px,1.45vw,16px);line-height:1.7;white-space:pre-wrap;word-break:break-word">' + esc(it.body) + '</div>';
+    var replyHTML = it.reply
+      ? '<div style="margin:9px 0 2px 18px;padding:8px 12px;border-left:2px solid #b8322a;background:rgba(184,50,42,.055);border-radius:0 3px 3px 0">' +
+          '<div style="font-family:\'Song Myung\',serif;font-size:14px;color:#b8322a">' + esc(T.gb.ownerName) + (it.replyTs ? ' <span style="color:#a89e86;font-size:12px;font-family:\'Nanum Myeongjo\',serif">' + gbFmt(it.replyTs) + '</span>' : '') + '</div>' +
+          '<div style="margin-top:2px;font-size:14px;line-height:1.65;white-space:pre-wrap;word-break:break-word">' + esc(it.reply) + '</div>' +
+        '</div>'
+      : '';
+    var adminReply = admin
+      ? '<div style="margin:9px 0 2px 18px;display:flex;gap:8px">' +
+          '<input class="gb-in gb-reply-in" data-id="' + esc(it.id) + '" maxlength="500" placeholder="' + esc(T.gb.replyPh) + '" value="' + esc(it.reply || "") + '" style="flex:1;font-size:14px;padding:7px 10px">' +
+          '<button class="gb-btn gb-reply-btn" data-id="' + esc(it.id) + '" type="button" style="padding:7px 14px;font-size:14px">' + esc(T.gb.replySave) + '</button>' +
+        '</div>'
+      : '';
     return '<div class="gb-item" data-id="' + esc(it.id) + '" style="border-bottom:1px solid rgba(28,26,23,.14);padding:2px 0 12px">' +
       '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">' +
-        '<span style="font-family:\'Song Myung\',serif;font-size:clamp(15px,1.6vw,17px)">' + esc(it.nick) + '</span>' +
+        '<span style="font-family:\'Song Myung\',serif;font-size:clamp(15px,1.6vw,17px)">' + lock + esc(it.nick) + '</span>' +
         '<span style="font-size:12px;color:#8a7c60">' + gbFmt(it.ts) + '</span>' +
         '<span style="flex:1"></span>' +
         '<span class="gb-del" data-id="' + esc(it.id) + '" role="button" style="font-size:12px;color:#a89e86;cursor:pointer">' + esc(T.gb.del) + '</span>' +
       '</div>' +
-      '<div style="margin-top:4px;font-size:clamp(14px,1.45vw,16px);line-height:1.7;white-space:pre-wrap;word-break:break-word">' + esc(it.body) + '</div>' +
+      bodyHTML + replyHTML + adminReply +
     '</div>';
   }
-  function gbPaint(listEl, items, T) {
+  function gbPaint(listEl, items, T, admin) {
     if (!items || !items.length) { listEl.innerHTML = '<div class="gb-empty" style="color:#8a7c60;font-size:14px">' + esc(T.gb.empty) + '</div>'; return; }
-    listEl.innerHTML = items.map(function (it) { return gbItemHTML(it, T); }).join("");
+    listEl.innerHTML = items.map(function (it) { return gbItemHTML(it, T, admin); }).join("");
+  }
+  async function gbLoad(frame) {
+    var listEl = frame.querySelector("#gb-list"); if (!listEl) return;
+    var T = texts(curLang());
+    try { var res = await gbFetch("GET"); gbPaint(listEl, (res.j && res.j.items) || [], T, !!(res.j && res.j.admin)); }
+    catch (e) { listEl.innerHTML = '<div style="color:#b8322a;font-size:14px">' + esc(T.gb.loadErr) + '</div>'; }
   }
   function gbInit(frame) {
     var listEl = frame.querySelector("#gb-list"), form = frame.querySelector("#gb-form");
     if (!listEl || !form) return;
-    var T = texts(curLang()), msg = frame.querySelector("#gb-msg");
-    var q = function (id) { return frame.querySelector(id); };
-    fetch(GB_URL).then(function (r) { return r.json(); })
-      .then(function (j) { gbPaint(listEl, (j && j.items) || [], T); })
-      .catch(function () { listEl.innerHTML = '<div style="color:#b8322a;font-size:14px">' + esc(T.gb.loadErr) + '</div>'; });
+    var T = texts(curLang()), msg = frame.querySelector("#gb-msg"), q = function (id) { return frame.querySelector(id); };
+    var tog = q("#gb-admin-toggle");
+    if (tog) { tog.textContent = gbAdmin.user ? T.gb.adminOut : T.gb.adminIn; tog.onclick = function () { gbAdmin.user ? gbAdminLogout() : gbAdminLogin(); }; }
+    gbLoad(frame);
     form.addEventListener("submit", function (e) {
       e.preventDefault();
-      var nick = q("#gb-nick").value.trim(), pw = q("#gb-pw").value, body = q("#gb-body").value.trim(), hp = q("#gb-hp").value;
+      var nick = q("#gb-nick").value.trim(), pw = q("#gb-pw").value, body = q("#gb-body").value.trim(), hp = q("#gb-hp").value, secret = q("#gb-secret").checked;
       if (!nick || !body || !pw) { msg.textContent = T.gb.need; return; }
       var btn = q("#gb-submit"), old = btn.textContent; btn.disabled = true; btn.textContent = T.gb.posting; msg.textContent = "";
-      fetch(GB_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add", nick: nick, password: pw, body: body, hp: hp }) })
-        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      gbFetch("POST", { action: "add", nick: nick, password: pw, body: body, secret: secret, hp: hp })
         .then(function (res) {
           if (!res.ok) { msg.textContent = (res.j && res.j.error) || T.gb.neterr; return; }
-          var emptyEl = listEl.querySelector(".gb-empty"); if (emptyEl) emptyEl.remove();
-          listEl.insertAdjacentHTML("afterbegin", gbItemHTML(res.j.item, T));
-          q("#gb-nick").value = ""; q("#gb-pw").value = ""; q("#gb-body").value = "";
+          q("#gb-nick").value = ""; q("#gb-pw").value = ""; q("#gb-body").value = ""; q("#gb-secret").checked = false;
+          gbLoad(frame);
         })
         .catch(function () { msg.textContent = T.gb.neterr; })
         .finally(function () { btn.disabled = false; btn.textContent = old; });
     });
     listEl.addEventListener("click", function (e) {
-      var t = e.target.closest(".gb-del"); if (!t) return;
-      var id = t.dataset.id, pw = prompt(T.gb.pwAsk); if (pw == null || pw === "") return;
-      var orig = t.textContent; t.textContent = "…";
-      fetch(GB_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "del", id: id, password: pw }) })
-        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-        .then(function (res) {
-          if (res.ok) { var item = t.closest(".gb-item"); if (item) item.remove(); if (!listEl.querySelector(".gb-item")) gbPaint(listEl, [], T); }
-          else { alert((res.j && res.j.error) || T.gb.neterr); t.textContent = orig; }
-        })
-        .catch(function () { alert(T.gb.neterr); t.textContent = orig; });
+      var del = e.target.closest(".gb-del");
+      if (del) {
+        var id = del.dataset.id;
+        if (gbAdmin.user) {
+          if (!confirm(T.gb.confirmDel)) return; del.textContent = "…";
+          gbFetch("POST", { action: "del", id: id }).then(function (res) {
+            if (res.ok) gbLoad(frame); else { alert((res.j && res.j.error) || T.gb.neterr); del.textContent = T.gb.del; }
+          });
+        } else {
+          var pw = prompt(T.gb.pwAsk); if (pw == null || pw === "") return; del.textContent = "…";
+          gbFetch("POST", { action: "del", id: id, password: pw }).then(function (res) {
+            if (res.ok) { var item = del.closest(".gb-item"); if (item) item.remove(); if (!listEl.querySelector(".gb-item")) gbPaint(listEl, [], T, false); }
+            else { alert((res.j && res.j.error) || T.gb.neterr); del.textContent = T.gb.del; }
+          });
+        }
+        return;
+      }
+      var rb = e.target.closest(".gb-reply-btn");
+      if (rb) {
+        var rid = rb.dataset.id, inp = listEl.querySelector('.gb-reply-in[data-id="' + rid + '"]'), val = inp ? inp.value.trim() : "";
+        rb.disabled = true;
+        gbFetch("POST", { action: "reply", id: rid, body: val }).then(function (res) {
+          if (res.ok) gbLoad(frame); else { alert((res.j && res.j.error) || T.gb.neterr); rb.disabled = false; }
+        });
+      }
     });
   }
 
@@ -619,7 +694,7 @@
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:4px clamp(24px,4vw,48px)">' + contacts + '</div>' +
       '</section>' +
       '<section class="hw-reveal" style="display:flex;flex-direction:column;gap:clamp(14px,2vw,22px)">' +
-        '<div style="display:flex;align-items:center;gap:clamp(12px,1.6vw,18px)"><h2 style="margin:0;font-weight:400;font-family:\'Song Myung\',serif;font-size:clamp(26px,3vw,32px)">' + esc(T.gb.title) + '</h2><div style="flex:1;border-top:1px solid #1c1a17"></div></div>' +
+        '<div style="display:flex;align-items:center;gap:clamp(12px,1.6vw,18px)"><h2 style="margin:0;font-weight:400;font-family:\'Song Myung\',serif;font-size:clamp(26px,3vw,32px)">' + esc(T.gb.title) + '</h2><div style="flex:1;border-top:1px solid #1c1a17"></div><span id="gb-admin-toggle" role="button" style="font-size:12px;color:#a89e86;cursor:pointer;white-space:nowrap">' + esc(T.gb.adminIn) + '</span></div>' +
         '<div id="gb-list" style="display:flex;flex-direction:column;gap:clamp(10px,1.4vw,16px)"><div class="gb-empty" style="color:#8a7c60;font-size:14px">…</div></div>' +
         '<form id="gb-form" autocomplete="off" style="display:flex;flex-direction:column;gap:10px;border-top:1px solid rgba(28,26,23,.22);padding-top:clamp(12px,1.6vw,18px);position:relative">' +
           '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
@@ -628,7 +703,7 @@
           '</div>' +
           '<input id="gb-hp" class="gb-in" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;top:0;width:1px;height:1px;opacity:0;padding:0;border:0">' +
           '<textarea id="gb-body" class="gb-in" maxlength="500" rows="2" placeholder="' + esc(T.gb.body) + '" style="resize:vertical;min-height:2.6em"></textarea>' +
-          '<div style="display:flex;justify-content:flex-end;align-items:center;gap:12px"><span id="gb-msg" style="font-size:13px;color:#b8322a"></span><button id="gb-submit" type="submit" class="gb-btn">' + esc(T.gb.post) + '</button></div>' +
+          '<div style="display:flex;align-items:center;gap:12px"><label style="display:flex;align-items:center;gap:6px;font-size:14px;color:#4a4236;cursor:pointer;margin-right:auto"><input type="checkbox" id="gb-secret" style="width:16px;height:16px;accent-color:#b8322a">' + esc(T.gb.secret) + '</label><span id="gb-msg" style="font-size:13px;color:#b8322a"></span><button id="gb-submit" type="submit" class="gb-btn">' + esc(T.gb.post) + '</button></div>' +
         '</form>' +
       '</section>' +
       '<footer class="hw-reveal" style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px">' +
@@ -668,7 +743,7 @@
 
   function setLang(l) { try { localStorage.setItem("hw-lang", l); } catch (e) {} St.lang = l; render(); }
 
-  window.addEventListener("resize", function () { St.vw = window.innerWidth; St.vh = window.innerHeight; if (St.reader) apply(); });
+  window.addEventListener("resize", function () { St.vw = window.innerWidth; St.vh = window.innerHeight; if (St.reader) { St.flip = null; apply(); } });
   window.addEventListener("keydown", function (e) {
     if (!St.reader) return;
     if (e.key === "Escape") closeReader();
