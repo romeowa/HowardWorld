@@ -174,7 +174,7 @@
     var text = function (kicker, ti, body) { return { type: "text", kicker: kicker, title: ti, body: body }; };
     var build = function (introBody, feats) {
       var sp = [{ r: title, l: intro(introBody) }];
-      feats.forEach(function (f) { sp.push({ r: img(f.shot, f.cap), l: text(f.kicker, f.title, f.body) }); });
+      feats.forEach(function (f) { sp.push({ r: text(f.kicker, f.title, f.body), l: img(f.shot, f.cap) }); });
       sp.push({ r: end, l: inside });
       return sp;
     };
@@ -228,11 +228,11 @@
     );
     return [
       { r: title, l: intro([ko ? "Day별로 들를 곳과 시간, 메모를 적어 두고 링크 하나로 함께 가는 사람과 나눕니다." : "Write down each day's stops, times and notes, then share the whole trip with one link."]) },
-      { r: { type: "image", src: "./assets/trips-day.jpg", caption: ko ? "하루 일정" : "A day's plan" },
-        l: { type: "text", kicker: ko ? "일정" : "Itinerary", title: ko ? "하루를 시간 순서로" : "Each day, in order",
+      { l: { type: "image", src: "./assets/trips-day.jpg", caption: ko ? "하루 일정" : "A day's plan" },
+        r: { type: "text", kicker: ko ? "일정" : "Itinerary", title: ko ? "하루를 시간 순서로" : "Each day, in order",
           body: ko ? ["날짜를 고르면 그날 들를 곳이 시간 순서대로 놓입니다.", "장소마다 주소와 짧은 메모를 남길 수 있어요."] : ["Pick a day to see its stops laid out by time.", "Each stop keeps its address and a short note."] } },
-      { r: { type: "image", src: "./assets/trips-map.jpg", caption: ko ? "동선 지도" : "Route map" },
-        l: { type: "text", kicker: ko ? "지도" : "Map", title: ko ? "다닌 길을 한눈에" : "The whole route at a glance",
+      { l: { type: "image", src: "./assets/trips-map.jpg", caption: ko ? "동선 지도" : "Route map" },
+        r: { type: "text", kicker: ko ? "지도" : "Map", title: ko ? "다닌 길을 한눈에" : "The whole route at a glance",
           body: ko ? ["적어 둔 장소가 번호와 함께 지도 위에 이어집니다.", "전체 보기로 여행 전체 동선을 확인할 수 있어요."] : ["Your stops are numbered and connected on the map.", "Zoom out to see the route for the whole trip."] } },
       { r: end, l: inside }
     ];
