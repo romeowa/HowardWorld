@@ -122,14 +122,13 @@
     var title = { type: "title", han: a.han, name: a.name, desc: a.desc, icon: a.icon };
     var end = { type: "end", fin: T.fin, seal: T.sealSm, where: a.soon ? "" : T.where, links: a.links, soon: !!a.soon, soonText: T.soon };
     var inside = { type: "inside" };
-    var back = { type: "back", cover: a.cover };
     var intro = function (body) { return { type: "text", kicker: T.preface, title: a.desc, body: body }; };
     var img = function (src, cap) { return { type: "image", src: src, caption: cap }; };
     var text = function (kicker, ti, body) { return { type: "text", kicker: kicker, title: ti, body: body }; };
     var build = function (introBody, feats) {
       var sp = [{ r: title, l: intro(introBody) }];
       feats.forEach(function (f) { sp.push({ r: img(f.shot, f.cap), l: text(f.kicker, f.title, f.body) }); });
-      sp.push({ r: end, l: back });
+      sp.push({ r: end, l: inside });
       return sp;
     };
     if (a.key === "pig") return build(
@@ -188,7 +187,7 @@
       { r: { type: "image", src: "./assets/trips-map.jpg", caption: ko ? "동선 지도" : "Route map" },
         l: { type: "text", kicker: ko ? "지도" : "Map", title: ko ? "다닌 길을 한눈에" : "The whole route at a glance",
           body: ko ? ["적어 둔 장소가 번호와 함께 지도 위에 이어집니다.", "전체 보기로 여행 전체 동선을 확인할 수 있어요."] : ["Your stops are numbered and connected on the map.", "Zoom out to see the route for the whole trip."] } },
-      { r: end, l: back }
+      { r: end, l: inside }
     ];
   }
 
@@ -207,10 +206,6 @@
     var ty = (page && page.type) || "inside";
     var shade = side === "l" ? "linear-gradient(270deg,rgba(60,40,10,.16),transparent 9%)" : side === "r" ? "linear-gradient(90deg,rgba(60,40,10,.16),transparent 9%)" : "linear-gradient(90deg,transparent,transparent)";
     if (ty === "inside") return pageWrap(shade, '<div style="position:absolute;inset:0;background-color:#e2d4b4;background-image:repeating-linear-gradient(45deg,rgba(120,90,40,.12) 0 1px,transparent 1px 14px),repeating-linear-gradient(-45deg,rgba(120,90,40,.12) 0 1px,transparent 1px 14px)"></div>');
-    if (ty === "back") return '<div style="position:relative;width:100%;height:100%;container-type:size;background:' + (page.cover || "#5b4a32") + ';display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5cqh;overflow:hidden;box-shadow:inset 0 0 0 2cqw rgba(239,230,210,.12)">' +
-      '<img src="./assets/seal-howard.png?v=2" alt="" style="width:30cqw;height:auto"/>' +
-      '<div style="font-family:\'Song Myung\',serif;font-size:4.2cqw;letter-spacing:.32em;color:#efe6d2;opacity:.72">HOWARDWORLD</div>' +
-    '</div>';
     var body = "";
     if (ty === "title") {
       var icon = page.icon ? '<div style="width:clamp(56px,20cqw,110px);aspect-ratio:1;border-radius:22%;overflow:hidden;box-shadow:0 6px 14px -8px rgba(40,30,10,.6)"><div role="img" style="width:100%;height:100%;background-image:url(\'' + page.icon + '\');background-size:108%;background-position:center"></div></div>' : "";
@@ -343,8 +338,10 @@
       else { baseL = S[idx].r; baseR = S[idx].l; }
     }
     var mSlideTr = "transform .44s cubic-bezier(.33,0,.2,1)";
-    var shown = ph === "opening" || ph === "open";
-    var shift = !m && ph === "closed" ? "translateX(" + (-p / 2) + "px)" : "translateX(0px)";
+    var endPh = ph === "endclosing" || ph === "ended" || ph === "endopening";
+    var shown = ph === "opening" || ph === "open" || endPh;
+    var centeredClosed = !m && (ph === "closed" || ph === "endclosing" || ph === "ended");
+    var shift = centeredClosed ? "translateX(" + (-p / 2) + "px)" : "translateX(0px)";
 
     // book frame
     el.book.style.width = w + "px"; el.book.style.height = h + "px"; el.book.style.perspective = "2600px";
@@ -353,7 +350,7 @@
     // 모바일 넘김(가로 슬라이드) 동안은 화면 밖으로 밀려난 페이지를 잘라낸다
     el.book.style.overflow = (m && ph === "open") ? "hidden" : "visible";
     // base pages. 좌→우: 표지는 오른쪽 반을 덮으므로, 열리는 동안 '왼쪽' 페이지를 숨긴다(표지 뒷면이 대신 보임).
-    var hideClosing = !m && (ph === "closed" || ph === "opening");
+    var hideClosing = !m && (ph === "closed" || ph === "opening" || endPh);
     el.pageL.style.cssText = "position:absolute;left:0;top:0;width:" + p + "px;height:100%;z-index:2;visibility:" + (hideClosing ? "hidden" : "visible") + ";box-shadow:0 30px 60px -24px rgba(0,0,0,.7);display:grid;grid-template:100%/100%" + (m ? ";transform:translateX(" + slideIn + "px);transition:" + (f && f.anim ? mSlideTr : "none") : "");
     el.pageL.innerHTML = pageHTML(baseL, m ? "s" : "l");
     el.stack.style.display = "none"; el.stack.innerHTML = "";
@@ -367,8 +364,8 @@
     el.bd.style.opacity = shown ? "1" : "0";
     el.x.style.opacity = shown ? "1" : "0"; el.x.textContent = T.close + " ✕";
     el.nav.style.opacity = shown ? "1" : "0";
-    el.prev.style.opacity = cur > 0 ? "1" : ".3"; el.prev.textContent = "← " + T.prev;
-    el.next.style.opacity = cur < count - 1 ? "1" : ".3"; el.next.textContent = T.next + " →";
+    el.prev.style.opacity = (cur > 0 || ph === "ended") ? "1" : ".3"; el.prev.textContent = "← " + T.prev;
+    el.next.style.opacity = (ph === "ended") ? ".3" : "1"; el.next.textContent = T.next + " →";
     el.pos.textContent = (cur + 1) + " / " + count;
     el.swipe.style.display = m ? "" : "none"; el.swipe.textContent = T.swipe;
 
@@ -384,6 +381,19 @@
       }
       el.cover.style.cssText = "position:absolute;top:0;left:" + (m ? 0 : p) + "px;width:" + p + "px;height:100%;transform-style:preserve-3d;transform-origin:left center;transform:rotateY(" + (ph === "closed" ? "0deg" : "-180deg") + ");transition:transform 1s cubic-bezier(.45,.05,.25,1);z-index:5";
     } else if (el.cover) { el.cover.remove(); el.cover = null; }
+
+    // back cover (책 덮기) — 첫 표지와 같은 모습으로 덮인다
+    if (endPh) {
+      if (!el.bcover) {
+        el.bcover = document.createElement("div");
+        var bcoverBack = m ? inside : S[S.length - 1].r;
+        el.bcover.innerHTML = coverArtHTML(a.cover, a.name, a.han) +
+          '<div style="position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:rotateY(180deg);display:grid;grid-template:100%/100%">' + pageHTML(bcoverBack, "l") + '</div>';
+        el.book.appendChild(el.bcover);
+      }
+      var brot = ph === "ended" ? 0 : (St.bcoverRot || 0);
+      el.bcover.style.cssText = "position:absolute;top:0;left:" + (m ? 0 : p) + "px;width:" + p + "px;height:100%;transform-style:preserve-3d;transform-origin:left center;transform:rotateY(" + brot + "deg);transition:transform 1s cubic-bezier(.45,.05,.25,1);z-index:5";
+    } else if (el.bcover) { el.bcover.remove(); el.bcover = null; }
 
     // flip leaf
     if (f) {
@@ -413,6 +423,7 @@
     document.body.style.overflow = "hidden";
     if (!ov) buildReaderDOM();
     el.cover && el.cover.remove(); el.cover = null;
+    el.bcover && el.bcover.remove(); el.bcover = null;
     el.leaf && el.leaf.remove(); el.leaf = null;
     apply();
     raf2(function () { if (St.phase === "closed") { St.phase = "opening"; apply(); } });
@@ -428,9 +439,24 @@
       St.reader = null; St.phase = "idle"; St.flip = null;
     }, 380);
   }
+  function closeBook() {
+    clearTimeout(St.tm);
+    St.phase = "endclosing"; St.bcoverRot = -180; apply();
+    raf2(function () { if (St.phase === "endclosing") { St.bcoverRot = 0; apply(); } });
+    St.tm = setTimeout(function () { if (St.phase === "endclosing") { St.phase = "ended"; apply(); } }, 1050);
+  }
+  function openBook() {
+    clearTimeout(St.tm);
+    St.phase = "endopening"; St.bcoverRot = 0; apply();
+    raf2(function () { if (St.phase === "endopening") { St.bcoverRot = -180; apply(); } });
+    St.tm = setTimeout(function () { if (St.phase === "endopening") { St.phase = "open"; apply(); } }, 1050);
+  }
   function go(dir) {
-    if (St.phase !== "open" || St.flip || !St.reader) return;
+    if (St.flip || !St.reader) return;
+    if (St.phase === "ended") { if (dir < 0) openBook(); return; }
+    if (St.phase !== "open") return;
     var count = pageModel(St.reader).count;
+    if (dir > 0 && St.spread === count - 1) { closeBook(); return; }
     var to = St.spread + dir;
     if (to < 0 || to >= count) return;
     var m = isMobile();
