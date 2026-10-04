@@ -169,14 +169,17 @@ exports.guestbook = onRequest(
         const snap = await db.collection("guestbook").orderBy("ts", "desc").limit(300).get();
         const items = snap.docs.map((d) => {
           const x = d.data();
-          const sec = !!x.secret;
-          const show = isAdmin || !sec; // 비밀글은 관리자만 내용/답글을 본다
+          const sec = !!x.secret;         // 글 비밀
+          const rsec = !!x.replySecret;   // 답글 비밀
+          const hasReply = !!x.reply;
+          const showBody = isAdmin || !sec;                 // 관리자 또는 공개글
+          const showReply = isAdmin || (!sec && !rsec);     // 비밀글/비밀답글이면 공개엔 숨김
           return {
-            id: d.id, nick: x.nick, secret: sec,
+            id: d.id, nick: x.nick, secret: sec, replySecret: rsec, hasReply: hasReply,
             ts: x.ts && x.ts.toMillis ? x.ts.toMillis() : 0,
-            body: show ? x.body : null,
-            reply: (show && x.reply) ? x.reply : null,
-            replyTs: (show && x.replyTs && x.replyTs.toMillis) ? x.replyTs.toMillis() : null,
+            body: showBody ? x.body : null,
+            reply: (showReply && hasReply) ? x.reply : null,
+            replyTs: (showReply && x.replyTs && x.replyTs.toMillis) ? x.replyTs.toMillis() : null,
           };
         });
         res.set("Cache-Control", "no-store");
@@ -203,21 +206,44 @@ exports.guestbook = onRequest(
           res.status(200).json({ item: { id: ref.id, nick, body, secret, reply: null, ts: Date.now() } });
           return;
         }
-        if (action === "reply") { // 관리자 대댓글(글당 1개, 빈 내용이면 삭제)
+        if (action === "reply") { // 관리자 대댓글(글당 1개, 빈 내용이면 삭제). secret이면 비밀 답글.
           if (!(await gbIsAdmin(req))) { res.status(403).json({ error: "관리자만 답글을 달 수 있어요." }); return; }
           const id = String(b.id || "");
           const body = String(b.body || "").trim().slice(0, 500);
+          const rsecret = !!b.secret;
           if (!id) { res.status(400).json({ error: "대상이 없습니다." }); return; }
           const ref = db.collection("guestbook").doc(id);
           const doc = await ref.get();
           if (!doc.exists) { res.status(404).json({ error: "이미 삭제된 글입니다." }); return; }
           if (body) {
-            await ref.set({ reply: body, replyTs: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-            res.status(200).json({ ok: true, reply: body, replyTs: Date.now() });
+            await ref.set({ reply: body, replyTs: admin.firestore.FieldValue.serverTimestamp(), replySecret: rsecret }, { merge: true });
+            res.status(200).json({ ok: true, reply: body, replyTs: Date.now(), replySecret: rsecret });
           } else {
-            await ref.set({ reply: admin.firestore.FieldValue.delete(), replyTs: admin.firestore.FieldValue.delete() }, { merge: true });
+            await ref.set({ reply: admin.firestore.FieldValue.delete(), replyTs: admin.firestore.FieldValue.delete(), replySecret: admin.firestore.FieldValue.delete() }, { merge: true });
             res.status(200).json({ ok: true, reply: null });
           }
+          return;
+        }
+        if (action === "reveal") { // 작성자가 자기 글 비번으로 비밀 내용/답글 열람
+          const id = String(b.id || "");
+          const password = String(b.password || "");
+          if (!id) { res.status(400).json({ error: "대상이 없습니다." }); return; }
+          const ref = db.collection("guestbook").doc(id);
+          const doc = await ref.get();
+          if (!doc.exists) { res.status(404).json({ error: "이미 삭제된 글입니다." }); return; }
+          const x = doc.data();
+          const attempt = gbHash(password, x.salt || "");
+          let ok = false;
+          try {
+            ok = !!x.pwHash && attempt.length === x.pwHash.length &&
+              crypto.timingSafeEqual(Buffer.from(attempt, "hex"), Buffer.from(x.pwHash, "hex"));
+          } catch (e) { ok = false; }
+          if (!ok) { res.status(403).json({ error: "비밀번호가 맞지 않습니다." }); return; }
+          res.status(200).json({
+            ok: true, body: x.body, reply: x.reply || null,
+            replySecret: !!x.replySecret,
+            replyTs: (x.replyTs && x.replyTs.toMillis) ? x.replyTs.toMillis() : null,
+          });
           return;
         }
         if (action === "del") {

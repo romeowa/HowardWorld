@@ -130,7 +130,7 @@
       colo1: "병오년 시월", colo2: "하워드 짓다",
       read: "펼쳐 읽기", close: "덮기", prev: "앞 장", next: "다음 장", swipe: "왼쪽으로 밀면 다음 장, 오른쪽으로 밀면 앞 장",
       preface: "서문", fin: "끝", where: "구하는 곳", empty: "그림 자리", shots: "화면",
-      gb: { title: "방명록", nick: "닉네임", pw: "비밀번호", body: "한마디 남겨 주세요", post: "남기기", del: "삭제", empty: "첫 인사를 남겨 보세요.", pwAsk: "삭제하려면 비밀번호를 입력하세요", posting: "남기는 중…", need: "닉네임·내용·비밀번호를 모두 입력해 주세요.", neterr: "네트워크 오류예요. 잠시 후 다시 시도해 주세요.", loadErr: "방명록을 불러오지 못했어요.", secret: "비밀글", secretMsg: "비밀글입니다", ownerName: "하워드", replyPh: "답글 달기…", replySave: "답글", adminIn: "관리자", adminOut: "관리 모드 끄기", notAdmin: "관리자 계정이 아니에요.", confirmDel: "이 글을 삭제할까요?" },
+      gb: { title: "방명록", nick: "닉네임", pw: "비밀번호", body: "한마디 남겨 주세요", post: "남기기", del: "삭제", empty: "첫 인사를 남겨 보세요.", pwAsk: "삭제하려면 비밀번호를 입력하세요", posting: "남기는 중…", need: "닉네임·내용·비밀번호를 모두 입력해 주세요.", neterr: "네트워크 오류예요. 잠시 후 다시 시도해 주세요.", loadErr: "방명록을 불러오지 못했어요.", secret: "비밀글", secretMsg: "비밀글입니다", secretReplyMsg: "비밀 답글이 있어요", reveal: "비밀번호로 보기", pwView: "비밀번호를 입력하세요", ownerName: "하워드", replyPh: "답글 달기…", replySave: "답글", adminIn: "관리자", adminOut: "관리 모드 끄기", notAdmin: "관리자 계정이 아니에요.", confirmDel: "이 글을 삭제할까요?" },
       about: [
         "개발을 시작한 지 열일곱 해. 스타트업 두 곳에서 4년, 카카오에서 11년을 지냈습니다.",
         "그리고 지금은 2년째 애플 디벨로퍼 아카데미에서 학생들을 가르치는 테크 멘토로 지내고 있어요.",
@@ -144,7 +144,7 @@
       colo1: "October 2026", colo2: "by Howard",
       read: "Open", close: "Close", prev: "Back", next: "Next", swipe: "Swipe left for the next page, right to go back",
       preface: "Preface", fin: "Fin", where: "Get it", empty: "Image to come", shots: "Screens",
-      gb: { title: "Guestbook", nick: "Nickname", pw: "Password", body: "Leave a note", post: "Post", del: "Delete", empty: "Be the first to say hello.", pwAsk: "Enter the password to delete", posting: "Posting…", need: "Please enter a nickname, note and password.", neterr: "Network error. Please try again.", loadErr: "Couldn't load the guestbook.", secret: "Private", secretMsg: "Private note", ownerName: "Howard", replyPh: "Write a reply…", replySave: "Reply", adminIn: "Admin", adminOut: "Exit admin", notAdmin: "Not the admin account.", confirmDel: "Delete this note?" },
+      gb: { title: "Guestbook", nick: "Nickname", pw: "Password", body: "Leave a note", post: "Post", del: "Delete", empty: "Be the first to say hello.", pwAsk: "Enter the password to delete", posting: "Posting…", need: "Please enter a nickname, note and password.", neterr: "Network error. Please try again.", loadErr: "Couldn't load the guestbook.", secret: "Private", secretMsg: "Private note", secretReplyMsg: "A private reply", reveal: "View with password", pwView: "Enter the password", ownerName: "Howard", replyPh: "Write a reply…", replySave: "Reply", adminIn: "Admin", adminOut: "Exit admin", notAdmin: "Not the admin account.", confirmDel: "Delete this note?" },
       about: [
         "Seventeen years since I started developing — four at two startups, eleven at Kakao,",
         "and now a second year as a tech mentor at the Apple Developer Academy, teaching students.",
@@ -520,6 +520,7 @@
 
   // ---------- 방명록 ----------
   var GB_URL = "/gb";
+  var gbItems = [];
   function gbFmt(ts) { var d = new Date(ts || Date.now()); var p = function (n) { return (n < 10 ? "0" : "") + n; }; return d.getFullYear() + "." + p(d.getMonth() + 1) + "." + p(d.getDate()); }
   async function gbFetch(method, payload) {
     var opt = { method: method, headers: {} };
@@ -531,20 +532,29 @@
     return { ok: r.ok, j: j };
   }
   function gbItemHTML(it, T, admin) {
-    var masked = it.secret && (it.body == null); // 비밀글이고 열람 권한 없음
+    var bodyMasked = it.secret && (it.body == null);          // 비밀글, 열람 권한 없음
+    var replyMasked = it.hasReply && (it.reply == null);      // 비밀 답글, 열람 권한 없음
     var lock = it.secret ? '<span title="' + esc(T.gb.secret) + '" style="color:#a89e86;font-size:13px">🔒</span> ' : '';
-    var bodyHTML = masked
+    var bodyHTML = bodyMasked
       ? '<div style="margin-top:4px;font-size:14px;color:#8a7c60;font-style:italic">🔒 ' + esc(T.gb.secretMsg) + '</div>'
       : '<div style="margin-top:4px;font-size:clamp(14px,1.45vw,16px);line-height:1.7;white-space:pre-wrap;word-break:break-word">' + esc(it.body) + '</div>';
-    var replyHTML = it.reply
-      ? '<div style="margin:9px 0 2px 18px;padding:8px 12px;border-left:2px solid #b8322a;background:rgba(184,50,42,.055);border-radius:0 3px 3px 0">' +
-          '<div style="font-family:\'Song Myung\',serif;font-size:14px;color:#b8322a">' + esc(T.gb.ownerName) + (it.replyTs ? ' <span style="color:#a89e86;font-size:12px;font-family:\'Nanum Myeongjo\',serif">' + gbFmt(it.replyTs) + '</span>' : '') + '</div>' +
+    var replyHTML = "";
+    if (it.reply) {
+      var rlock = it.replySecret ? '<span title="' + esc(T.gb.secret) + '" style="font-size:12px">🔒</span> ' : '';
+      replyHTML = '<div style="margin:9px 0 2px 18px;padding:8px 12px;border-left:2px solid #b8322a;background:rgba(184,50,42,.055);border-radius:0 3px 3px 0">' +
+          '<div style="font-family:\'Song Myung\',serif;font-size:14px;color:#b8322a">' + rlock + esc(T.gb.ownerName) + (it.replyTs ? ' <span style="color:#a89e86;font-size:12px;font-family:\'Nanum Myeongjo\',serif">' + gbFmt(it.replyTs) + '</span>' : '') + '</div>' +
           '<div style="margin-top:2px;font-size:14px;line-height:1.65;white-space:pre-wrap;word-break:break-word">' + esc(it.reply) + '</div>' +
-        '</div>'
+        '</div>';
+    } else if (replyMasked) {
+      replyHTML = '<div style="margin:9px 0 2px 18px;font-size:13px;color:#a89e86;font-style:italic">🔒 ' + esc(T.gb.secretReplyMsg) + '</div>';
+    }
+    var reveal = (!admin && (bodyMasked || replyMasked))
+      ? '<div style="margin-top:6px"><span class="gb-reveal" data-id="' + esc(it.id) + '" role="button" style="font-size:12px;color:#b8322a;cursor:pointer">🔓 ' + esc(T.gb.reveal) + '</span></div>'
       : '';
     var adminReply = admin
-      ? '<div style="margin:9px 0 2px 18px;display:flex;gap:8px">' +
-          '<input class="gb-in gb-reply-in" data-id="' + esc(it.id) + '" maxlength="500" placeholder="' + esc(T.gb.replyPh) + '" value="' + esc(it.reply || "") + '" style="flex:1;font-size:14px;padding:7px 10px">' +
+      ? '<div style="margin:9px 0 2px 18px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+          '<input class="gb-in gb-reply-in" data-id="' + esc(it.id) + '" maxlength="500" placeholder="' + esc(T.gb.replyPh) + '" value="' + esc(it.reply || "") + '" style="flex:1 1 200px;font-size:14px;padding:7px 10px">' +
+          '<label style="display:flex;align-items:center;gap:5px;font-size:13px;color:#4a4236;cursor:pointer"><input type="checkbox" class="gb-reply-secret" data-id="' + esc(it.id) + '" ' + (it.replySecret ? 'checked' : '') + ' style="width:15px;height:15px;accent-color:#b8322a">' + esc(T.gb.secret) + '</label>' +
           '<button class="gb-btn gb-reply-btn" data-id="' + esc(it.id) + '" type="button" style="padding:7px 14px;font-size:14px">' + esc(T.gb.replySave) + '</button>' +
         '</div>'
       : '';
@@ -555,7 +565,7 @@
         '<span style="flex:1"></span>' +
         '<span class="gb-del" data-id="' + esc(it.id) + '" role="button" style="font-size:12px;color:#a89e86;cursor:pointer">' + esc(T.gb.del) + '</span>' +
       '</div>' +
-      bodyHTML + replyHTML + adminReply +
+      bodyHTML + replyHTML + reveal + adminReply +
     '</div>';
   }
   function gbPaint(listEl, items, T, admin) {
@@ -565,7 +575,7 @@
   async function gbLoad(frame) {
     var listEl = frame.querySelector("#gb-list"); if (!listEl) return;
     var T = texts(curLang());
-    try { var res = await gbFetch("GET"); gbPaint(listEl, (res.j && res.j.items) || [], T, !!(res.j && res.j.admin)); }
+    try { var res = await gbFetch("GET"); gbItems = (res.j && res.j.items) || []; gbPaint(listEl, gbItems, T, !!(res.j && res.j.admin)); }
     catch (e) { listEl.innerHTML = '<div style="color:#b8322a;font-size:14px">' + esc(T.gb.loadErr) + '</div>'; }
   }
   function gbInit(frame) {
@@ -610,9 +620,23 @@
       var rb = e.target.closest(".gb-reply-btn");
       if (rb) {
         var rid = rb.dataset.id, inp = listEl.querySelector('.gb-reply-in[data-id="' + rid + '"]'), val = inp ? inp.value.trim() : "";
+        var sc = listEl.querySelector('.gb-reply-secret[data-id="' + rid + '"]'), secret = sc ? sc.checked : false;
         rb.disabled = true;
-        gbFetch("POST", { action: "reply", id: rid, body: val }).then(function (res) {
+        gbFetch("POST", { action: "reply", id: rid, body: val, secret: secret }).then(function (res) {
           if (res.ok) gbLoad(frame); else { alert((res.j && res.j.error) || T.gb.neterr); rb.disabled = false; }
+        });
+        return;
+      }
+      var rv = e.target.closest(".gb-reveal");
+      if (rv) {
+        var vid = rv.dataset.id, vpw = prompt(T.gb.pwView); if (vpw == null || vpw === "") return;
+        rv.textContent = "…";
+        gbFetch("POST", { action: "reveal", id: vid, password: vpw }).then(function (res) {
+          if (!res.ok) { alert((res.j && res.j.error) || T.gb.neterr); rv.textContent = "🔓 " + T.gb.reveal; return; }
+          var base = gbItems.filter(function (x) { return x.id === vid; })[0] || { id: vid };
+          var merged = Object.assign({}, base, { body: res.j.body, reply: res.j.reply, replySecret: res.j.replySecret, replyTs: res.j.replyTs, hasReply: !!res.j.reply });
+          var el = listEl.querySelector('.gb-item[data-id="' + vid + '"]');
+          if (el) el.outerHTML = gbItemHTML(merged, T, false);
         });
       }
     });
