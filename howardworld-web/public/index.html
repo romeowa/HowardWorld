@@ -46,6 +46,13 @@
   .hw-read::before{content:"";position:absolute;inset:0;background:#1c1a17;transform:scaleX(0);transform-origin:left center;transition:transform .32s cubic-bezier(.4,0,.2,1);z-index:-1}
   .hw-read:hover::before{transform:scaleX(1)}
   .hw-contact{transition:color .15s}.hw-contact:hover{color:#b8322a}
+  /* 방명록 */
+  .gb-in{width:100%;font-family:'Nanum Myeongjo',serif;font-size:15px;color:#1c1a17;background:rgba(255,253,246,.55);border:1px solid rgba(28,26,23,.33);border-radius:3px;padding:10px 12px;box-sizing:border-box;outline:none;transition:border-color .15s,background .15s}
+  .gb-in:focus{border-color:#b8322a;background:rgba(255,253,246,.9)}
+  .gb-in::placeholder{color:#a89e86}
+  .gb-btn{font-family:'Song Myung',serif;color:#efe6d2;background:#b8322a;border:0;padding:9px 20px;border-radius:3px;cursor:pointer;font-size:15px;transition:background .15s}
+  .gb-btn:hover{background:#1c1a17}.gb-btn:disabled{opacity:.5;cursor:default}
+  .gb-del{transition:color .15s}.gb-del:hover{color:#b8322a !important}
   /* 등장 모션 */
   @keyframes hwRise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
   /* 쾅!! — 높이서 빠르게 내리꽂혀 눌렸다가(squash) 튕겨 안착 + 낙하 모션블러 */
@@ -95,6 +102,7 @@
       colo1: "병오년 시월", colo2: "하워드 짓다",
       read: "펼쳐 읽기", close: "덮기", prev: "앞 장", next: "다음 장", swipe: "왼쪽으로 밀면 다음 장, 오른쪽으로 밀면 앞 장",
       preface: "서문", fin: "끝", where: "구하는 곳", empty: "그림 자리", shots: "화면",
+      gb: { title: "방명록", nick: "닉네임", pw: "비밀번호", body: "한마디 남겨 주세요", post: "남기기", del: "삭제", empty: "첫 인사를 남겨 보세요.", pwAsk: "삭제하려면 비밀번호를 입력하세요", posting: "남기는 중…", need: "닉네임·내용·비밀번호를 모두 입력해 주세요.", neterr: "네트워크 오류예요. 잠시 후 다시 시도해 주세요.", loadErr: "방명록을 불러오지 못했어요." },
       about: [
         "개발을 시작한 지 열일곱 해. 스타트업 두 곳에서 4년, 카카오에서 11년을 지냈습니다.",
         "그리고 지금은 2년째 애플 디벨로퍼 아카데미에서 학생들을 가르치는 테크 멘토로 지내고 있어요.",
@@ -108,6 +116,7 @@
       colo1: "October 2026", colo2: "by Howard",
       read: "Open", close: "Close", prev: "Back", next: "Next", swipe: "Swipe left for the next page, right to go back",
       preface: "Preface", fin: "Fin", where: "Get it", empty: "Image to come", shots: "Screens",
+      gb: { title: "Guestbook", nick: "Nickname", pw: "Password", body: "Leave a note", post: "Post", del: "Delete", empty: "Be the first to say hello.", pwAsk: "Enter the password to delete", posting: "Posting…", need: "Please enter a nickname, note and password.", neterr: "Network error. Please try again.", loadErr: "Couldn't load the guestbook." },
       about: [
         "Seventeen years since I started developing — four at two startups, eleven at Kakao,",
         "and now a second year as a tech mentor at the Apple Developer Academy, teaching students.",
@@ -478,6 +487,62 @@
     St.tm = setTimeout(function () { St.spread = to; St.flip = null; apply(); }, m ? 470 : 760);
   }
 
+  // ---------- 방명록 ----------
+  var GB_URL = "/gb";
+  function gbFmt(ts) { var d = new Date(ts || Date.now()); var p = function (n) { return (n < 10 ? "0" : "") + n; }; return d.getFullYear() + "." + p(d.getMonth() + 1) + "." + p(d.getDate()); }
+  function gbItemHTML(it, T) {
+    return '<div class="gb-item" data-id="' + esc(it.id) + '" style="border-bottom:1px solid rgba(28,26,23,.14);padding:2px 0 12px">' +
+      '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">' +
+        '<span style="font-family:\'Song Myung\',serif;font-size:clamp(15px,1.6vw,17px)">' + esc(it.nick) + '</span>' +
+        '<span style="font-size:12px;color:#8a7c60">' + gbFmt(it.ts) + '</span>' +
+        '<span style="flex:1"></span>' +
+        '<span class="gb-del" data-id="' + esc(it.id) + '" role="button" style="font-size:12px;color:#a89e86;cursor:pointer">' + esc(T.gb.del) + '</span>' +
+      '</div>' +
+      '<div style="margin-top:4px;font-size:clamp(14px,1.45vw,16px);line-height:1.7;white-space:pre-wrap;word-break:break-word">' + esc(it.body) + '</div>' +
+    '</div>';
+  }
+  function gbPaint(listEl, items, T) {
+    if (!items || !items.length) { listEl.innerHTML = '<div class="gb-empty" style="color:#8a7c60;font-size:14px">' + esc(T.gb.empty) + '</div>'; return; }
+    listEl.innerHTML = items.map(function (it) { return gbItemHTML(it, T); }).join("");
+  }
+  function gbInit(frame) {
+    var listEl = frame.querySelector("#gb-list"), form = frame.querySelector("#gb-form");
+    if (!listEl || !form) return;
+    var T = texts(curLang()), msg = frame.querySelector("#gb-msg");
+    var q = function (id) { return frame.querySelector(id); };
+    fetch(GB_URL).then(function (r) { return r.json(); })
+      .then(function (j) { gbPaint(listEl, (j && j.items) || [], T); })
+      .catch(function () { listEl.innerHTML = '<div style="color:#b8322a;font-size:14px">' + esc(T.gb.loadErr) + '</div>'; });
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var nick = q("#gb-nick").value.trim(), pw = q("#gb-pw").value, body = q("#gb-body").value.trim(), hp = q("#gb-hp").value;
+      if (!nick || !body || !pw) { msg.textContent = T.gb.need; return; }
+      var btn = q("#gb-submit"), old = btn.textContent; btn.disabled = true; btn.textContent = T.gb.posting; msg.textContent = "";
+      fetch(GB_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add", nick: nick, password: pw, body: body, hp: hp }) })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok) { msg.textContent = (res.j && res.j.error) || T.gb.neterr; return; }
+          var emptyEl = listEl.querySelector(".gb-empty"); if (emptyEl) emptyEl.remove();
+          listEl.insertAdjacentHTML("afterbegin", gbItemHTML(res.j.item, T));
+          q("#gb-nick").value = ""; q("#gb-pw").value = ""; q("#gb-body").value = "";
+        })
+        .catch(function () { msg.textContent = T.gb.neterr; })
+        .finally(function () { btn.disabled = false; btn.textContent = old; });
+    });
+    listEl.addEventListener("click", function (e) {
+      var t = e.target.closest(".gb-del"); if (!t) return;
+      var id = t.dataset.id, pw = prompt(T.gb.pwAsk); if (pw == null || pw === "") return;
+      var orig = t.textContent; t.textContent = "…";
+      fetch(GB_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "del", id: id, password: pw }) })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (res.ok) { var item = t.closest(".gb-item"); if (item) item.remove(); if (!listEl.querySelector(".gb-item")) gbPaint(listEl, [], T); }
+          else { alert((res.j && res.j.error) || T.gb.neterr); t.textContent = orig; }
+        })
+        .catch(function () { alert(T.gb.neterr); t.textContent = orig; });
+    });
+  }
+
   // ---------- main page ----------
   function render() {
     var ko = curLang() === "ko", T = texts(ko), titleFs = ko ? "clamp(54px,8vw,96px)" : "clamp(40px,6vw,76px)";
@@ -553,6 +618,19 @@
         '<div style="display:flex;align-items:center;gap:clamp(12px,1.6vw,18px)"><h2 style="margin:0;font-weight:400;font-family:\'Song Myung\',serif;font-size:clamp(26px,3vw,32px)">' + esc(T.contact) + '</h2><div style="flex:1;border-top:1px solid #1c1a17"></div></div>' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:4px clamp(24px,4vw,48px)">' + contacts + '</div>' +
       '</section>' +
+      '<section class="hw-reveal" style="display:flex;flex-direction:column;gap:clamp(14px,2vw,22px)">' +
+        '<div style="display:flex;align-items:center;gap:clamp(12px,1.6vw,18px)"><h2 style="margin:0;font-weight:400;font-family:\'Song Myung\',serif;font-size:clamp(26px,3vw,32px)">' + esc(T.gb.title) + '</h2><div style="flex:1;border-top:1px solid #1c1a17"></div></div>' +
+        '<div id="gb-list" style="display:flex;flex-direction:column;gap:clamp(10px,1.4vw,16px)"><div class="gb-empty" style="color:#8a7c60;font-size:14px">…</div></div>' +
+        '<form id="gb-form" autocomplete="off" style="display:flex;flex-direction:column;gap:10px;border-top:1px solid rgba(28,26,23,.22);padding-top:clamp(12px,1.6vw,18px);position:relative">' +
+          '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
+            '<input id="gb-nick" class="gb-in" maxlength="20" placeholder="' + esc(T.gb.nick) + '" style="flex:2 1 150px">' +
+            '<input id="gb-pw" class="gb-in" type="password" maxlength="64" placeholder="' + esc(T.gb.pw) + '" style="flex:1 1 120px">' +
+          '</div>' +
+          '<input id="gb-hp" class="gb-in" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;top:0;width:1px;height:1px;opacity:0;padding:0;border:0">' +
+          '<textarea id="gb-body" class="gb-in" maxlength="500" rows="2" placeholder="' + esc(T.gb.body) + '" style="resize:vertical;min-height:2.6em"></textarea>' +
+          '<div style="display:flex;justify-content:flex-end;align-items:center;gap:12px"><span id="gb-msg" style="font-size:13px;color:#b8322a"></span><button id="gb-submit" type="submit" class="gb-btn">' + esc(T.gb.post) + '</button></div>' +
+        '</form>' +
+      '</section>' +
       '<footer class="hw-reveal" style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px">' +
         '<div style="font-size:12px;color:#6f6a5f">© HowardWorld</div>' +
         '<div style="border:1px solid #1c1a17;padding:clamp(10px,1.3vw,14px) clamp(9px,1.1vw,12px);display:flex;gap:clamp(7px,.9vw,10px);align-items:flex-start">' +
@@ -585,6 +663,7 @@
         setTimeout(function () { frame.classList.remove("hw-hit"); }, 520);
       }, 905);
     }
+    gbInit(frame);
   }
 
   function setLang(l) { try { localStorage.setItem("hw-lang", l); } catch (e) {} St.lang = l; render(); }

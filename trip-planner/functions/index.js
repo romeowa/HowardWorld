@@ -5,6 +5,7 @@ const { onRequest } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 const webpush = require("web-push");
+const crypto = require("crypto");
 
 const PROJECT = "howardworld";
 const BASE = "https://howard-trips.web.app";
@@ -135,6 +136,80 @@ exports.pushNotify = onSchedule(
         }
         if (changed) await db.doc(`pushSubs/${sub.id}`).set({ notified }, { merge: true }).catch(() => {});
       }
+    }
+  }
+);
+
+// ---------- 방명록 (howardworld.web.app /gb) ----------
+// GET: 최근 목록(민감정보 제외). POST {action:"add"|"del"}: 작성/삭제.
+// 비밀번호는 평문 저장하지 않고 scrypt(salt) 해시로만 저장, 삭제 시 서버에서 검증.
+function gbHash(password, salt) {
+  return crypto.scryptSync(String(password), salt, 32).toString("hex");
+}
+exports.guestbook = onRequest(
+  { region: "asia-northeast3", memory: "256MiB", invoker: "public" },
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+    if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+    const db = admin.firestore();
+    try {
+      if (req.method === "GET") {
+        const snap = await db.collection("guestbook").orderBy("ts", "desc").limit(300).get();
+        const items = snap.docs.map((d) => {
+          const x = d.data();
+          return { id: d.id, nick: x.nick, body: x.body, ts: x.ts && x.ts.toMillis ? x.ts.toMillis() : 0 };
+        });
+        res.set("Cache-Control", "no-store");
+        res.status(200).json({ items });
+        return;
+      }
+      if (req.method === "POST") {
+        const b = req.body || {};
+        const action = b.action || "add";
+        if (action === "add") {
+          if (b.hp) { res.status(200).json({ ok: true }); return; } // 허니팟(봇) → 조용히 무시
+          const nick = String(b.nick || "").trim().replace(/\s+/g, " ").slice(0, 20);
+          const body = String(b.body || "").trim().slice(0, 500);
+          const password = String(b.password || "");
+          if (!nick || !body) { res.status(400).json({ error: "닉네임과 내용을 입력해 주세요." }); return; }
+          if (password.length < 1 || password.length > 64) { res.status(400).json({ error: "비밀번호를 입력해 주세요." }); return; }
+          const salt = crypto.randomBytes(16).toString("hex");
+          const pwHash = gbHash(password, salt);
+          const ref = await db.collection("guestbook").add({
+            nick, body, salt, pwHash, app: "howardworld",
+            ts: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          res.status(200).json({ item: { id: ref.id, nick, body, ts: Date.now() } });
+          return;
+        }
+        if (action === "del") {
+          const id = String(b.id || "");
+          const password = String(b.password || "");
+          if (!id) { res.status(400).json({ error: "대상이 없습니다." }); return; }
+          const ref = db.collection("guestbook").doc(id);
+          const doc = await ref.get();
+          if (!doc.exists) { res.status(404).json({ error: "이미 삭제된 글입니다." }); return; }
+          const x = doc.data();
+          const attempt = gbHash(password, x.salt || "");
+          let ok = false;
+          try {
+            ok = !!x.pwHash && attempt.length === x.pwHash.length &&
+              crypto.timingSafeEqual(Buffer.from(attempt, "hex"), Buffer.from(x.pwHash, "hex"));
+          } catch (e) { ok = false; }
+          if (!ok) { res.status(403).json({ error: "비밀번호가 맞지 않습니다." }); return; }
+          await ref.delete();
+          res.status(200).json({ ok: true });
+          return;
+        }
+        res.status(400).json({ error: "알 수 없는 요청입니다." });
+        return;
+      }
+      res.status(405).json({ error: "method" });
+    } catch (e) {
+      console.error("guestbook", e);
+      res.status(500).json({ error: "서버 오류가 발생했어요." });
     }
   }
 );

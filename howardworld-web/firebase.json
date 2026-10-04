@@ -2,6 +2,9 @@
   "hosting": {
     "site": "howardworld",
     "public": "public",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      { "source": "/gb", "function": { "functionId": "guestbook", "region": "asia-northeast3" } }
+    ]
   }
 }

@@ -33,5 +33,13 @@ service cloud.firestore {
         && request.auth.token.email == 'romeowa@gmail.com';
       allow update, delete: if false;
     }
+
+    // --- 방명록 (howardworld.web.app) ---
+    // 모든 읽기/쓰기는 guestbook 함수(admin SDK)를 통해서만. 비밀번호 해시(scrypt)는
+    // 함수가 저장/검증하므로 클라이언트 직접 접근은 관리자만 허용(모더레이션용).
+    match /guestbook/{id} {
+      allow read, write: if request.auth != null
+        && request.auth.token.email == 'romeowa@gmail.com';
+    }
   }
 }
