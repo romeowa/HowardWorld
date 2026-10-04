@@ -32,6 +32,16 @@
   #frame article{perspective:1200px}
   .hw-book{transition:transform .38s cubic-bezier(.2,.8,.2,1),box-shadow .38s;transform-origin:88% 50%;will-change:transform}
   .hw-book:hover{transform:translateY(-10px) rotateY(-13deg) scale(1.03);box-shadow:-2px 0 0 #ece2cd,-4px 0 0 #d6c8a7,-6px 0 0 #ece2cd,-8px 0 0 #d2c2a0,-9px 0 0 rgba(120,95,55,.5),16px 26px 32px -12px rgba(50,34,10,.55) !important}
+  /* 표지 질감 — 능화문(마름모 격자) 양각 + 올이 고운 천 결 */
+  .hw-cover-tex{
+    background-image:
+      repeating-linear-gradient(45deg,rgba(255,247,228,.07) 0 1.2cqw,transparent 1.2cqw 8cqw),
+      repeating-linear-gradient(45deg,rgba(0,0,0,.08) 1.2cqw 2.1cqw,transparent 2.1cqw 8cqw),
+      repeating-linear-gradient(-45deg,rgba(255,247,228,.07) 0 1.2cqw,transparent 1.2cqw 8cqw),
+      repeating-linear-gradient(-45deg,rgba(0,0,0,.08) 1.2cqw 2.1cqw,transparent 2.1cqw 8cqw),
+      repeating-linear-gradient(0deg,rgba(0,0,0,.05) 0 1px,transparent 1px 3px),
+      repeating-linear-gradient(90deg,rgba(255,255,255,.03) 0 1px,transparent 1px 3px);
+  }
   /* 펼쳐 읽기 — 먹이 차오르는 호버 */
   .hw-read{position:relative;overflow:hidden;z-index:0}
   .hw-read::before{content:"";position:absolute;inset:0;background:#1c1a17;transform:scaleX(0);transform-origin:left center;transition:transform .32s cubic-bezier(.4,0,.2,1);z-index:-1}
@@ -252,7 +262,7 @@
     return pageWrap(shade, framed);
   }
   function coverArtHTML(cover, name, han) {
-    return '<div style="position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;container-type:inline-size;background:' + cover + ';border-radius:3px 6px 6px 3px;box-shadow:0 30px 60px -24px rgba(0,0,0,.7)">' +
+    return '<div class="hw-cover-tex" style="position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;container-type:inline-size;background-color:' + cover + ';border-radius:3px 6px 6px 3px;box-shadow:0 30px 60px -24px rgba(0,0,0,.7)">' +
       '<div style="position:absolute;right:3cqw;top:0;bottom:0;border-left:2px solid rgba(239,230,210,.55)"></div>' +
       '<div style="position:absolute;right:3cqw;top:0;bottom:0;width:7cqw;display:flex;flex-direction:column;justify-content:space-evenly"><div style="border-top:2px solid rgba(239,230,210,.55)"></div><div style="border-top:2px solid rgba(239,230,210,.55)"></div><div style="border-top:2px solid rgba(239,230,210,.55)"></div><div style="border-top:2px solid rgba(239,230,210,.55)"></div><div style="border-top:2px solid rgba(239,230,210,.55)"></div></div>' +
       '<div style="position:absolute;left:9cqw;top:8cqw;width:22cqw;height:72%;background:#f5eedd;border:1px solid #1c1a17;box-shadow:inset 0 0 0 3px #f5eedd,inset 0 0 0 4px #1c1a17;display:flex;justify-content:center;padding:6cqw 0;box-sizing:border-box"><div style="writing-mode:vertical-rl;font-family:\'Song Myung\',serif;font-size:10cqw;line-height:1;letter-spacing:.08em;white-space:nowrap;overflow:hidden;color:#1c1a17">' + esc(name) + '</div></div>' +
@@ -477,7 +487,7 @@
       var links = a.links.map(function (l) { return '<a href="' + esc(l.href) + '" target="_blank" rel="noopener" style="font-weight:800;font-size:clamp(14px,1.3vw,15px);text-decoration:underline;text-decoration-color:#b8322a;text-underline-offset:4px;padding:12px 0;white-space:nowrap">' + esc(l.label) + '</a>'; }).join("");
       var soon = a.soon ? '<div style="font-family:\'Nanum Brush Script\',cursive;font-size:clamp(24px,2.4vw,28px);color:#b8322a;line-height:1;padding:10px 0">' + esc(T.soon) + '</div>' : "";
       return '<article class="hw-reveal" style="transition-delay:' + (i * 80) + 'ms;display:grid;grid-template-columns:clamp(104px,15vw,176px) minmax(0,1fr);gap:clamp(16px,2.4vw,28px)">' +
-        '<div class="hw-book hw-open" data-k="' + a.key + '" role="button" aria-label="' + esc(a.name + " " + T.read) + '" style="cursor:pointer;position:relative;aspect-ratio:176/244;container-type:inline-size;background:' + a.cover + ';border-radius:2px 5px 5px 2px;box-shadow:-2px 0 0 #ece2cd,-4px 0 0 #d6c8a7,-6px 0 0 #ece2cd,-8px 0 0 #d2c2a0,-9px 0 0 rgba(120,95,55,.5),4px 10px 16px -5px rgba(55,38,14,.45)">' +
+        '<div class="hw-book hw-cover-tex hw-open" data-k="' + a.key + '" role="button" aria-label="' + esc(a.name + " " + T.read) + '" style="cursor:pointer;position:relative;aspect-ratio:176/244;container-type:inline-size;background-color:' + a.cover + ';border-radius:2px 5px 5px 2px;box-shadow:-2px 0 0 #ece2cd,-4px 0 0 #d6c8a7,-6px 0 0 #ece2cd,-8px 0 0 #d2c2a0,-9px 0 0 rgba(120,95,55,.5),4px 10px 16px -5px rgba(55,38,14,.45)">' +
           '<div style="position:absolute;inset:0;border-radius:inherit;pointer-events:none;box-shadow:inset 0 0 7cqw rgba(0,0,0,.17),inset 0 3cqw 5cqw -3cqw rgba(255,255,255,.1);background:linear-gradient(105deg,rgba(255,255,255,.07),transparent 32%)"></div>' +
           '<div style="position:absolute;right:3cqw;top:0;bottom:0;border-left:1.5px solid rgba(239,230,210,.55)"></div>' +
           '<div style="position:absolute;right:3cqw;top:0;bottom:0;width:8cqw;display:flex;flex-direction:column;justify-content:space-evenly"><div style="border-top:1.5px solid rgba(239,230,210,.55)"></div><div style="border-top:1.5px solid rgba(239,230,210,.55)"></div><div style="border-top:1.5px solid rgba(239,230,210,.55)"></div><div style="border-top:1.5px solid rgba(239,230,210,.55)"></div><div style="border-top:1.5px solid rgba(239,230,210,.55)"></div></div>' +
