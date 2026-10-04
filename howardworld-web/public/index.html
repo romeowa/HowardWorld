@@ -85,7 +85,6 @@
       colo1: "병오년 시월", colo2: "하워드 짓다",
       read: "펼쳐 읽기", close: "덮기", prev: "앞 장", next: "다음 장", swipe: "왼쪽으로 밀면 다음 장, 오른쪽으로 밀면 앞 장",
       preface: "서문", fin: "끝", where: "구하는 곳", empty: "그림 자리", shots: "화면",
-      stats: [{ n: "열일곱 해", l: "iOS와" }, { n: "네 권", l: "지은 것" }, { n: "두 해", l: "아카데미" }],
       about: [
         "iOS와 함께한 지 열일곱 해. 스타트업 두 곳에서 4년, 카카오에서 11년을 지냈습니다.",
         "그리고 지금은 2년째 애플 디벨로퍼 아카데미에서 학생들을 가르치는 테크 멘토로 지내고 있어요.",
@@ -99,7 +98,6 @@
       colo1: "October 2026", colo2: "by Howard",
       read: "Open", close: "Close", prev: "Back", next: "Next", swipe: "Swipe left for the next page, right to go back",
       preface: "Preface", fin: "Fin", where: "Get it", empty: "Image to come", shots: "Screens",
-      stats: [{ n: "17 years", l: "with iOS" }, { n: "Four", l: "volumes" }, { n: "2nd year", l: "mentor" }],
       about: [
         "Seventeen years with iOS — four at two startups, eleven at Kakao,",
         "and now a second year as a tech mentor at the Apple Developer Academy, teaching students.",
@@ -480,11 +478,7 @@
 
     var aboutHTML = (T.about || []).map(function (p) { return '<p style="margin:0;font-size:clamp(15px,1.55vw,18px);line-height:1.9;text-wrap:pretty">' + esc(p) + '</p>'; }).join("");
 
-    var statsHTML = (T.stats || []).map(function (s) {
-      return '<span style="display:inline-flex;align-items:baseline;gap:5px"><b style="font-family:\'Song Myung\',serif;font-weight:400;color:#b8322a;font-size:1.3em">' + esc(s.n) + '</b>' + esc(s.l) + '</span>';
-    }).join('<i style="font-style:normal;color:rgba(28,26,23,.32)">·</i>');
-
-    var inkSVG = '<svg class="hw-ink" viewBox="0 0 1200 220" preserveAspectRatio="xMidYMax slice" aria-hidden="true" style="height:clamp(120px,22vw,230px)">' +
+    var inkSVG ='<svg class="hw-ink" viewBox="0 0 1200 220" preserveAspectRatio="xMidYMax slice" aria-hidden="true" style="height:clamp(120px,22vw,230px)">' +
       '<path fill="currentColor" opacity="0.5" d="M0,220 L0,150 C120,112 180,150 260,120 C340,90 430,150 520,110 C620,66 700,140 820,100 C940,60 1050,132 1200,96 L1200,220 Z"/>' +
       '<path fill="currentColor" opacity="0.95" d="M0,220 L0,186 C140,162 220,186 320,166 C430,144 520,181 640,161 C760,141 860,183 980,161 C1080,143 1140,173 1200,161 L1200,220 Z"/>' +
       '</svg>';
@@ -501,7 +495,6 @@
           '<div class="hw-anim-rise" style="font-family:\'Nanum Brush Script\',cursive;font-size:clamp(44px,6vw,70px);line-height:1.05;text-wrap:balance">' + esc(T.motto) + '</div>' +
           '<div class="hw-anim-rise" style="animation-delay:.08s;width:clamp(56px,7vw,80px);border-top:2px solid #1c1a17"></div>' +
           '<div class="hw-anim-rise" style="animation-delay:.12s;font-size:clamp(16px,1.7vw,20px);line-height:1.7">' + esc(T.role) + '</div>' +
-          '<div class="hw-anim-rise" style="animation-delay:.2s;display:flex;flex-wrap:wrap;align-items:baseline;gap:clamp(8px,1.2vw,14px);font-size:clamp(13px,1.4vw,16px);color:#6f6a5f">' + statsHTML + '</div>' +
         '</div>' +
         '<div style="flex:1 1 auto;display:flex;justify-content:space-between;align-items:flex-end;gap:clamp(18px,4vw,44px)">' +
           '<div style="flex:none;width:clamp(140px,17vw,200px);aspect-ratio:200/260;border:1px solid #1c1a17;padding:clamp(5px,.7vw,8px);box-sizing:border-box"><img src="./assets/howard.jpg" alt="' + esc(T.photoAlt) + '" style="display:block;width:100%;height:100%;object-fit:cover;object-position:40% 20%;filter:sepia(.35) saturate(.85)"></div>' +
