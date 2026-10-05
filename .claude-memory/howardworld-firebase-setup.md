@@ -2,7 +2,10 @@
 name: howardworld-firebase-setup
 description: HowardWorld 레포의 공용 Firebase(howardworld) 인프라 구성
 metadata:
+  node_type: memory
   type: project
+  originSessionId: f2a2b738-2280-4be0-a63c-ca09b5c4f9ff
+  modified: 2026-10-04T16:14:47.027Z
 ---
 
 HowardWorld는 잡다한 개인 프로젝트 모음 레포. 서버는 Firebase 프로젝트 `howardworld` (project number 940701312592)를 공유. 프로젝트별 상세는 별도 memory 파일 참고: [[trip-planner]].
@@ -13,6 +16,8 @@ HowardWorld는 잡다한 개인 프로젝트 모음 레포. 서버는 Firebase �
 - 결제: 2026-09 기준 **Blaze(결제) 활성** (billing account 012FC2-…). 구글맵/Places/Routes 유료 API 사용 가능하나 개인 사용량이라 실비용 ≈ 0. 예산 알림 설정됨(월 ₩1만, 50/90/100% 이메일).
 - 사용 로그: 공용 `events` 컬렉션. 요약 CLI `node tools/usage-report.js [일수]`(gcloud 로그인 토큰+REST, 서비스계정 불필요). 웹 대시보드는 trip-planner `/admin`.
 - Hosting 사이트 2개: `howardworld`(랜딩, howardworld.web.app, 소스 `howardworld-web/`) + `howard-trips`(trip-planner).
+- Cloud Functions는 **`trip-planner/functions/` 한 codebase("trip-planner")에 모두** 있음(howardworld 프로젝트에 배포, region asia-northeast3). 함수: `share`(trip OG), `pushNotify`(스케줄), `guestbook`(랜딩 방명록). 단일 함수 배포는 `firebase deploy --only "functions:trip-planner:<name>"`.
+- 방명록: `guestbook` 컬렉션(랜딩 howardworld.web.app). 쓰기는 `guestbook` 함수(admin)만 — 비밀번호는 scrypt+salt 해시 저장, 삭제 시 서버 검증. 클라는 호스팅 rewrite `/gb`(howardworld-web/firebase.json)로 같은 출처 호출(CORS 無). 규칙상 직접 접근은 romeowa만.
 
 ## 제거된 것
 - **flight-watch**: 항공권 감시(구글플라이트 크롤링 + launchd 데몬 + 메뉴바 앱 + FCM). 2026-09-23 사용 중단·제거. launchd 데몬/plist/메뉴바앱 삭제, Firestore 데이터(watches·history·fcmTokens·notifications·control) 삭제, 레포 flight-watch/ 폴더 삭제. 규칙은 firestore/로 이전. (firebase-adminsdk SA는 남아 있음 — 무해)
