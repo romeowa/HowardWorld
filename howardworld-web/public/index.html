@@ -211,22 +211,39 @@
           : ["Every good place someone has been becomes a map.", "Subscribe, save, and make a map of your own to share."]),
         l: end },
     ];
-    if (a.key === "nin") return build(
-      ko ? ["낯선 사람이 아니라, 친구가 소개해주는 사람.", "어색함보다 설렘으로 시작하는 첫 만남.", "니니구는 친구를 통해 소개받는 익숙한 문화를 그대로 옮겨왔어요."]
-         : ["Not a stranger — someone a friend introduces.", "A first meeting that starts with a flutter, not awkwardness.", "NINIGU brings the familiar warmth of real-life introductions."],
-      [
-        { shot: "./assets/shot-nin-1.jpg", cap: ko ? "둘러보기" : "Browse", kicker: ko ? "둘러보기" : "Browse", title: ko ? "친구의 친구에서" : "Friends of friends",
-          body: ko ? ["친구의 친구를 통해 새로운 인연을 발견하세요.", "성별·나이·지역을 설정해 나와 잘 맞는 사람을 찾아볼 수 있어요."] : ["Discover new connections through friends of friends.", "Filter by gender, age and area to find people who fit you."] },
-        { shot: "./assets/shot-nin-2.jpg", cap: ko ? "솔로 리스트" : "Single list", kicker: ko ? "솔로 리스트" : "Single list", title: ko ? "나를 아는 사람의 추천" : "Picks from people who know you",
-          body: ko ? ["친구들의 솔로 리스트에 참여하고, 나를 잘 아는 사람들의 추천을 받아보세요.", "친구의 승인을 받으면 더 자세한 프로필과 사진을 볼 수 있어요."] : ["Join your friends' single lists and get picks from people who know you.", "With a friend's approval, see fuller profiles and photos."] },
-        { shot: "./assets/shot-nin-3.jpg", cap: ko ? "매칭" : "Match", kicker: ko ? "매칭" : "Match", title: ko ? "신중한 연결" : "A careful connection",
-          body: ko ? ["마음에 드는 사람이 생기면 매칭을 요청해요.", "두 사람을 아는 친구가 먼저 소개를 확인하고 승인합니다.", "상대가 직접 수락했을 때 비로소 대화가 시작돼요."] : ["Request a match when someone catches your eye.", "A mutual friend reviews and approves the intro first.", "The chat begins only when the other person accepts."] },
-        { shot: "./assets/shot-nin-4.jpg", cap: ko ? "프로필" : "Profile", kicker: ko ? "프로필" : "Profile", title: ko ? "있는 그대로의 나" : "Just as you are",
-          body: ko ? ["사진, 취향, 관심사, 가치관까지 있는 그대로 보여주세요.", "나를 잘 아는 친구일수록 더 잘 어울리는 사람을 소개해줄 수 있으니까요."] : ["Show your photos, taste, interests and values as they are.", "The better a friend knows you, the better the match they can make."] },
-        { shot: "./assets/shot-nin-5.jpg", cap: ko ? "연결" : "Connect", kicker: ko ? "연결" : "Connect", title: ko ? "신뢰와 설렘으로" : "Trust and a flutter",
-          body: ko ? ["누군가의 추천 한마디가 주는 안심,", "조금 더 신중하고 따뜻한 연결을 응원합니다."] : ["The reassurance of a trusted recommendation,", "for connections that are a little warmer and more careful."] }
-      ]
-    );
+    if (a.key === "nin") return [
+      { r: title, l: text(T.preface, ko ? "한국에서 가장 가까운 소개팅" : "Korea's closest blind date", ko
+        ? ["낯선 사람 대신, 믿을 수 있는 친구가 소개합니다.", "친구가 담아 둔 사람을 둘러보고, 마음이 가면 친구에게 부탁하세요.", "모르는 사람은 이 지도에 없습니다."]
+        : ["Instead of a stranger, a friend you trust makes the introduction.", "Browse the people your friends have saved, and when someone catches your eye, ask your friend.", "No strangers here — everyone is a friend of a friend."]) },
+      { r: text(ko ? "주선자" : "Matchmaker", ko ? "소개는 내가, 나머지는 둘이" : "You introduce; the two take it from there", ko
+          ? ["솔로인 친구를 내 솔로리스트에 담아 두세요. 사진을 캡처해 보내고 나이를 대신 답해 줄 일이 없습니다. 담아 두기만 하면 됩니다.", "내 친구들이 그 친구를 봅니다. 한마디를 적어 두면, 내가 아는 그 사람의 좋은 점이 함께 전해집니다."]
+          : ["Add your single friends to your single list. No screenshotting photos or answering “how old are they?” for them — just save them.", "Your friends then see that friend; add a line, and the good things you know about them come along too."]),
+        l: img("./assets/shot-nin-1.jpg", ko ? "솔로리스트" : "Single list") },
+      { r: text(ko ? "둘러보기" : "Browse", ko ? "친구의 친구까지만" : "Only as far as friends of friends", ko
+          ? ["내 친구들이 담아 둔 사람이 한곳에 모입니다. 모르는 사람은 들어오지 않습니다. 모두 누군가의 친구입니다.", "누가 소개하는 사람인지, 그 친구가 뭐라고 했는지가 프로필에 함께 있습니다. 사진과 소개를 보고, 궁금하면 더 들여다보세요."]
+          : ["The people your friends have saved gather in one place. No strangers get in — everyone is someone's friend.", "Who's introducing them, and what that friend said, sit right on the profile. Look through photos and intros, and dig deeper if you're curious."]),
+        l: img("./assets/shot-nin-2.jpg", ko ? "둘러보기" : "Browse") },
+      { r: text(ko ? "매칭" : "Match", ko ? "부탁은 친구에게" : "Ask through a friend", ko
+          ? ["마음에 드는 사람이 있으면 그를 소개하는 친구에게 부탁합니다. 주선자가 승인하고 상대가 수락해야 대화가 열립니다.", "모르는 사람이 먼저 말을 걸 수 없습니다. 연락처를 주고받을 일도 없습니다. 대화는 앱 안에서 시작됩니다."]
+          : ["Found someone you like? Ask the friend who introduces them. The chat opens only after the matchmaker approves and the other person accepts.", "No stranger can message you first, and no numbers change hands — conversations begin inside the app."]),
+        l: img("./assets/shot-nin-3.jpg", ko ? "매칭 요청" : "Match request") },
+      { r: text(ko ? "그룹 미팅" : "Group meet", ko ? "여럿이 만나는 자리" : "A place to meet as a group", ko
+          ? ["주선자 둘이 팀을 꾸리고, 각자 솔로 친구를 부릅니다. 정한 기간 동안 한 방에서 다 같이 이야기합니다.", "사진을 가리는 반블라인드, 아무것도 보이지 않는 완전 블라인드도 있습니다. 기간이 끝나면 각자 마음에 든 사람을 고르고, 서로 고른 짝만 이어집니다."]
+          : ["Two matchmakers form a team and each brings their single friends; for a set period, everyone talks together in one room.", "There's a half-blind mode that hides photos, and a fully blind one that shows nothing. When it ends, each person picks who they liked — and only mutual picks connect."]),
+        l: img("./assets/shot-nin-4.jpg", ko ? "그룹 미팅" : "Group meet") },
+      { r: text(ko ? "광장" : "Plaza", ko ? "먼저 말을 섞어 보는 곳" : "Where you talk first", ko
+          ? ["일상·음식·여행·운동 같은 관심사 게시판에서 친구의 친구들과 이야기합니다. 담은 게시판만 보여서, 관심 없는 글이 섞이지 않습니다.", "앱이 없어도 웹에서 먼저 둘러볼 수 있습니다. 소개보다 먼저, 어떤 사람인지가 글에서 보입니다."]
+          : ["Chat with friends of friends on interest boards — daily life, food, travel, exercise. You only see the boards you've added, so nothing off-topic creeps in.", "You can browse on the web first, even without the app. Before any introduction, who someone is shows through in what they write."]),
+        l: img("./assets/shot-nin-5.jpg", ko ? "광장" : "Plaza") },
+      { r: text(ko ? "안심" : "Safety", ko ? "아는 사이로만 이어지도록" : "Connected only through people you know", ko
+          ? ["학교와 직장은 이메일로 인증하고, 프로필에 배지로 남습니다. 내 솔로리스트는 내가 친구로 받은 사람에게만 보입니다.", "차단하면 서로의 정보가 보이지 않습니다. 다른 사람의 사진과 대화는 화면을 찍어도 담기지 않습니다."]
+          : ["Verify your school and workplace by email; they stay as badges on your profile. Your single list is visible only to people you've accepted as friends.", "Block someone and neither of you sees the other. Others' photos and chats can't be captured, even with a screenshot."]),
+        l: img("./assets/shot-nin-6.jpg", ko ? "인증 배지" : "Verified badge") },
+      { r: text(ko ? "맺음말" : "Afterword", ko ? "지금, 니니구" : "NINIGU, now", ko
+          ? ["좋은 사람은 이미 누군가의 친구입니다.", "친구를 담아 두고, 친구의 친구를 만나고, 좋은 자리를 이어주세요."]
+          : ["The good ones are already someone's friend.", "Save your friends, meet friends of friends, and make good introductions happen."]),
+        l: end },
+    ];
     if (a.key === "luck") return build(
       ko ? ["일기를 쓰면 번호가 나옵니다.", "하루 한 편의 기록이 로또 번호 하나가 되는 다이어리.", "일곱 편을 채우면 6개의 번호와 보너스 한 개, 한 줄이 완성돼요."]
          : ["Write a diary, get a number.", "A diary where each day's entry becomes a lottery number.", "Fill seven entries for six numbers plus a bonus — one full line."],
