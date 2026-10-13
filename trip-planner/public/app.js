@@ -1731,8 +1731,10 @@ function openSettleHistory() {
       <div class="modal-actions"><button class="btn ghost" id="close">닫기</button></div>
     </div>`);
   bg.appendChild(modal); document.body.appendChild(bg);
-  bg.addEventListener("click", (e) => { if (e.target === bg) bg.remove(); });
-  modal.querySelector("#close").addEventListener("click", () => bg.remove());
+  let unsub = null;
+  const closeM = () => { if (unsub) { unsub(); unsub = null; } bg.remove(); };
+  bg.addEventListener("click", (e) => { if (e.target === bg) closeM(); });
+  modal.querySelector("#close").addEventListener("click", closeM);
 
   const who = getSettleWho();
   const sel = modal.querySelector("#whoSel");
@@ -1741,28 +1743,31 @@ function openSettleHistory() {
   sel.addEventListener("change", () => { setSettleWho(sel.value); toast(sel.value ? `이제부터 '${sel.value}'(으)로 기록돼요` : "익명으로 기록됩니다"); });
 
   const list = modal.querySelector(".stl-loglist");
+  const ACT = { add: ["추가", "a-add"], edit: ["수정", "a-edit"], delete: ["삭제", "a-del"] };
+  // onSnapshot 구독 — 캐시에서 즉시 반환(영구캐시 1회성 getDocs 멈춤 함정 회피) + 실시간 갱신
   (async () => {
-    try {
-      await firebaseReady;
-      const snap = await getDocsFromServer(query(collection(db, "trips", tripId, "settleLog"), orderBy("ts", "desc"), limit(200)));
-      const rows = snap.docs.map((x) => x.data());
-      if (!rows.length) { list.innerHTML = `<div class="stl-logempty">아직 변경 이력이 없어요.<br/>지출·입금을 추가·수정·삭제하면 여기에 쌓입니다.</div>`; return; }
-      const ACT = { add: ["추가", "a-add"], edit: ["수정", "a-edit"], delete: ["삭제", "a-del"] };
-      list.innerHTML = "";
-      rows.forEach((r) => {
-        const [lbl, cls] = ACT[r.action] || ["변경", ""];
-        const when = r.ts && r.ts.toMillis ? fmtLogTime(r.ts.toMillis()) : "";
-        list.appendChild(h(`<div class="stl-logrow">
-          <span class="lg-act ${cls}">${lbl}</span>
-          <div class="lg-body">
-            <div class="lg-sum">${esc(r.summary || "")}</div>
-            <div class="lg-meta">${esc(r.by || "익명")} · ${esc(when)}</div>
-          </div>
-        </div>`));
-      });
-    } catch (e) {
-      list.innerHTML = `<div class="stl-logempty">이력을 불러오지 못했어요: ${esc(e.message)}</div>`;
-    }
+    await firebaseReady;
+    if (!bg.isConnected) return; // 닫힌 뒤면 구독 안 함
+    unsub = onSnapshot(
+      query(collection(db, "trips", tripId, "settleLog"), orderBy("ts", "desc"), limit(200)),
+      (snap) => {
+        const rows = snap.docs.map((x) => x.data());
+        if (!rows.length) { list.innerHTML = `<div class="stl-logempty">아직 변경 이력이 없어요.<br/>지출·입금을 추가·수정·삭제하면 여기에 쌓입니다.</div>`; return; }
+        list.innerHTML = "";
+        rows.forEach((r) => {
+          const [lbl, cls] = ACT[r.action] || ["변경", ""];
+          const when = r.ts && r.ts.toMillis ? fmtLogTime(r.ts.toMillis()) : "방금";
+          list.appendChild(h(`<div class="stl-logrow">
+            <span class="lg-act ${cls}">${lbl}</span>
+            <div class="lg-body">
+              <div class="lg-sum">${esc(r.summary || "")}</div>
+              <div class="lg-meta">${esc(r.by || "익명")} · ${esc(when)}</div>
+            </div>
+          </div>`));
+        });
+      },
+      (err) => { list.innerHTML = `<div class="stl-logempty">이력을 불러오지 못했어요: ${esc(err.message)}</div>`; }
+    );
   })();
 }
 
