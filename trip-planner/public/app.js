@@ -1706,12 +1706,14 @@ function settleSummary(d) {
 }
 
 // 정산 변경 기록 (add|edit|delete). 실패해도 본 동작엔 영향 없음(fire-and-forget).
-function logSettle(action, d) {
+function logSettle(action, d, prev) {
   if (!tripId || !d) return;
-  addDoc(collection(db, "trips", tripId, "settleLog"), {
+  const entry = {
     ts: serverTimestamp(), dev: deviceId(), by: getSettleWho(),
     action, kind: d.kind || "expense", summary: settleSummary(d),
-  }).catch((e) => console.error("settleLog 실패", e));
+  };
+  if (action === "edit" && prev) entry.prevSummary = settleSummary(prev); // 수정 전 값
+  addDoc(collection(db, "trips", tripId, "settleLog"), entry).catch((e) => console.error("settleLog 실패", e));
 }
 
 function fmtLogTime(ms) {
@@ -1761,6 +1763,7 @@ function openSettleHistory() {
             <span class="lg-act ${cls}">${lbl}</span>
             <div class="lg-body">
               <div class="lg-sum">${esc(r.summary || "")}</div>
+              ${r.action === "edit" && r.prevSummary ? `<div class="lg-prev">이전: ${esc(r.prevSummary)}</div>` : ""}
               <div class="lg-meta">${esc(r.by || "익명")} · ${esc(when)}</div>
             </div>
           </div>`));
@@ -2512,7 +2515,7 @@ function openExpenseForm(existing, kindArg) {
     }
     efSaving = true; saveBtn.disabled = true;
     try {
-      if (existing) { await updateDoc(doc(db, "trips", tripId, "expenses", existing.id), data); logSettle("edit", data); }
+      if (existing) { await updateDoc(doc(db, "trips", tripId, "expenses", existing.id), data); logSettle("edit", data, existing); }
       else { await addDoc(collection(db, "trips", tripId, "expenses"), { ...data, order: Date.now(), createdAt: serverTimestamp() }); logEvent(inc ? "income_add" : "expense_add", { trip: tripId }); logSettle("add", data); }
       bg.remove();
     } catch (e) { efSaving = false; saveBtn.disabled = false; toast("저장 실패: " + e.message); }

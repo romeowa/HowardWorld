@@ -674,6 +674,7 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .lg-act.a-del { background: #fee2e2; color: #b91c1c; }
 .lg-body { flex: 1; min-width: 0; }
 .lg-sum { font-size: 14px; color: var(--text); word-break: break-all; }
+.lg-prev { font-size: 12.5px; color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); word-break: break-all; margin-top: 1px; }
 .lg-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
 /* 수입 합계(요약 카드) */
 .stl-incsum { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-soft); font-size: 13px; color: var(--muted-2); }
