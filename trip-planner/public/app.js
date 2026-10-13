@@ -1693,6 +1693,11 @@ function buildRatesCard() {
 function settleWhoKey() { return "settleWho_" + tripId; }
 function getSettleWho() { try { return localStorage.getItem(settleWhoKey()) || ""; } catch { return ""; } }
 function setSettleWho(name) { try { if (name) localStorage.setItem(settleWhoKey(), name); else localStorage.removeItem(settleWhoKey()); } catch {} }
+// 기록자가 '익명'이면 저장·삭제 전에 한 번 더 확인. 진행하면 true.
+function confirmAnonSettle(actionLabel) {
+  if (getSettleWho()) return true;
+  return confirm(`기록자가 '익명'으로 되어 있어요.\n익명으로 ${actionLabel || "기록"}할까요?\n(취소하면 기록자를 먼저 고를 수 있어요)`);
+}
 
 function settleSummary(d) {
   const cur = d.currency || "KRW";
@@ -2180,6 +2185,7 @@ function buildInlineAdd(members, cats) {
     const amt = Number(String(amtEl.value).replace(/,/g, "")) || 0;
     if (!amt) { toast("금액을 입력해 주세요"); amtEl.focus(); return; }
     if (!inlineAdd.sharedBy.length) { toast("나눠 낼 사람을 선택해 주세요"); return; }
+    if (!confirmAnonSettle("추가")) return;
     const off = inlineAdd.day === "off";
     const fromPool = inlineAdd.payer === POOL;
     const data = {
@@ -2485,7 +2491,9 @@ function openExpenseForm(existing, kindArg) {
   bySel.addEventListener("change", () => setSettleWho(bySel.value));
 
   if (existing) modal.querySelector("#efDel").addEventListener("click", async () => {
-    if (!confirm(expForm.kind === "income" ? "이 입금 내역을 삭제할까요?" : "이 지출을 삭제할까요?")) return;
+    const base = expForm.kind === "income" ? "이 입금 내역을 삭제할까요?" : "이 지출을 삭제할까요?";
+    const msg = getSettleWho() ? base : base + "\n\n기록자가 '익명'이에요. 익명으로 변경 이력에 남습니다.";
+    if (!confirm(msg)) return;
     try { await deleteDoc(doc(db, "trips", tripId, "expenses", existing.id)); logSettle("delete", existing); bg.remove(); }
     catch (e) { toast("삭제 실패: " + e.message); }
   });
@@ -2522,6 +2530,7 @@ function openExpenseForm(existing, kindArg) {
         fromPool, payer: fromPool ? "" : (expForm.payer || ""), sharedBy: expForm.sharedBy,
       };
     }
+    if (!confirmAnonSettle(existing ? "수정" : "추가")) return;
     efSaving = true; saveBtn.disabled = true;
     try {
       if (existing) { await updateDoc(doc(db, "trips", tripId, "expenses", existing.id), data); logSettle("edit", data, existing); }
