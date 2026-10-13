@@ -658,6 +658,23 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 /* 지출/수입 추가 버튼 행 */
 .stl-addrow { display: flex; gap: 8px; margin: 12px 0; }
 .stl-addrow .btn { flex: 1 1 0; min-width: 0; width: auto; margin: 0; white-space: nowrap; padding-left: 10px; padding-right: 10px; }
+/* 정산 변경 이력 */
+.stl-histrow { text-align: right; margin: -4px 0 10px; }
+.lnk { font-size: 13px; color: var(--muted); padding: 4px 2px; }
+.lnk:hover { color: var(--accent); text-decoration: underline; }
+.stl-who { font-size: 13px; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.stl-who select { border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font-size: 14px; background: var(--card); color: var(--text); }
+.stl-loglist { max-height: 56vh; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.stl-logempty { color: var(--muted); font-size: 14px; text-align: center; padding: 28px 10px; line-height: 1.6; }
+.stl-logrow { display: flex; gap: 10px; align-items: flex-start; padding: 9px 2px; border-bottom: 1px solid var(--line-soft); }
+.stl-logrow:last-child { border-bottom: none; }
+.lg-act { flex: 0 0 auto; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-top: 1px; background: var(--surface-2); color: var(--muted-2); }
+.lg-act.a-add { background: #dcfce7; color: #15803d; }
+.lg-act.a-edit { background: #e0f2fe; color: #0369a1; }
+.lg-act.a-del { background: #fee2e2; color: #b91c1c; }
+.lg-body { flex: 1; min-width: 0; }
+.lg-sum { font-size: 14px; color: var(--text); word-break: break-all; }
+.lg-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
 /* 수입 합계(요약 카드) */
 .stl-incsum { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-soft); font-size: 13px; color: var(--muted-2); }
 .stl-incsum .amt { font-family: var(--mono); font-weight: 700; color: var(--accent-dark); }

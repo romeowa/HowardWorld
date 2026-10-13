@@ -17,6 +17,10 @@ service cloud.firestore {
       match /expenses/{expenseId} {
         allow read, write: if true; // 정산 내역 — tripId(비밀 링크)를 아는 사람만 도달
       }
+      match /settleLog/{logId} {
+        allow read, create: if true; // 정산 변경 이력(감사 로그) — 추가/조회만, 수정·삭제 불가
+        allow update, delete: if false;
+      }
     }
 
     // --- 웹푸시 구독(다음 일정 알림) ---

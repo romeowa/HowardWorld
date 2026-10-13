@@ -1688,6 +1688,84 @@ function buildRatesCard() {
   return card;
 }
 
+// ---------- 정산 변경 이력(감사 로그) ----------
+// trips/{id}/settleLog 에 지출·입금 추가/수정/삭제를 사람이 읽을 요약으로 남긴다.
+function settleWhoKey() { return "settleWho_" + tripId; }
+function getSettleWho() { try { return localStorage.getItem(settleWhoKey()) || ""; } catch { return ""; } }
+function setSettleWho(name) { try { if (name) localStorage.setItem(settleWhoKey(), name); else localStorage.removeItem(settleWhoKey()); } catch {} }
+
+function settleSummary(d) {
+  const cur = d.currency || "KRW";
+  const amtStr = cur === "KRW" ? `₩${won(d.amount)}` : fmtCur(d.amount, cur);
+  if (d.kind === "income") {
+    const who = Object.keys(incomeContribs(d)).join(", ");
+    return `입금 ${amtStr}${who ? ` · ${who}` : ""}${d.desc ? ` · ${d.desc}` : ""}`;
+  }
+  const payer = d.fromPool ? "공금" : (d.payer || "");
+  return `${d.category || "기타"} ${amtStr}${payer ? ` · ${payer} 결제` : ""}${d.desc ? ` · ${d.desc}` : ""}`;
+}
+
+// 정산 변경 기록 (add|edit|delete). 실패해도 본 동작엔 영향 없음(fire-and-forget).
+function logSettle(action, d) {
+  if (!tripId || !d) return;
+  addDoc(collection(db, "trips", tripId, "settleLog"), {
+    ts: serverTimestamp(), dev: deviceId(), by: getSettleWho(),
+    action, kind: d.kind || "expense", summary: settleSummary(d),
+  }).catch((e) => console.error("settleLog 실패", e));
+}
+
+function fmtLogTime(ms) {
+  const d = new Date(ms), now = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  const ymd = (d.getFullYear() === now.getFullYear() ? "" : d.getFullYear() + ". ") + `${d.getMonth() + 1}. ${d.getDate()}.`;
+  return `${ymd} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function openSettleHistory() {
+  const bg = h(`<div class="modal-bg"></div>`);
+  const modal = h(`
+    <div class="modal modal-sm">
+      <h3>정산 변경 이력</h3>
+      <div class="stl-who">이 기기에서 바꾼 사람: <select id="whoSel"></select></div>
+      <div class="stl-loglist"><div class="stl-logempty">불러오는 중…</div></div>
+      <div class="modal-actions"><button class="btn ghost" id="close">닫기</button></div>
+    </div>`);
+  bg.appendChild(modal); document.body.appendChild(bg);
+  bg.addEventListener("click", (e) => { if (e.target === bg) bg.remove(); });
+  modal.querySelector("#close").addEventListener("click", () => bg.remove());
+
+  const who = getSettleWho();
+  const sel = modal.querySelector("#whoSel");
+  sel.innerHTML = `<option value="">익명</option>` + tripMembers().map((m) => `<option value="${esc(m)}">${esc(m)}</option>`).join("");
+  sel.value = who;
+  sel.addEventListener("change", () => { setSettleWho(sel.value); toast(sel.value ? `이제부터 '${sel.value}'(으)로 기록돼요` : "익명으로 기록됩니다"); });
+
+  const list = modal.querySelector(".stl-loglist");
+  (async () => {
+    try {
+      await firebaseReady;
+      const snap = await getDocsFromServer(query(collection(db, "trips", tripId, "settleLog"), orderBy("ts", "desc"), limit(200)));
+      const rows = snap.docs.map((x) => x.data());
+      if (!rows.length) { list.innerHTML = `<div class="stl-logempty">아직 변경 이력이 없어요.<br/>지출·입금을 추가·수정·삭제하면 여기에 쌓입니다.</div>`; return; }
+      const ACT = { add: ["추가", "a-add"], edit: ["수정", "a-edit"], delete: ["삭제", "a-del"] };
+      list.innerHTML = "";
+      rows.forEach((r) => {
+        const [lbl, cls] = ACT[r.action] || ["변경", ""];
+        const when = r.ts && r.ts.toMillis ? fmtLogTime(r.ts.toMillis()) : "";
+        list.appendChild(h(`<div class="stl-logrow">
+          <span class="lg-act ${cls}">${lbl}</span>
+          <div class="lg-body">
+            <div class="lg-sum">${esc(r.summary || "")}</div>
+            <div class="lg-meta">${esc(r.by || "익명")} · ${esc(when)}</div>
+          </div>
+        </div>`));
+      });
+    } catch (e) {
+      list.innerHTML = `<div class="stl-logempty">이력을 불러오지 못했어요: ${esc(e.message)}</div>`;
+    }
+  })();
+}
+
 function renderSettleView(shell) {
   const members = tripMembers();
   const view = h(`<div class="settle-view"></div>`);
@@ -1730,6 +1808,10 @@ function renderSettleView(shell) {
   addRow.querySelector(".stl-add").addEventListener("click", () => { if (needMembers()) openExpenseForm(null, "expense"); });
   addRow.querySelector(".stl-addinc").addEventListener("click", () => { if (needMembers()) openExpenseForm(null, "income"); });
   view.appendChild(addRow);
+
+  const histRow = h(`<div class="stl-histrow"><button class="lnk stl-histbtn">🕘 변경 이력</button></div>`);
+  histRow.querySelector(".stl-histbtn").addEventListener("click", openSettleHistory);
+  view.appendChild(histRow);
 
   // 지출 / 수입(입금) 분리 — 수입은 넣은 사람에게 적립되고 전원이 공동비용으로 나뉘어 정산됨
   const expList = expenses.filter((e) => e.kind !== "income");
@@ -2100,6 +2182,7 @@ function buildInlineAdd(members, cats) {
     try {
       await addDoc(collection(db, "trips", tripId, "expenses"), { ...data, order: Date.now(), createdAt: serverTimestamp() });
       logEvent("expense_add", { trip: tripId });
+      logSettle("add", data);
       amtEl.value = ""; descEl.value = ""; updatePer();
       toast("추가됨");
     } catch (e) { toast("저장 실패: " + e.message); }
@@ -2386,7 +2469,7 @@ function openExpenseForm(existing, kindArg) {
 
   if (existing) modal.querySelector("#efDel").addEventListener("click", async () => {
     if (!confirm(expForm.kind === "income" ? "이 입금 내역을 삭제할까요?" : "이 지출을 삭제할까요?")) return;
-    try { await deleteDoc(doc(db, "trips", tripId, "expenses", existing.id)); bg.remove(); }
+    try { await deleteDoc(doc(db, "trips", tripId, "expenses", existing.id)); logSettle("delete", existing); bg.remove(); }
     catch (e) { toast("삭제 실패: " + e.message); }
   });
   let efSaving = false; // 더블 탭 중복 저장 방지
@@ -2424,8 +2507,8 @@ function openExpenseForm(existing, kindArg) {
     }
     efSaving = true; saveBtn.disabled = true;
     try {
-      if (existing) await updateDoc(doc(db, "trips", tripId, "expenses", existing.id), data);
-      else { await addDoc(collection(db, "trips", tripId, "expenses"), { ...data, order: Date.now(), createdAt: serverTimestamp() }); logEvent(inc ? "income_add" : "expense_add", { trip: tripId }); }
+      if (existing) { await updateDoc(doc(db, "trips", tripId, "expenses", existing.id), data); logSettle("edit", data); }
+      else { await addDoc(collection(db, "trips", tripId, "expenses"), { ...data, order: Date.now(), createdAt: serverTimestamp() }); logEvent(inc ? "income_add" : "expense_add", { trip: tripId }); logSettle("add", data); }
       bg.remove();
     } catch (e) { efSaving = false; saveBtn.disabled = false; toast("저장 실패: " + e.message); }
   });
