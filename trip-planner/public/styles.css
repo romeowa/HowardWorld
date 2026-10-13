@@ -639,6 +639,11 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .ef-actions { display: flex; gap: 10px; margin-top: 22px; }
 .ef-actions .btn { flex: 1; }
 .ef-actions .btn.danger { flex: 0 0 auto; }
+/* 지출 폼 — 기록자(변경 이력에 남길 이름) */
+.ef-recby { display: flex; align-items: center; gap: 8px; margin-top: 18px; font-size: 13px; color: var(--muted); }
+.ef-recby-lbl { font-weight: 600; color: var(--muted-2); }
+.ef-recby select { border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font-size: 14px; background: var(--card); color: var(--text); }
+.ef-recby-hint { font-size: 11.5px; color: var(--muted); }
 
 /* 정산: 데스크톱 상단 인라인 빠른 추가 폼 (3a desktop) */
 .stl-inline-add { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 14px; padding: 10px; background: var(--card); }
@@ -658,12 +663,12 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 /* 지출/수입 추가 버튼 행 */
 .stl-addrow { display: flex; gap: 8px; margin: 12px 0; }
 .stl-addrow .btn { flex: 1 1 0; min-width: 0; width: auto; margin: 0; white-space: nowrap; padding-left: 10px; padding-right: 10px; }
-/* 정산 변경 이력 */
-.stl-histrow { text-align: right; margin: -4px 0 10px; }
+/* 정산 변경 이력 + 기록자 선택 */
+.stl-histrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -4px 0 10px; }
+.stl-melabel { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.stl-mesel { border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font-size: 14px; background: var(--card); color: var(--text); }
 .lnk { font-size: 13px; color: var(--muted); padding: 4px 2px; }
 .lnk:hover { color: var(--accent); text-decoration: underline; }
-.stl-who { font-size: 13px; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-.stl-who select { border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font-size: 14px; background: var(--card); color: var(--text); }
 .stl-loglist { max-height: 56vh; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
 .stl-logempty { color: var(--muted); font-size: 14px; text-align: center; padding: 28px 10px; line-height: 1.6; }
 .stl-logrow { display: flex; gap: 10px; align-items: flex-start; padding: 9px 2px; border-bottom: 1px solid var(--line-soft); }

@@ -1728,7 +1728,6 @@ function openSettleHistory() {
   const modal = h(`
     <div class="modal modal-sm">
       <h3>정산 변경 이력</h3>
-      <div class="stl-who">이 기기에서 바꾼 사람: <select id="whoSel"></select></div>
       <div class="stl-loglist"><div class="stl-logempty">불러오는 중…</div></div>
       <div class="modal-actions"><button class="btn ghost" id="close">닫기</button></div>
     </div>`);
@@ -1737,12 +1736,6 @@ function openSettleHistory() {
   const closeM = () => { if (unsub) { unsub(); unsub = null; } bg.remove(); };
   bg.addEventListener("click", (e) => { if (e.target === bg) closeM(); });
   modal.querySelector("#close").addEventListener("click", closeM);
-
-  const who = getSettleWho();
-  const sel = modal.querySelector("#whoSel");
-  sel.innerHTML = `<option value="">익명</option>` + tripMembers().map((m) => `<option value="${esc(m)}">${esc(m)}</option>`).join("");
-  sel.value = who;
-  sel.addEventListener("change", () => { setSettleWho(sel.value); toast(sel.value ? `이제부터 '${sel.value}'(으)로 기록돼요` : "익명으로 기록됩니다"); });
 
   const list = modal.querySelector(".stl-loglist");
   const ACT = { add: ["추가", "a-add"], edit: ["수정", "a-edit"], delete: ["삭제", "a-del"] };
@@ -1817,7 +1810,16 @@ function renderSettleView(shell) {
   addRow.querySelector(".stl-addinc").addEventListener("click", () => { if (needMembers()) openExpenseForm(null, "income"); });
   view.appendChild(addRow);
 
-  const histRow = h(`<div class="stl-histrow"><button class="lnk stl-histbtn">🕘 변경 이력</button></div>`);
+  // 기록자(이 기기 사용자) — 지출·입금을 추가/수정/삭제할 때 이 이름으로 변경 이력에 남는다.
+  // 액션은 이 정산 탭(빠른 추가·폼)에서 벌어지므로, 선택도 여기서 바로 하게 둔다.
+  const histRow = h(`<div class="stl-histrow">
+    <label class="stl-melabel" title="지출·입금을 추가·수정·삭제하면 이 이름으로 변경 이력에 남아요">기록자 <select class="stl-mesel"></select></label>
+    <button class="lnk stl-histbtn">🕘 변경 이력</button>
+  </div>`);
+  const meSel = histRow.querySelector(".stl-mesel");
+  meSel.innerHTML = `<option value="">익명</option>` + members.map((m) => `<option value="${esc(m)}">${esc(m)}</option>`).join("");
+  meSel.value = getSettleWho();
+  meSel.addEventListener("change", () => { setSettleWho(meSel.value); toast(meSel.value ? `이제부터 '${meSel.value}'(으)로 기록돼요` : "익명으로 기록됩니다"); });
   histRow.querySelector(".stl-histbtn").addEventListener("click", openSettleHistory);
   view.appendChild(histRow);
 
@@ -2234,6 +2236,7 @@ function openExpenseForm(existing, kindArg) {
         <input class="ef-desc" id="efDesc" placeholder="무엇에 썼나요? (예: 저녁 한정식)" value="${esc(expForm.desc)}" /></div>
       <div class="ef-field" id="efPayField"><div class="ef-lbl" id="efPayLbl">결제한 사람</div><div class="ef-payers" id="efPayers"></div></div>
       <div class="ef-field" id="efWhoField"><div class="ef-lbl2"><span>나눠 낼 사람</span><button class="ef-all" id="efAll" type="button">전체</button></div><div class="ef-who" id="efWho"></div></div>
+      <div class="ef-recby"><span class="ef-recby-lbl">기록자</span><select id="efBy"></select><span class="ef-recby-hint">변경 이력에 남는 이름</span></div>
       <div class="ef-actions">
         ${existing ? `<button class="btn danger" id="efDel">삭제</button>` : ""}
         <button class="btn" id="efSave"></button>
@@ -2474,6 +2477,12 @@ function openExpenseForm(existing, kindArg) {
     renderWho(); updateCalc();
   });
   applyKind();
+
+  // 기록자 — 이 폼에서 저장(추가·수정)·삭제할 때 변경 이력에 남길 이름. 기기별로 기억한다.
+  const bySel = modal.querySelector("#efBy");
+  bySel.innerHTML = `<option value="">익명</option>` + members.map((m) => `<option value="${esc(m)}">${esc(m)}</option>`).join("");
+  bySel.value = getSettleWho();
+  bySel.addEventListener("change", () => setSettleWho(bySel.value));
 
   if (existing) modal.querySelector("#efDel").addEventListener("click", async () => {
     if (!confirm(expForm.kind === "income" ? "이 입금 내역을 삭제할까요?" : "이 지출을 삭제할까요?")) return;
