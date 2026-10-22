@@ -1267,6 +1267,7 @@ function itemCard(it) {
           <span class="tl-weather"></span>
           <span class="tl-acts">
             <button class="cal" title="이 일정 캘린더에 추가">📅</button>
+            <button class="tocand" title="후보로 내리기">📥</button>
             <button class="edit" title="수정">✏️</button>
             <button class="del" title="삭제">🗑️</button>
           </span>
@@ -1285,6 +1286,7 @@ function itemCard(it) {
     });
   }
   row.querySelector(".cal").addEventListener("click", (e) => { e.stopPropagation(); addItemToCalendar(it); });
+  row.querySelector(".tocand").addEventListener("click", (e) => { e.stopPropagation(); unassignItem(it); });
   row.querySelector(".edit").addEventListener("click", (e) => { e.stopPropagation(); openEditor(it); });
   row.querySelector(".del").addEventListener("click", (e) => {
     e.stopPropagation();
@@ -1346,11 +1348,13 @@ function toggleActions(it, row) {
   }
   const bCal = h(`<button class="ia-btn">📅 캘린더</button>`);
   bCal.addEventListener("click", (e) => { e.stopPropagation(); addItemToCalendar(it); });
+  const bCand = h(`<button class="ia-btn">📥 후보로</button>`);
+  bCand.addEventListener("click", (e) => { e.stopPropagation(); unassignItem(it); });
   const bEdit = h(`<button class="ia-btn">✏️ 수정</button>`);
   bEdit.addEventListener("click", (e) => { e.stopPropagation(); openEditor(it); });
   const bDel = h(`<button class="ia-btn danger">🗑 삭제</button>`);
   bDel.addEventListener("click", (e) => { e.stopPropagation(); if (confirm(`"${it.name || TYPES[it.type]?.label}" 삭제할까요?`)) { deleteDoc(doc(db, "trips", tripId, "items", it.id)); logEvent("item_delete", { trip: tripId }); } });
-  el.appendChild(bCal); el.appendChild(bEdit); el.appendChild(bDel);
+  el.appendChild(bCal); el.appendChild(bCand); el.appendChild(bEdit); el.appendChild(bDel);
 }
 
 // ---------- 이 날 지도 (구글맵) ----------
@@ -1543,7 +1547,7 @@ function openEditor(existing, presetDay, opts) {
       </div>
       <div class="field"><label>이름</label><input id="name" value="${esc(editState.name)}" placeholder="장소/메뉴/활동 이름" /></div>
       <div class="field"><label>주소 · 위치</label><input id="address" value="${esc(editState.address)}" placeholder="주소 또는 위치 설명" /></div>
-      <div class="field"><label>시간</label>
+      <div class="field" id="timeField"><label>시간</label>
         <div class="time-pick"><select id="timeH">${hourOpts}</select><select id="timeM">${minOpts}</select></div>
       </div>
       <div class="field"><label>메모</label><textarea id="memo" placeholder="예약 정보, 팁, 준비물…">${esc(editState.memo)}</textarea></div>
@@ -1555,6 +1559,10 @@ function openEditor(existing, presetDay, opts) {
   bg.appendChild(modal);
   document.body.appendChild(bg);
   bg.addEventListener("click", (e) => { if (e.target === bg) close(); });
+
+  // 후보(날짜 미정)는 시간 칸 숨김 — 날짜에 넣은 뒤 일정에서 시간 지정
+  const isCand = asCand || (existing && !Number.isInteger(editState.day));
+  if (isCand) { const tf = modal.querySelector("#timeField"); if (tf) tf.style.display = "none"; }
 
   // 종류 선택
   const typePick = modal.querySelector("#typePick");
