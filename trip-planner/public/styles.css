@@ -882,3 +882,30 @@ input, textarea, select { font-family: inherit; font-size: 16px; }
 .al-guide { margin: 0 0 14px; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.5; color: var(--ink); }
 .al-guide li { padding-left: 2px; }
 .al-guide .al-ic { font-family: -apple-system, "SF Pro Text", sans-serif; }
+
+/* ---------- 후보(날짜 미정) ---------- */
+.cand-sec { margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--line); }
+.cand-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.cand-head .ch-t { font-weight: 700; font-size: 15px; color: var(--amber); }
+.cand-head .ch-cnt { font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--surface); padding: 1px 7px; border-radius: 999px; }
+.cand-head .ch-hint { font-size: 12px; color: var(--muted); }
+.cand-body { display: flex; flex-direction: column; gap: 8px; }
+.cand-card { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--amber); border-radius: 10px; padding: 10px 12px; box-shadow: var(--shadow); }
+.cc-main .cc-name { font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 7px; }
+.cc-main .cc-em { font-size: 15px; }
+.cc-main .cc-addr { font-size: 12.5px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-days { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 9px; }
+.cc-days-lb { font-size: 12px; color: var(--muted); margin-right: 2px; }
+.cc-day { min-width: 30px; height: 28px; padding: 0 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 8px; font-family: var(--mono); font-size: 13px; cursor: pointer; transition: background .12s, color .12s, border-color .12s; }
+.cc-day:hover { background: var(--amber); border-color: var(--amber); color: #fff; }
+.cc-acts { display: flex; gap: 12px; margin-top: 9px; }
+.cc-act { background: none; border: none; padding: 2px 0; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+.cc-act:hover { color: var(--accent); }
+.cc-act.danger:hover { color: var(--danger); }
+.cand-add { margin-top: 2px; }
+/* 지도 후보 InfoWindow */
+.cand-info { color: #1f2937; font-size: 13px; line-height: 1.4; min-width: 150px; }
+.cand-info .ci-q { font-size: 12px; color: #6b7280; margin: 4px 0 6px; }
+.cand-info .ci-days { display: flex; gap: 5px; flex-wrap: wrap; }
+.cand-info .ci-day { border: 1px solid #e5a24a; background: #fff7ed; color: #b45309; border-radius: 7px; padding: 4px 9px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.cand-info .ci-day:hover { background: #f59e0b; color: #fff; border-color: #f59e0b; }

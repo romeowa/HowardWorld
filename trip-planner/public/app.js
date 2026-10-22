@@ -864,6 +864,7 @@ let tripId = null;
 let dayMap = null;
 let markerById = {};   // 항목 id → 지도 마커 (리스트 클릭 시 지도 이동용)
 let currentPinned = []; // 현재 표시 중인 핀 목록 (모바일 지도 시트용)
+let currentCandPins = []; // 현재 후보 핀 목록
 let pinNumById = {};   // 항목 id → 지도 핀 번호 (타임라인 번호 원과 매칭)
 let skipRememberOnce = false;  // admin에서 열람 시 홈 최근목록에 기록 안 함
 
@@ -968,7 +969,9 @@ function paint() {
   const ordered = items.slice().sort((a, b) =>
     (a.day - b.day) || ((a.time || "99:99") < (b.time || "99:99") ? -1 : (a.time === b.time ? (a.order || 0) - (b.order || 0) : 1)));
   const pinned = ordered.filter((it) => dayList.includes(it.day) && it.lat != null);
-  const hasMap = pinned.length > 0;
+  const cands = items.filter((it) => !Number.isInteger(it.day)); // 날짜 미정 = 후보
+  const candPins = cands.filter((it) => it.lat != null);
+  const hasMap = pinned.length > 0 || candPins.length > 0;
   pinNumById = {}; pinned.forEach((it, i) => { pinNumById[it.id] = i + 1; }); // 지도 핀 번호와 매칭
 
   APP.innerHTML = "";
@@ -979,8 +982,8 @@ function paint() {
   let summaryTxt;
   if (trip.startDate) {
     const s = parseDate(trip.startDate), e = addDays(s, (trip.dayCount || 1) - 1);
-    summaryTxt = `${fmtMD(s)}(${wkOf(s)}) — ${fmtMD(e)}(${wkOf(e)}) · ${trip.dayCount}일 · ${items.length}곳`;
-  } else summaryTxt = `${trip.dayCount}일 · ${items.length}곳`;
+    summaryTxt = `${fmtMD(s)}(${wkOf(s)}) — ${fmtMD(e)}(${wkOf(e)}) · ${trip.dayCount}일 · ${items.length - cands.length}곳`;
+  } else summaryTxt = `${trip.dayCount}일 · ${items.length - cands.length}곳`;
   const mob = isMobileView();
 
   const bar = h(`
@@ -1124,11 +1127,22 @@ function paint() {
     sec.appendChild(add);
     list.appendChild(sec);
   });
+  // 후보(날짜 미정) 섹션 — 지도엔 함께 보이고, 날짜 칩으로 바로 편입
+  const candSec = h(`<div class="cand-sec"></div>`);
+  candSec.appendChild(h(`<div class="cand-head"><span class="ch-t">📍 후보</span>${cands.length ? `<span class="ch-cnt">${cands.length}곳</span>` : ""}<span class="ch-hint">날짜 미정 · 가고 싶은 곳을 모아 두고, 칩을 눌러 날짜에 넣으세요</span></div>`));
+  const candBody = h(`<div class="cand-body"></div>`);
+  cands.forEach((c) => candBody.appendChild(candCard(c)));
+  const candAdd = h(`<button class="tl-add cand-add">+ 후보 담기</button>`);
+  candAdd.addEventListener("click", () => openEditor(null, null, { cand: true }));
+  candBody.appendChild(candAdd);
+  candSec.appendChild(candBody);
+  list.appendChild(candSec);
   main.appendChild(list);
   body.appendChild(main);
 
   // 지도: 데스크톱은 오른쪽 스티키(#dayMap), 모바일은 '지도' 버튼 → 하단 시트(1d)
   currentPinned = pinned;
+  currentCandPins = candPins;
   if (hasMap) {
     const aside = h(`<div class="trip-aside"><div id="dayMap"></div></div>`);
     body.appendChild(aside);
@@ -1176,7 +1190,7 @@ function paint() {
   APP.appendChild(shell);
   APP.appendChild(promoFooter());
   // 데스크톱만 우측 지도 즉시 렌더. 모바일은 '지도' 버튼으로 시트에서 렌더.
-  if (pinned.length && !isMobileView()) renderDayMap(pinned, "dayMap");
+  if ((pinned.length || candPins.length) && !isMobileView()) renderDayMap(pinned, "dayMap", candPins);
 }
 
 // 모바일: 하단 지도 시트 열기/닫기
@@ -1199,8 +1213,8 @@ async function openMapSheet(focus) {
     }).open({ map, anchor: mk });
     dayMap = map;
   } else {
-    // FAB '지도'로 열면 전체 루트 표시
-    await renderDayMap(currentPinned, "dayMapSheet");
+    // FAB '지도'로 열면 전체 루트 + 후보 표시
+    await renderDayMap(currentPinned, "dayMapSheet", currentCandPins);
   }
 }
 function closeMapSheet() { const bg = document.getElementById("mapSheetBg"); if (bg) bg.hidden = true; }
@@ -1341,7 +1355,7 @@ function toggleActions(it, row) {
 
 // ---------- 이 날 지도 (구글맵) ----------
 let dayFitAll = null; // "전체 보기" 콜백
-async function renderDayMap(pinned, elId = "dayMap") {
+async function renderDayMap(pinned, elId = "dayMap", cands = []) {
   const el = document.getElementById(elId);
   if (!el) return;
   await google.maps.importLibrary("maps");
@@ -1352,6 +1366,7 @@ async function renderDayMap(pinned, elId = "dayMap") {
   markerById = {};
   const bounds = new google.maps.LatLngBounds();
   const path = [];
+  const fitPts = [];
   pinned.forEach((it, i) => {
     const pos = { lat: it.lat, lng: it.lng };
     const mk = new google.maps.Marker({
@@ -1363,15 +1378,27 @@ async function renderDayMap(pinned, elId = "dayMap") {
     });
     mk.addListener("click", () => { info.open({ map, anchor: mk }); focusItem(it); });
     markerById[it.id] = { mk, info };
-    bounds.extend(pos); path.push(pos);
+    bounds.extend(pos); path.push(pos); fitPts.push(pos);
   });
   // 순서대로 잇는 경로선
   if (path.length > 1) {
     new google.maps.Polyline({ path, map, strokeColor: "#0f766e", strokeOpacity: 0.85, strokeWeight: 3.5 });
   }
+  // 후보 핀(날짜 미정) — 주황 점, 클릭하면 어느 날에 넣을지 선택
+  cands.forEach((it) => {
+    const pos = { lat: it.lat, lng: it.lng };
+    const mk = new google.maps.Marker({
+      position: pos, map, zIndex: 50,
+      icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: "#f59e0b", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 },
+    });
+    const info = new google.maps.InfoWindow({ content: candInfoContent(it) });
+    mk.addListener("click", () => info.open({ map, anchor: mk }));
+    markerById[it.id] = { mk, info };
+    bounds.extend(pos); fitPts.push(pos);
+  });
   dayFitAll = () => {
-    if (path.length > 1) map.fitBounds(bounds, 40);
-    else { map.setCenter(path[0]); map.setZoom(15); }
+    if (fitPts.length > 1) map.fitBounds(bounds, 40);
+    else if (fitPts.length === 1) { map.setCenter(fitPts[0]); map.setZoom(15); }
   };
   // "전체 보기" 버튼
   const btn = document.createElement("button");
@@ -1422,13 +1449,70 @@ function focusOnMap(it) {
   if (c) { c.classList.remove("flash"); void c.offsetWidth; c.classList.add("flash"); }
 }
 
+// ---------- 후보(날짜 미정) ----------
+// 후보를 특정 날짜로 편입 — day만 채우면 onSnapshot이 일정으로 재배치
+function assignCandidate(it, day) {
+  updateDoc(doc(db, "trips", tripId, "items", it.id), { day })
+    .then(() => { const { top } = dayLabel(trip.startDate, day); toast(`${top}에 넣었어요`); logEvent("item_add", { trip: tripId }); })
+    .catch((e) => toast("실패: " + e.message));
+}
+// 일정 항목을 다시 후보로 빼기
+function unassignItem(it) {
+  updateDoc(doc(db, "trips", tripId, "items", it.id), { day: null })
+    .then(() => toast("후보로 옮겼어요"))
+    .catch((e) => toast("실패: " + e.message));
+}
+function focusCandOnMap(it) {
+  if (it.lat == null) return;
+  if (isMobileView()) openMapSheet(); else focusOnMap(it);
+}
+// 후보 카드 (목록)
+function candCard(it) {
+  const t = TYPES[it.type] || TYPES.place;
+  const card = h(`<div class="cand-card" data-id="${it.id}"></div>`);
+  const main = h(`<div class="cc-main">
+      <div class="cc-name"><span class="cc-em">${t.emoji}</span>${esc(it.name || it.address || "이름 없음")}</div>
+      ${it.address ? `<div class="cc-addr">${esc(it.address)}</div>` : ""}
+    </div>`);
+  const days = h(`<div class="cc-days"><span class="cc-days-lb">날짜에 넣기</span></div>`);
+  for (let i = 0; i < trip.dayCount; i++) {
+    const { top, sub } = dayLabel(trip.startDate, i);
+    const chip = h(`<button class="cc-day" title="${esc(top)}${sub ? " · " + esc(sub) : ""}">${i + 1}</button>`);
+    chip.addEventListener("click", () => assignCandidate(it, i));
+    days.appendChild(chip);
+  }
+  const acts = h(`<div class="cc-acts"></div>`);
+  if (it.lat != null) { const b = h(`<button class="cc-act">🗺 지도</button>`); b.addEventListener("click", () => focusCandOnMap(it)); acts.appendChild(b); }
+  const edB = h(`<button class="cc-act">수정</button>`); edB.addEventListener("click", () => openEditor(it)); acts.appendChild(edB);
+  const delB = h(`<button class="cc-act danger">삭제</button>`);
+  delB.addEventListener("click", () => { if (confirm("이 후보를 삭제할까요?")) { deleteDoc(doc(db, "trips", tripId, "items", it.id)); logEvent("item_delete", { trip: tripId }); } });
+  acts.appendChild(delB);
+  card.appendChild(main); card.appendChild(days); card.appendChild(acts);
+  return card;
+}
+// 지도 후보 핀 InfoWindow — 이름 + 날짜 버튼(누르면 바로 편입)
+function candInfoContent(it) {
+  const el = document.createElement("div");
+  el.className = "cand-info";
+  el.innerHTML = `<div class="ci-name"><b>${esc(it.name || it.address || "후보")}</b></div><div class="ci-q">어느 날에 넣을까요?</div>`;
+  const row = document.createElement("div"); row.className = "ci-days";
+  for (let i = 0; i < trip.dayCount; i++) {
+    const b = document.createElement("button"); b.className = "ci-day"; b.type = "button"; b.textContent = "D" + (i + 1);
+    b.addEventListener("click", () => assignCandidate(it, i));
+    row.appendChild(b);
+  }
+  el.appendChild(row);
+  return el;
+}
+
 // ---------- 항목 편집 모달 ----------
 let pickMap = null, pickMarker = null, editState = null;
 
-function openEditor(existing, presetDay) {
+function openEditor(existing, presetDay, opts) {
+  const asCand = !!(opts && opts.cand);
   editState = existing
     ? { ...existing }
-    : { day: presetDay != null ? presetDay : curDay, type: "place", name: "", address: "", lat: null, lng: null, time: "", memo: "" };
+    : { day: asCand ? null : (presetDay != null ? presetDay : curDay), type: "place", name: "", address: "", lat: null, lng: null, time: "", memo: "" };
 
   // 24시간제 시/분 선택 옵션
   const [eh = "", em = ""] = (editState.time || "").split(":");
@@ -1443,7 +1527,7 @@ function openEditor(existing, presetDay) {
   const bg = h(`<div class="modal-bg"></div>`);
   const modal = h(`
     <div class="modal">
-      <h3>${existing ? "항목 수정" : "항목 추가"}</h3>
+      <h3>${existing ? (Number.isInteger(editState.day) ? "항목 수정" : "후보 수정") : (asCand ? "후보 담기" : "항목 추가")}</h3>
       <div class="field">
         <label>종류</label>
         <div class="type-pick" id="typePick"></div>
