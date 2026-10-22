@@ -1527,6 +1527,11 @@ function openEditor(existing, presetDay, opts) {
   if (em && !minSet.includes(Number(em))) minSet.push(Number(em));
   minSet.sort((a, b) => a - b);
   const minOpts = minSet.map((i) => { const v = String(i).padStart(2, "0"); return `<option value="${v}" ${v === em ? "selected" : ""}>${v}분</option>`; }).join("");
+  // 날짜(Day) 옵션 — 후보(미정) + 각 날
+  const dayCount = (trip && trip.dayCount) || 1;
+  const dayOpts = [`<option value="cand" ${editState.day == null ? "selected" : ""}>후보 (날짜 미정)</option>`]
+    .concat([...Array(dayCount).keys()].map((i) => { const { top, sub } = dayLabel(trip.startDate, i); return `<option value="${i}" ${editState.day === i ? "selected" : ""}>${esc(top)}${sub ? " · " + esc(sub) : ""}</option>`; }))
+    .join("");
 
   const bg = h(`<div class="modal-bg"></div>`);
   const modal = h(`
@@ -1547,6 +1552,9 @@ function openEditor(existing, presetDay, opts) {
       </div>
       <div class="field"><label>이름</label><input id="name" value="${esc(editState.name)}" placeholder="장소/메뉴/활동 이름" /></div>
       <div class="field"><label>주소 · 위치</label><input id="address" value="${esc(editState.address)}" placeholder="주소 또는 위치 설명" /></div>
+      <div class="field" id="dayField"><label>날짜</label>
+        <select id="daySel" class="day-select">${dayOpts}</select>
+      </div>
       <div class="field" id="timeField"><label>시간</label>
         <div class="time-pick"><select id="timeH">${hourOpts}</select><select id="timeM">${minOpts}</select></div>
       </div>
@@ -1560,9 +1568,17 @@ function openEditor(existing, presetDay, opts) {
   document.body.appendChild(bg);
   bg.addEventListener("click", (e) => { if (e.target === bg) close(); });
 
-  // 후보(날짜 미정)는 시간 칸 숨김 — 날짜에 넣은 뒤 일정에서 시간 지정
-  const isCand = asCand || (existing && !Number.isInteger(editState.day));
-  if (isCand) { const tf = modal.querySelector("#timeField"); if (tf) tf.style.display = "none"; }
+  // 날짜 선택: 수정 시 다른 날/후보로 이동. '후보 담기'(새 후보)에서는 날짜 칸 숨김.
+  const dayField = modal.querySelector("#dayField");
+  const timeField = modal.querySelector("#timeField");
+  const syncTime = () => { if (timeField) timeField.style.display = (editState.day == null) ? "none" : ""; };
+  if (asCand && dayField) dayField.style.display = "none";
+  const daySel = modal.querySelector("#daySel");
+  if (daySel) daySel.addEventListener("change", () => {
+    editState.day = daySel.value === "cand" ? null : Number(daySel.value);
+    syncTime();
+  });
+  syncTime();
 
   // 종류 선택
   const typePick = modal.querySelector("#typePick");
