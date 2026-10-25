@@ -1,7 +1,7 @@
 import SwiftUI
+import MapKit
 
-// 항목 추가/수정 시트. 날짜(후보 포함)·시간·종류·이름·주소·메모 편집.
-// 장소 좌표 검색은 다음 단계(MKLocalSearch). 지금은 기존 좌표를 보존한다.
+// 항목 추가/수정 시트. 장소 검색(MKLocalSearch)으로 좌표를 찍고, 날짜/시간/메모 편집.
 struct ItemEditor: View {
     let trip: Trip
     let existing: Item?
@@ -17,7 +17,15 @@ struct ItemEditor: View {
     @State private var hasTime: Bool
     @State private var timeDate: Date
     @State private var memo: String
+    @State private var lat: Double?
+    @State private var lng: Double?
     @State private var saving = false
+
+    // 검색
+    @State private var query = ""
+    @State private var results: [PlaceResult] = []
+    @State private var searching = false
+    @State private var searchTask: Task<Void, Never>?
 
     init(trip: Trip, existing: Item?, presetDay: Int?,
          onSave: @escaping (Item) async -> Void, onDelete: (() async -> Void)? = nil) {
@@ -33,15 +41,15 @@ struct ItemEditor: View {
         let d = it?.day ?? presetDay
         _daySel = State(initialValue: d ?? -1)
         _memo = State(initialValue: it?.memo ?? "")
+        _lat = State(initialValue: it?.lat)
+        _lng = State(initialValue: it?.lng)
         let parsed = ItemEditor.parseTime(it?.time ?? "")
         _hasTime = State(initialValue: parsed != nil)
         _timeDate = State(initialValue: parsed ?? defaultTime())
     }
 
     private var isNew: Bool { existing == nil }
-    private var titleText: String {
-        isNew ? (presetDay == nil ? "후보 담기" : "항목 추가") : "수정"
-    }
+    private var titleText: String { isNew ? (presetDay == nil ? "후보 담기" : "항목 추가") : "수정" }
     private var canSave: Bool {
         !(name.trimmingCharacters(in: .whitespaces).isEmpty
           && address.trimmingCharacters(in: .whitespaces).isEmpty
@@ -59,10 +67,43 @@ struct ItemEditor: View {
                     }
                     .pickerStyle(.menu)
                 }
+
+                Section("장소 검색 (지도)") {
+                    HStack {
+                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                        TextField("예: 남산타워, 스타벅스 강남…", text: $query)
+                            .autocorrectionDisabled()
+                            .onChange(of: query) { _, q in scheduleSearch(q) }
+                        if searching { ProgressView() }
+                    }
+                    ForEach(results) { r in
+                        Button { pick(r) } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(r.name).foregroundStyle(.primary)
+                                if !r.address.isEmpty {
+                                    Text(r.address).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    if let la = lat, let lo = lng {
+                        PickedMap(lat: la, lng: lo)
+                            .frame(height: 140)
+                            .listRowInsets(EdgeInsets())
+                        HStack {
+                            Label("위치 지정됨", systemImage: "mappin.circle.fill").foregroundStyle(.teal)
+                            Spacer()
+                            Button("위치 지우기") { lat = nil; lng = nil }
+                                .font(.caption)
+                        }
+                    }
+                }
+
                 Section {
                     TextField("장소/메뉴/활동 이름", text: $name)
                     TextField("주소 또는 위치 설명", text: $address)
                 }
+
                 Section {
                     Picker("날짜", selection: $daySel) {
                         Text("후보 (날짜 미정)").tag(-1)
@@ -77,10 +118,12 @@ struct ItemEditor: View {
                         }
                     }
                 }
+
                 Section("메모") {
                     TextField("예약 정보, 팁, 준비물…", text: $memo, axis: .vertical)
                         .lineLimit(2...5)
                 }
+
                 if !isNew, let onDelete {
                     Section {
                         Button(role: .destructive) {
@@ -94,16 +137,37 @@ struct ItemEditor: View {
             .navigationTitle(titleText)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("취소") { dismiss() }
-                }
+                ToolbarItem(placement: .cancellationAction) { Button("취소") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("저장") { Task { await save() } }
-                        .disabled(!canSave || saving)
+                    Button("저장") { Task { await save() } }.disabled(!canSave || saving)
                 }
             }
             .disabled(saving)
         }
+    }
+
+    private func scheduleSearch(_ q: String) {
+        searchTask?.cancel()
+        let query = q
+        if query.trimmingCharacters(in: .whitespaces).isEmpty { results = []; searching = false; return }
+        searchTask = Task {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            if Task.isCancelled { return }
+            searching = true
+            let res = await PlaceSearch.search(query)
+            if Task.isCancelled { return }
+            results = res
+            searching = false
+        }
+    }
+
+    private func pick(_ r: PlaceResult) {
+        name = r.name
+        address = r.address
+        lat = r.lat; lng = r.lng
+        results = []
+        query = ""
+        if type == .memo { type = .place }
     }
 
     private func save() async {
@@ -116,6 +180,8 @@ struct ItemEditor: View {
         it.day = daySel < 0 ? nil : daySel
         it.time = (daySel >= 0 && hasTime) ? ItemEditor.timeString(timeDate) : ""
         it.memo = memo.trimmingCharacters(in: .whitespaces)
+        it.lat = lat
+        it.lng = lng
         await onSave(it)
         dismiss()
     }
@@ -133,4 +199,19 @@ struct ItemEditor: View {
 
 private func defaultTime() -> Date {
     Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
+}
+
+// 선택된 좌표 미니 지도(핀 1개, 상호작용 없음)
+struct PickedMap: View {
+    let lat: Double
+    let lng: Double
+    var body: some View {
+        Map(initialPosition: .region(.init(
+            center: .init(latitude: lat, longitude: lng),
+            span: .init(latitudeDelta: 0.01, longitudeDelta: 0.01)))) {
+            Marker("", coordinate: .init(latitude: lat, longitude: lng)).tint(.red)
+        }
+        .mapControlVisibility(.hidden)
+        .allowsHitTesting(false)
+    }
 }
