@@ -153,4 +153,21 @@ enum FirestoreREST {
     static func deleteItem(tripId: String, itemId: String) async throws {
         try await send("DELETE", "/trips/\(tripId)/items/\(itemId)")
     }
+
+    // 새 여행 생성 (웹과 동일 스키마: title/startDate/dayCount/createdAt)
+    static func createTrip(title: String, startDate: String?, dayCount: Int) async throws -> Trip {
+        let name = title.trimmingCharacters(in: .whitespaces).isEmpty ? "새 여행" : title
+        let days = max(1, dayCount)
+        let iso = ISO8601DateFormatter().string(from: Date())
+        let f: [String: Any] = [
+            "title": vStr(name),
+            "dayCount": vInt(days),
+            "startDate": startDate.map(vStr) ?? vNull(),
+            "createdAt": ["timestampValue": iso],
+        ]
+        let res = try await send("POST", "/trips", body: ["fields": f])
+        let docName = res["name"] as? String ?? ""
+        let id = String(docName.split(separator: "/").last ?? "")
+        return Trip(id: id, title: name, startDate: startDate, dayCount: days, members: [])
+    }
 }

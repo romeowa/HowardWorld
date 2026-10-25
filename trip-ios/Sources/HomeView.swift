@@ -4,6 +4,7 @@ struct HomeView: View {
     @EnvironmentObject var store: Store
     @State private var linkInput = ""
     @State private var path: [String] = []   // trip ids
+    @State private var showNew = false
     @FocusState private var linkFocused: Bool
 
     var body: some View {
@@ -52,6 +53,19 @@ struct HomeView: View {
             .navigationTitle("하워드 트립")
             .navigationDestination(for: String.self) { id in
                 TripView(tripId: id)
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showNew = true } label: {
+                        Label("새 여행", systemImage: "plus")
+                    }
+                }
+            }
+            .sheet(isPresented: $showNew) {
+                NewTripSheet { trip in
+                    store.remember(trip)
+                    path.append(trip.id)
+                }
             }
         }
     }

@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: f2a2b738-2280-4be0-a63c-ca09b5c4f9ff
-  modified: 2026-10-03T06:18:55.241Z
+  modified: 2026-10-22T14:10:25.691Z
 ---
 
 trip-planner: 링크 하나로 함께 짜는 여행 일정 공유 웹앱. 공용 [[howardworld-firebase-setup]] 위에 올림.
@@ -17,6 +17,7 @@ trip-planner: 링크 하나로 함께 짜는 여행 일정 공유 웹앱. 공용
 - 구글 API 키: 리퍼러(howard-trips.web.app/*) + Places/Maps JS API로 제한된 **브라우저 키**. gcloud로 생성/관리. 키는 **public/config.js(gitignore)** 에 넣어 주입 — 소스/깃엔 미포함(브라우저엔 어차피 노출되지만 리퍼러 제한이 방어선). app.js는 window.TRIP_CONFIG.googleKey 사용.
 - 일정 화면 다듬기(1c/1d): 상단 ⋯ 더보기 메뉴(.tb-menu/.tb-dropdown)에 내보내기/가져오기(새 여행)/삭제 모음(하단 버튼 제거). 주소 한 줄(말줄임). 수정·삭제는 데스크톱 hover 시에만(@media hover), 모바일은 헤더 액션 숨기고 탭으로. 데스크톱(≥960)=우측 스티키 지도(#dayMap)+항목 클릭 시 인라인 미니지도. 모바일(<960)=목록 아래 지도 없음, 우하단 '🗺 지도' FAB→하단 지도 시트(openMapSheet, #dayMapSheet), 항목 탭→[지도(시트 열기)·길찾기·수정·삭제] 인라인 버튼(toggleActions). renderDayMap(pinned, elId) 공용. isMobileView()=matchMedia(max-width:959).
 - UI: 홈은 월별 달력 뷰(여행을 색 바로 표시) + 이 기기 localStorage 최근 목록만. 여행 화면은 전체 일정 리스트(Day별 섹션) + 상단 '전체'/날짜 탭(전체=다 보기, 날짜=그 날만 필터). 항목(장소/식사/액티비티/메모) 시간순 자동 정렬, 시간 입력은 24시간 시/분 드롭다운. 항목 클릭 시 아래로 확장되며 인라인 미니지도(핀 1개). 항목 "저장 후 계속" 연속 입력. 주소 클릭 시 구글맵 열기.
+- **후보 장소(날짜 미정, 2026-10)**: 후보 = `day`가 정수가 아닌 항목(기존 item 스키마 재사용, 별도 컬렉션 아님). 일정 화면 하단 '📍 후보' 섹션(.cand-sec): 후보 카드(candCard) 목록 + '+ 후보 담기'(openEditor(null,null,{cand:true}) → day=null 저장). 지도(renderDayMap 3번째 인자 cands)에 **주황 원 핀**으로 함께 표시(경로선 X), 핀 클릭 InfoWindow(candInfoContent)의 D1/D2… 버튼 또는 카드의 '날짜에 넣기 [1][2]…' 칩 → assignCandidate(it,day)=updateDoc({day})로 그 날 편입. **반대로 일정 항목→후보로 내리기**: 항목 액션의 📥 버튼(unassignItem=day:null) — 데스크톱 .tl-acts hover, 모바일 toggleActions 인라인. 후보 담기/수정 폼은 **시간 칸 숨김**(#timeField, 날짜 미정이라). 요약 'N곳'·pinned은 후보 제외. currentCandPins로 모바일 시트에도 전달.
 - 광고: 피그맵/니니구(만든 사람의 다른 앱), 리스트 맨 끝에 붙임(화면 하단 고정 아님).
 - 디자인: Claude Design 시안 기반 웜 라이트 타임라인(1a) + 월별 달력 홈(2a). IBM Plex Sans KR + JetBrains Mono. 여행 화면은 넓으면 타임라인|지도 2단, 좁으면 세로 1단(반응형).
 - 오프라인(PWA): sw.js(앱 셸 stale-while-revalidate, 전체 URL로 캐시) + Firestore persistentLocalCache(onSnapshot/오프라인 열람용, `db`). 오프라인 배너. SW 버전 올릴 때 sw.js의 VERSION 상수 갱신.
