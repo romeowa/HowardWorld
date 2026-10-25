@@ -91,4 +91,66 @@ enum FirestoreREST {
         }
         return items
     }
+
+    // ---- 쓰기 ----
+    static func vStr(_ s: String) -> [String: Any] { ["stringValue": s] }
+    static func vInt(_ n: Int) -> [String: Any] { ["integerValue": String(n)] }
+    static func vDbl(_ d: Double) -> [String: Any] { ["doubleValue": d] }
+    static func vNull() -> [String: Any] { ["nullValue": NSNull()] }
+
+    private static func itemFields(_ it: Item) -> [String: Any] {
+        [
+            "day": it.day.map(vInt) ?? vNull(),
+            "type": vStr(it.type),
+            "name": vStr(it.name),
+            "address": vStr(it.address),
+            "lat": it.lat.map(vDbl) ?? vNull(),
+            "lng": it.lng.map(vDbl) ?? vNull(),
+            "time": vStr(it.time),
+            "memo": vStr(it.memo),
+        ]
+    }
+
+    @discardableResult
+    private static func send(_ method: String, _ path: String, body: [String: Any]? = nil) async throws -> [String: Any] {
+        guard let url = URL(string: base + path) else { throw FSError.badURL }
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        if let body {
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(code) else { throw FSError.http(code) }
+        if data.isEmpty { return [:] }
+        return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+    }
+
+    // 새 항목 생성 → 생성된 id 반환
+    @discardableResult
+    static func addItem(tripId: String, _ it: Item) async throws -> String {
+        var f = itemFields(it)
+        f["order"] = vInt(Int(Date().timeIntervalSince1970 * 1000))
+        let res = try await send("POST", "/trips/\(tripId)/items", body: ["fields": f])
+        let name = res["name"] as? String ?? ""
+        return String(name.split(separator: "/").last ?? "")
+    }
+
+    // 항목 전체 수정(편집 가능한 필드만 마스크로)
+    static func updateItem(tripId: String, _ it: Item) async throws {
+        let masks = ["day", "type", "name", "address", "lat", "lng", "time", "memo"]
+        let q = masks.map { "updateMask.fieldPaths=\($0)" }.joined(separator: "&")
+        try await send("PATCH", "/trips/\(tripId)/items/\(it.id)?\(q)", body: ["fields": itemFields(it)])
+    }
+
+    // 날짜만 변경(편입/후보로 내리기)
+    static func setDay(tripId: String, itemId: String, day: Int?) async throws {
+        let f = ["day": day.map(vInt) ?? vNull()]
+        try await send("PATCH", "/trips/\(tripId)/items/\(itemId)?updateMask.fieldPaths=day", body: ["fields": f])
+    }
+
+    static func deleteItem(tripId: String, itemId: String) async throws {
+        try await send("DELETE", "/trips/\(tripId)/items/\(itemId)")
+    }
 }

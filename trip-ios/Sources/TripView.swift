@@ -1,6 +1,12 @@
 import SwiftUI
 import MapKit
 
+private struct EditTarget: Identifiable {
+    let id = UUID()
+    var item: Item?        // nil = 새 항목
+    var presetDay: Int?    // 새 항목이 들어갈 날(nil = 후보)
+}
+
 struct TripView: View {
     let tripId: String
     @EnvironmentObject var store: Store
@@ -9,6 +15,7 @@ struct TripView: View {
     @State private var items: [Item] = []
     @State private var loading = true
     @State private var errorMsg: String?
+    @State private var editTarget: EditTarget?
 
     private var pinned: [Item] { items.filter { $0.day != nil && $0.lat != nil } }
     private var candidates: [Item] { items.filter { $0.isCandidate } }
@@ -26,6 +33,17 @@ struct TripView: View {
         .navigationTitle(trip?.title ?? "여행")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .sheet(item: $editTarget) { target in
+            if let trip {
+                ItemEditor(
+                    trip: trip,
+                    existing: target.item,
+                    presetDay: target.presetDay,
+                    onSave: { await addOrUpdate($0) },
+                    onDelete: target.item.map { it in { await delete(it) } }
+                )
+            }
+        }
     }
 
     @ViewBuilder
@@ -41,19 +59,31 @@ struct TripView: View {
 
             ForEach(0..<trip.dayCount, id: \.self) { day in
                 let dayItems = items.filter { $0.day == day }
-                Section(dayLabel(trip, day)) {
-                    if dayItems.isEmpty {
-                        Text("아직 없음").foregroundStyle(.secondary).font(.subheadline)
-                    } else {
-                        ForEach(dayItems) { ItemRow(item: $0) }
+                Section(dayTitle(trip, day)) {
+                    ForEach(dayItems) { it in
+                        row(it, trip: trip, candidate: false)
                     }
+                    Button {
+                        editTarget = EditTarget(item: nil, presetDay: day)
+                    } label: {
+                        Label("장소 추가", systemImage: "plus")
+                    }
+                    .foregroundStyle(.tint)
                 }
             }
 
-            if !candidates.isEmpty {
-                Section("📍 후보 (날짜 미정)") {
-                    ForEach(candidates) { ItemRow(item: $0) }
+            Section {
+                ForEach(candidates) { it in
+                    row(it, trip: trip, candidate: true)
                 }
+                Button {
+                    editTarget = EditTarget(item: nil, presetDay: nil)
+                } label: {
+                    Label("후보 담기", systemImage: "plus")
+                }
+                .foregroundStyle(.tint)
+            } header: {
+                Text("📍 후보 (날짜 미정)")
             }
 
             Section {
@@ -64,6 +94,44 @@ struct TripView: View {
         .listStyle(.insetGrouped)
     }
 
+    @ViewBuilder
+    private func row(_ it: Item, trip: Trip, candidate: Bool) -> some View {
+        Button { editTarget = EditTarget(item: it, presetDay: nil) } label: {
+            HStack {
+                ItemRow(item: it)
+                Spacer(minLength: 0)
+                if candidate {
+                    Menu {
+                        ForEach(0..<trip.dayCount, id: \.self) { d in
+                            Button(dayTitle(trip, d)) { Task { await assign(it, day: d) } }
+                        }
+                    } label: {
+                        Text("날짜에 넣기").font(.caption.weight(.semibold))
+                    }
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) { Task { await delete(it) } } label: {
+                Label("삭제", systemImage: "trash")
+            }
+        }
+        .swipeActions(edge: .leading) {
+            if candidate {
+                // 후보 → 첫째 날로 빠르게
+                Button { Task { await assign(it, day: 0) } } label: {
+                    Label("Day 1", systemImage: "calendar.badge.plus")
+                }.tint(.teal)
+            } else {
+                Button { Task { await assign(it, day: nil) } } label: {
+                    Label("후보로", systemImage: "tray.and.arrow.down")
+                }.tint(.orange)
+            }
+        }
+    }
+
+    // ---- 데이터 ----
     private func load() async {
         loading = true; errorMsg = nil
         do {
@@ -78,6 +146,28 @@ struct TripView: View {
         loading = false
     }
 
+    private func reload() async {
+        if let it = try? await FirestoreREST.getItems(tripId) { items = it }
+    }
+
+    private func addOrUpdate(_ it: Item) async {
+        do {
+            if it.id.isEmpty { try await FirestoreREST.addItem(tripId: tripId, it) }
+            else { try await FirestoreREST.updateItem(tripId: tripId, it) }
+            await reload()
+        } catch { errorMsg = friendly(error) }
+    }
+
+    private func assign(_ it: Item, day: Int?) async {
+        try? await FirestoreREST.setDay(tripId: tripId, itemId: it.id, day: day)
+        await reload()
+    }
+
+    private func delete(_ it: Item) async {
+        try? await FirestoreREST.deleteItem(tripId: tripId, itemId: it.id)
+        await reload()
+    }
+
     private func friendly(_ e: Error) -> String {
         if case FirestoreREST.FSError.http(let code) = e {
             if code == 404 { return "링크가 올바르지 않거나 삭제된 여행이에요." }
@@ -85,22 +175,6 @@ struct TripView: View {
         }
         return "네트워크 오류예요. 잠시 후 다시 시도해 주세요."
     }
-
-    private func dayLabel(_ trip: Trip, _ day: Int) -> String {
-        guard let start = trip.startDate, let base = ymdToDate(start) else { return "Day \(day + 1)" }
-        let d = Calendar.current.date(byAdding: .day, value: day, to: base) ?? base
-        let fmt = DateFormatter()
-        fmt.locale = Locale(identifier: "ko_KR")
-        fmt.dateFormat = "M/d (E)"
-        return "Day \(day + 1) · \(fmt.string(from: d))"
-    }
-}
-
-private func ymdToDate(_ s: String) -> Date? {
-    let f = DateFormatter()
-    f.locale = Locale(identifier: "en_US_POSIX")
-    f.dateFormat = "yyyy-MM-dd"
-    return f.date(from: s)
 }
 
 struct ItemRow: View {
@@ -128,7 +202,7 @@ struct ItemRow: View {
     }
 }
 
-// 핀을 담은 지도 (일정 순서대로 경로선 + 번호 마커)
+// 핀을 담은 지도 (번호 마커)
 struct TripMap: View {
     let items: [Item]
 

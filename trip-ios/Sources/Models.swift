@@ -45,6 +45,24 @@ enum ItemType: String, CaseIterable {
     static func of(_ raw: String) -> ItemType { ItemType(rawValue: raw) ?? .place }
 }
 
+// "YYYY-MM-DD" → Date
+func ymdToDate(_ s: String) -> Date? {
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "en_US_POSIX")
+    f.dateFormat = "yyyy-MM-dd"
+    return f.date(from: s)
+}
+
+// "Day N · M/d (요일)" 라벨
+func dayTitle(_ trip: Trip, _ day: Int) -> String {
+    guard let start = trip.startDate, let base = ymdToDate(start) else { return "Day \(day + 1)" }
+    let d = Calendar.current.date(byAdding: .day, value: day, to: base) ?? base
+    let fmt = DateFormatter()
+    fmt.locale = Locale(identifier: "ko_KR")
+    fmt.dateFormat = "M/d (E)"
+    return "Day \(day + 1) · \(fmt.string(from: d))"
+}
+
 // 최근 연 여행 (UserDefaults 저장)
 struct RecentTrip: Codable, Identifiable, Equatable {
     let id: String
