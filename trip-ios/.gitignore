@@ -1,0 +1,5 @@
+HowardTrip.xcodeproj/
+DerivedData/
+build/
+*.xcuserstate
+.DS_Store
