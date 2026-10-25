@@ -10,12 +10,16 @@ private struct EditTarget: Identifiable {
 struct TripView: View {
     let tripId: String
     @EnvironmentObject var store: Store
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var trip: Trip?
     @State private var items: [Item] = []
     @State private var loading = true
     @State private var errorMsg: String?
     @State private var editTarget: EditTarget?
+    @State private var syncing = false        // 백그라운드 동기화 진행 표시
+
+    private let pollInterval: UInt64 = 4_000_000_000   // 4초
 
     private var pinned: [Item] { items.filter { $0.day != nil && $0.lat != nil } }
     private var candidates: [Item] { items.filter { $0.isCandidate } }
@@ -32,7 +36,21 @@ struct TripView: View {
         }
         .navigationTitle(trip?.title ?? "여행")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
+        .toolbar {
+            if syncing {
+                ToolbarItem(placement: .topBarTrailing) {
+                    ProgressView().controlSize(.small)
+                }
+            }
+        }
+        .task {
+            await load()
+            await startPolling()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // 앱이 다시 활성화되면 즉시 한 번 동기화
+            if phase == .active && !loading { Task { await syncSilently() } }
+        }
         .sheet(item: $editTarget) { target in
             if let trip {
                 ItemEditor(
@@ -89,9 +107,12 @@ struct TripView: View {
             Section {
                 Text("총 \(items.filter { $0.day != nil }.count)곳" + (candidates.isEmpty ? "" : " · 후보 \(candidates.count)곳"))
                     .font(.caption).foregroundStyle(.secondary)
+                Label("자동 동기화 켜짐 · 아래로 당겨 새로고침", systemImage: "arrow.triangle.2.circlepath")
+                    .font(.caption2).foregroundStyle(.secondary)
             }
         }
         .listStyle(.insetGrouped)
+        .refreshable { await syncSilently() }
     }
 
     @ViewBuilder
@@ -147,7 +168,33 @@ struct TripView: View {
     }
 
     private func reload() async {
-        if let it = try? await FirestoreREST.getItems(tripId) { items = it }
+        if let it = try? await FirestoreREST.getItems(tripId), items != it { items = it }
+    }
+
+    // 화면이 열려 있는 동안 주기적으로 조용히 동기화. 뷰가 사라지면 .task가 취소된다.
+    private func startPolling() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(nanoseconds: pollInterval)
+            if Task.isCancelled { break }
+            if editTarget != nil { continue }   // 편집 시트가 떠 있으면 건너뜀
+            await syncSilently()
+        }
+    }
+
+    // 여행 메타 + 항목을 다시 읽어 변경분만 반영(깜빡임 방지). 일시 오류는 조용히 무시.
+    private func syncSilently() async {
+        if editTarget != nil { return }
+        syncing = true
+        defer { syncing = false }
+        do {
+            async let tReq = FirestoreREST.getTrip(tripId)
+            async let iReq = FirestoreREST.getItems(tripId)
+            let (tr, it) = try await (tReq, iReq)
+            if trip != tr { trip = tr; store.remember(tr) }
+            if items != it { items = it }
+        } catch {
+            // 네트워크 일시 오류 등은 다음 주기에 재시도
+        }
     }
 
     private func addOrUpdate(_ it: Item) async {
