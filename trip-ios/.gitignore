@@ -1,5 +1,6 @@
 HowardTrip.xcodeproj/
 DerivedData/
 build/
+build-device/
 *.xcuserstate
 .DS_Store
