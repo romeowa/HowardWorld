@@ -23,6 +23,7 @@ struct TripView: View {
     @State private var syncing = false        // 백그라운드 동기화 진행 표시
     @State private var tab: TripTab = .plan
     @State private var mapDay: Int? = nil      // 지도 날짜 필터 (nil = 전체)
+    @State private var mapDayInitialized = false   // 오늘로 자동 시작 1회만
 
     private let pollInterval: UInt64 = 4_000_000_000   // 4초
 
@@ -227,6 +228,11 @@ struct TripView: View {
             let (tr, it, ex) = try await (t, i, x)
             trip = tr; items = it; expenses = ex
             store.remember(tr)
+            // 오늘이 여행 기간 안이고 그 날 핀이 있으면 지도를 '오늘'로 시작(최초 1회)
+            if !mapDayInitialized {
+                mapDayInitialized = true
+                if let t = todayIndex, pinned.contains(where: { $0.day == t }) { mapDay = t }
+            }
         } catch {
             errorMsg = friendly(error)
         }
