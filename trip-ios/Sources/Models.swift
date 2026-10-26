@@ -7,6 +7,9 @@ struct Trip: Identifiable, Equatable {
     var startDate: String?   // "YYYY-MM-DD"
     var dayCount: Int
     var members: [String]
+    var memberColors: [String: String] = [:]   // 이름 → hex 색
+    var rates: [String: Double] = [:]           // 통화 → 원/1단위 (고정 환율)
+    var expenseCategories: [String]? = nil      // 커스텀 카테고리(없으면 기본)
 }
 
 struct Item: Identifiable, Equatable {
@@ -22,6 +25,38 @@ struct Item: Identifiable, Equatable {
     var order: Double?
 
     var isCandidate: Bool { day == nil }
+}
+
+// 정산 내역(expenses 서브컬렉션). 웹과 동일 스키마.
+struct Expense: Identifiable, Equatable {
+    let id: String
+    var kind: String                   // "expense" | "income"
+    var amount: Double                 // 입력 통화 원금
+    var currency: String               // KRW | JPY | USD
+    var desc: String
+    var category: String
+    var day: Int?                      // 여행 외면 nil
+    var offTrip: Bool
+    var date: String                   // "YYYY-MM-DD" or ""
+    var place: String
+    var payer: String                  // 결제자(공금/수입이면 "")
+    var fromPool: Bool                 // 공금 결제
+    var sharedBy: [String]             // 나눠 낼 사람
+    var contribs: [String: Double]     // 수입: 참여자별 기여(원금)
+    var order: Double?
+
+    var isIncome: Bool { kind == "income" }
+}
+
+// 정산 변경 이력(settleLog) 한 줄
+struct SettleLogEntry: Identifiable {
+    let id: String
+    var action: String        // add | edit | delete
+    var kind: String          // expense | income
+    var summary: String
+    var prevSummary: String?
+    var by: String
+    var ts: Date?
 }
 
 enum ItemType: String, CaseIterable {

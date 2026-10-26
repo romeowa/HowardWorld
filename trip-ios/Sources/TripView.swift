@@ -7,6 +7,8 @@ private struct EditTarget: Identifiable {
     var presetDay: Int?    // 새 항목이 들어갈 날(nil = 후보)
 }
 
+private enum TripTab: String, CaseIterable { case plan = "일정", settle = "정산" }
+
 struct TripView: View {
     let tripId: String
     @EnvironmentObject var store: Store
@@ -14,10 +16,12 @@ struct TripView: View {
 
     @State private var trip: Trip?
     @State private var items: [Item] = []
+    @State private var expenses: [Expense] = []
     @State private var loading = true
     @State private var errorMsg: String?
     @State private var editTarget: EditTarget?
     @State private var syncing = false        // 백그라운드 동기화 진행 표시
+    @State private var tab: TripTab = .plan
 
     private let pollInterval: UInt64 = 4_000_000_000   // 4초
 
@@ -25,13 +29,26 @@ struct TripView: View {
     private var candidates: [Item] { items.filter { $0.isCandidate } }
 
     var body: some View {
-        Group {
-            if loading {
-                ProgressView("불러오는 중…")
-            } else if let errorMsg {
-                ContentUnavailableView("여행을 열 수 없어요", systemImage: "exclamationmark.triangle", description: Text(errorMsg))
-            } else if let trip {
-                content(trip)
+        VStack(spacing: 0) {
+            if !loading && errorMsg == nil {
+                Picker("", selection: $tab) {
+                    ForEach(TripTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal).padding(.top, 6).padding(.bottom, 8)
+            }
+            Group {
+                if loading {
+                    ProgressView("불러오는 중…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let errorMsg {
+                    ContentUnavailableView("여행을 열 수 없어요", systemImage: "exclamationmark.triangle", description: Text(errorMsg))
+                } else if let trip {
+                    switch tab {
+                    case .plan: content(trip)
+                    case .settle: SettleView(trip: trip, tripId: tripId, items: items, expenses: expenses,
+                                              reload: { await syncSilently() })
+                    }
+                }
             }
         }
         .navigationTitle(trip?.title ?? "여행")
@@ -158,8 +175,9 @@ struct TripView: View {
         do {
             async let t = FirestoreREST.getTrip(tripId)
             async let i = FirestoreREST.getItems(tripId)
-            let (tr, it) = try await (t, i)
-            trip = tr; items = it
+            async let x = FirestoreREST.getExpenses(tripId)
+            let (tr, it, ex) = try await (t, i, x)
+            trip = tr; items = it; expenses = ex
             store.remember(tr)
         } catch {
             errorMsg = friendly(error)
@@ -189,9 +207,11 @@ struct TripView: View {
         do {
             async let tReq = FirestoreREST.getTrip(tripId)
             async let iReq = FirestoreREST.getItems(tripId)
-            let (tr, it) = try await (tReq, iReq)
+            async let xReq = FirestoreREST.getExpenses(tripId)
+            let (tr, it, ex) = try await (tReq, iReq, xReq)
             if trip != tr { trip = tr; store.remember(tr) }
             if items != it { items = it }
+            if expenses != ex { expenses = ex }
         } catch {
             // 네트워크 일시 오류 등은 다음 주기에 재시도
         }

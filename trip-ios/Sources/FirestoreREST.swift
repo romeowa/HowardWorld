@@ -32,6 +32,12 @@ enum FirestoreREST {
         guard let m = v as? [String: Any] else { return false }
         return m["nullValue"] != nil
     }
+    static func boolVal(_ v: Any?) -> Bool? { (v as? [String: Any])?["booleanValue"] as? Bool }
+    static func mapFields(_ v: Any?) -> [String: Any] {
+        ((v as? [String: Any])?["mapValue"] as? [String: Any])?["fields"] as? [String: Any] ?? [:]
+    }
+    static func strMap(_ v: Any?) -> [String: String] { mapFields(v).compactMapValues { str($0) } }
+    static func dblMap(_ v: Any?) -> [String: Double] { mapFields(v).compactMapValues { dbl($0) } }
 
     private static func fetchJSON(_ path: String) async throws -> [String: Any] {
         guard let url = URL(string: base + path) else { throw FSError.badURL }
@@ -51,13 +57,132 @@ enum FirestoreREST {
     static func getTrip(_ id: String) async throws -> Trip {
         let obj = try await fetchJSON("/trips/\(id)")
         let f = obj["fields"] as? [String: Any] ?? [:]
+        let cats: [String]? = f["expenseCategories"] != nil ? strArray(f["expenseCategories"]) : nil
         return Trip(
             id: id,
             title: str(f["title"]) ?? "여행",
             startDate: str(f["startDate"]),
             dayCount: int(f["dayCount"]) ?? 1,
-            members: strArray(f["members"])
+            members: strArray(f["members"]),
+            memberColors: strMap(f["memberColors"]),
+            rates: dblMap(f["rates"]),
+            expenseCategories: (cats?.isEmpty == true) ? nil : cats
         )
+    }
+
+    // ---- 정산: expenses ----
+    static func getExpenses(_ tripId: String) async throws -> [Expense] {
+        let obj = try await fetchJSON("/trips/\(tripId)/expenses?pageSize=300")
+        let docs = obj["documents"] as? [[String: Any]] ?? []
+        var list: [Expense] = docs.map { doc in
+            let f = doc["fields"] as? [String: Any] ?? [:]
+            return Expense(
+                id: idFromName(doc["name"] as? String),
+                kind: str(f["kind"]) ?? "expense",
+                amount: dbl(f["amount"]) ?? 0,
+                currency: str(f["currency"]) ?? "KRW",
+                desc: str(f["desc"]) ?? "",
+                category: str(f["category"]) ?? "",
+                day: isNull(f["day"]) ? nil : int(f["day"]),
+                offTrip: boolVal(f["offTrip"]) ?? false,
+                date: str(f["date"]) ?? "",
+                place: str(f["place"]) ?? "",
+                payer: str(f["payer"]) ?? "",
+                fromPool: boolVal(f["fromPool"]) ?? false,
+                sharedBy: strArray(f["sharedBy"]),
+                contribs: dblMap(f["contribs"]),
+                order: dbl(f["order"])
+            )
+        }
+        list.sort { ($0.order ?? 0) < ($1.order ?? 0) }
+        return list
+    }
+
+    // ---- 값 인코더(배열/맵/불리언) ----
+    static func vBool(_ b: Bool) -> [String: Any] { ["booleanValue": b] }
+    static func vStrArray(_ a: [String]) -> [String: Any] { ["arrayValue": ["values": a.map { ["stringValue": $0] }]] }
+    static func vStrMap(_ m: [String: String]) -> [String: Any] { ["mapValue": ["fields": m.mapValues { ["stringValue": $0] }]] }
+    static func vDblMap(_ m: [String: Double]) -> [String: Any] { ["mapValue": ["fields": m.mapValues { ["doubleValue": $0] }]] }
+
+    private static func expenseFields(_ e: Expense) -> [String: Any] {
+        [
+            "kind": vStr(e.kind),
+            "amount": vDbl(e.amount),
+            "currency": vStr(e.currency),
+            "desc": vStr(e.desc),
+            "category": vStr(e.category),
+            "offTrip": vBool(e.offTrip),
+            "day": e.day.map(vInt) ?? vNull(),
+            "date": vStr(e.date),
+            "place": vStr(e.place),
+            "payer": vStr(e.payer),
+            "fromPool": vBool(e.fromPool),
+            "sharedBy": vStrArray(e.sharedBy),
+            "contribs": e.isIncome ? vDblMap(e.contribs) : vNull(),
+        ]
+    }
+
+    @discardableResult
+    static func addExpense(tripId: String, _ e: Expense) async throws -> String {
+        var f = expenseFields(e)
+        f["order"] = vInt(Int(Date().timeIntervalSince1970 * 1000))
+        let res = try await send("POST", "/trips/\(tripId)/expenses", body: ["fields": f])
+        return String((res["name"] as? String ?? "").split(separator: "/").last ?? "")
+    }
+
+    static func updateExpense(tripId: String, _ e: Expense) async throws {
+        let masks = ["kind", "amount", "currency", "desc", "category", "offTrip", "day", "date", "place", "payer", "fromPool", "sharedBy", "contribs"]
+        let q = masks.map { "updateMask.fieldPaths=\($0)" }.joined(separator: "&")
+        try await send("PATCH", "/trips/\(tripId)/expenses/\(e.id)?\(q)", body: ["fields": expenseFields(e)])
+    }
+
+    static func deleteExpense(tripId: String, expenseId: String) async throws {
+        try await send("DELETE", "/trips/\(tripId)/expenses/\(expenseId)")
+    }
+
+    // ---- 정산: trip 필드 갱신 ----
+    static func updateMembers(tripId: String, members: [String], memberColors: [String: String]) async throws {
+        try await send("PATCH", "/trips/\(tripId)?updateMask.fieldPaths=members&updateMask.fieldPaths=memberColors",
+                       body: ["fields": ["members": vStrArray(members), "memberColors": vStrMap(memberColors)]])
+    }
+    static func updateRate(tripId: String, currency: String, rate: Double) async throws {
+        try await send("PATCH", "/trips/\(tripId)?updateMask.fieldPaths=rates.\(currency)",
+                       body: ["fields": ["rates": ["mapValue": ["fields": [currency: ["doubleValue": rate]]]]]])
+    }
+    static func updateCategories(tripId: String, _ cats: [String]) async throws {
+        try await send("PATCH", "/trips/\(tripId)?updateMask.fieldPaths=expenseCategories",
+                       body: ["fields": ["expenseCategories": vStrArray(cats)]])
+    }
+
+    // ---- 정산 변경 이력(settleLog) ----
+    static func addSettleLog(tripId: String, action: String, kind: String, summary: String, prevSummary: String?, by: String, dev: String) async throws {
+        var f: [String: Any] = [
+            "ts": ["timestampValue": ISO8601DateFormatter().string(from: Date())],
+            "dev": vStr(dev), "by": vStr(by),
+            "action": vStr(action), "kind": vStr(kind), "summary": vStr(summary),
+        ]
+        if let prevSummary { f["prevSummary"] = vStr(prevSummary) }
+        try await send("POST", "/trips/\(tripId)/settleLog", body: ["fields": f])
+    }
+
+    static func getSettleLog(_ tripId: String) async throws -> [SettleLogEntry] {
+        let obj = try await fetchJSON("/trips/\(tripId)/settleLog?pageSize=200&orderBy=ts%20desc")
+        let docs = obj["documents"] as? [[String: Any]] ?? []
+        let iso = ISO8601DateFormatter()
+        return docs.map { doc in
+            let f = doc["fields"] as? [String: Any] ?? [:]
+            var ts: Date? = nil
+            if let s = (f["ts"] as? [String: Any])?["timestampValue"] as? String { ts = iso.date(from: s) }
+            return SettleLogEntry(
+                id: idFromName(doc["name"] as? String),
+                action: str(f["action"]) ?? "변경",
+                kind: str(f["kind"]) ?? "expense",
+                summary: str(f["summary"]) ?? "",
+                prevSummary: str(f["prevSummary"]),
+                by: str(f["by"]) ?? "",
+                ts: ts
+            )
+        }
     }
 
     static func getItems(_ tripId: String) async throws -> [Item] {
