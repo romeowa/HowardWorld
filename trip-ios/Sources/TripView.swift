@@ -273,19 +273,23 @@ struct ItemRow: View {
 struct TripMap: View {
     let items: [Item]
 
-    // 핀 좌표(정렬된 방문 순서)
-    private var routeCoords: [CLLocationCoordinate2D] {
-        items.compactMap { it in
-            guard let la = it.lat, let lo = it.lng else { return nil }
-            return CLLocationCoordinate2D(latitude: la, longitude: lo)
+    // 날짜별 경로선(정렬된 방문 순서). 날이 바뀌면 선을 끊는다.
+    private var dayRoutes: [[CLLocationCoordinate2D]] {
+        let groups = Dictionary(grouping: items) { $0.day ?? -1 }
+        return groups.keys.sorted().compactMap { day in
+            let coords = groups[day]!.compactMap { it -> CLLocationCoordinate2D? in
+                guard let la = it.lat, let lo = it.lng else { return nil }
+                return CLLocationCoordinate2D(latitude: la, longitude: lo)
+            }
+            return coords.count > 1 ? coords : nil
         }
     }
 
     var body: some View {
         Map(initialPosition: .region(region)) {
-            // 이동 순서대로 잇는 경로선(웹과 동일: teal)
-            if routeCoords.count > 1 {
-                MapPolyline(coordinates: routeCoords)
+            // 이동 순서대로 잇는 경로선(웹과 동일: teal) — 날짜별로 끊어서
+            ForEach(Array(dayRoutes.enumerated()), id: \.offset) { _, coords in
+                MapPolyline(coordinates: coords)
                     .stroke(.teal.opacity(0.85), style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
             }
             ForEach(Array(items.enumerated()), id: \.element.id) { idx, it in
