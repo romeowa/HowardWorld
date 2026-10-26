@@ -22,11 +22,25 @@ struct TripView: View {
     @State private var editTarget: EditTarget?
     @State private var syncing = false        // 백그라운드 동기화 진행 표시
     @State private var tab: TripTab = .plan
+    @State private var mapDay: Int? = nil      // 지도 날짜 필터 (nil = 전체)
 
     private let pollInterval: UInt64 = 4_000_000_000   // 4초
 
     private var pinned: [Item] { items.filter { $0.day != nil && $0.lat != nil } }
     private var candidates: [Item] { items.filter { $0.isCandidate } }
+
+    // 오늘이 여행 기간 안이면 그 Day 인덱스(아니면 nil)
+    private var todayIndex: Int? {
+        guard let trip, let s = trip.startDate, let base = ymdToDate(s) else { return nil }
+        let today = Calendar.current.startOfDay(for: Date())
+        let d = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: base), to: today).day ?? -1
+        return (d >= 0 && d < trip.dayCount) ? d : nil
+    }
+    // 지도에 표시할 핀(날짜 필터 적용)
+    private var mapPins: [Item] {
+        guard let mapDay else { return pinned }
+        return pinned.filter { $0.day == mapDay }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -86,9 +100,17 @@ struct TripView: View {
         List {
             if !pinned.isEmpty {
                 Section {
-                    TripMap(items: pinned)
-                        .frame(height: 230)
-                        .listRowInsets(EdgeInsets())
+                    mapDayFilter(trip)
+                    if mapPins.isEmpty {
+                        Text("이 날은 지도에 표시할 장소가 없어요")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 10)
+                    } else {
+                        TripMap(items: mapPins)
+                            .frame(height: 230)
+                            .listRowInsets(EdgeInsets())
+                    }
                 }
             }
 
@@ -130,6 +152,32 @@ struct TripView: View {
         }
         .listStyle(.insetGrouped)
         .refreshable { await syncSilently() }
+    }
+
+    // 지도 날짜 필터 (전체 / 각 Day, 오늘은 표시)
+    @ViewBuilder
+    private func mapDayFilter(_ trip: Trip) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                filterChip("전체", on: mapDay == nil) { mapDay = nil }
+                ForEach(0..<trip.dayCount, id: \.self) { d in
+                    filterChip("Day \(d + 1)" + (d == todayIndex ? " · 오늘" : ""), on: mapDay == d) { mapDay = d }
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 2, trailing: 16))
+    }
+
+    private func filterChip(_ text: String, on: Bool, tap: @escaping () -> Void) -> some View {
+        Button(action: tap) {
+            Text(text)
+                .font(.caption.weight(on ? .semibold : .regular))
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(on ? Color.teal : Color(.secondarySystemBackground))
+                .foregroundStyle(on ? Color.white : Color.primary)
+                .clipShape(Capsule())
+        }.buttonStyle(.plain)
     }
 
     @ViewBuilder
