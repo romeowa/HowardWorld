@@ -269,6 +269,37 @@ struct ItemRow: View {
     }
 }
 
+// 번호가 찍힌 지도 핀 (아래 꼬리 끝이 위치를 가리킴)
+struct NumberPin: View {
+    let number: Int
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                Circle().fill(Color.teal)
+                Text("\(number)").font(.caption.weight(.bold)).foregroundStyle(.white)
+            }
+            .frame(width: 28, height: 28)
+            .overlay(Circle().stroke(.white, lineWidth: 2))
+            PinTail().fill(Color.teal)
+                .frame(width: 12, height: 8)
+                .offset(y: -2)
+        }
+        .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+    }
+}
+
+// 아래를 가리키는 삼각 꼬리
+struct PinTail: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.midX, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.minX, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.minY))
+        p.closeSubpath()
+        return p
+    }
+}
+
 // 핀을 담은 지도 (번호 마커)
 struct TripMap: View {
     let items: [Item]
@@ -294,8 +325,9 @@ struct TripMap: View {
             }
             ForEach(Array(items.enumerated()), id: \.element.id) { idx, it in
                 if let lat = it.lat, let lng = it.lng {
-                    Marker("\(idx + 1). \(it.name)", coordinate: .init(latitude: lat, longitude: lng))
-                        .tint(.teal)
+                    Annotation(it.name, coordinate: .init(latitude: lat, longitude: lng), anchor: .bottom) {
+                        NumberPin(number: idx + 1)
+                    }
                 }
             }
         }
