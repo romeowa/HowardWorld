@@ -273,8 +273,21 @@ struct ItemRow: View {
 struct TripMap: View {
     let items: [Item]
 
+    // 핀 좌표(정렬된 방문 순서)
+    private var routeCoords: [CLLocationCoordinate2D] {
+        items.compactMap { it in
+            guard let la = it.lat, let lo = it.lng else { return nil }
+            return CLLocationCoordinate2D(latitude: la, longitude: lo)
+        }
+    }
+
     var body: some View {
         Map(initialPosition: .region(region)) {
+            // 이동 순서대로 잇는 경로선(웹과 동일: teal)
+            if routeCoords.count > 1 {
+                MapPolyline(coordinates: routeCoords)
+                    .stroke(.teal.opacity(0.85), style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
+            }
             ForEach(Array(items.enumerated()), id: \.element.id) { idx, it in
                 if let lat = it.lat, let lng = it.lng {
                     Marker("\(idx + 1). \(it.name)", coordinate: .init(latitude: lat, longitude: lng))
